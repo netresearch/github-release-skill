@@ -1,0 +1,22 @@
+{
+  "description": "Prevents dangerous release operations that bypass CI pipelines",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py",
+            "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-lightweight-tag.py",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}

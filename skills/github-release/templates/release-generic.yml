@@ -1,0 +1,55 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions: {}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Create release archive
+        run: |
+          mkdir -p dist
+          ARCHIVE_NAME="${{ github.event.repository.name }}-${{ steps.version.outputs.version }}"
+          git archive --format=tar.gz --prefix="${ARCHIVE_NAME}/" -o "dist/${ARCHIVE_NAME}.tar.gz" HEAD
+          git archive --format=zip --prefix="${ARCHIVE_NAME}/" -o "dist/${ARCHIVE_NAME}.zip" HEAD
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/${{ github.event.repository.name }}-${{ steps.version.outputs.version }}.sbom.spdx.json
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: dist/${{ github.event.repository.name }}-${{ steps.version.outputs.version }}.sbom.cdx.json
+      - name: Generate checksums
+        run: cd dist && sha256sum * > checksums.txt
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign artifacts
+        run: |
+          for f in dist/*; do
+            cosign sign-blob "$f" --bundle "${f}.bundle" --yes
+          done
+      - name: Generate attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.tar.gz,dist/*.zip
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,123 @@
+version: 1
+skill_id: github-release
+
+preconditions:
+  - type: file_exists
+    path: ".git"
+    message: "Must be inside a git repository"
+
+mechanical:
+  # Release workflow checks
+  - id: GR-1
+    type: file_exists
+    severity: error
+    desc: "Release workflow must exist"
+    path: ".github/workflows/release.yml"
+
+  - id: GR-2
+    type: contains
+    severity: error
+    desc: "Release workflow must trigger on version tags"
+    path: ".github/workflows/release.yml"
+    content: "tags:"
+
+  - id: GR-3
+    type: contains
+    severity: error
+    desc: "Release workflow must have id-token write permission for signing"
+    path: ".github/workflows/release.yml"
+    content: "id-token: write"
+
+  - id: GR-4
+    type: contains
+    severity: error
+    desc: "Release workflow must have attestations write permission"
+    path: ".github/workflows/release.yml"
+    content: "attestations: write"
+
+  - id: GR-5
+    type: contains
+    severity: warning
+    desc: "Release workflow should have workflow_dispatch for manual triggers"
+    path: ".github/workflows/release.yml"
+    content: "workflow_dispatch"
+
+  # Tag integrity checks
+  - id: GR-6
+    type: command
+    severity: error
+    desc: "All version tags must be annotated (not lightweight)"
+    command: "test -z \"$(git for-each-ref refs/tags/v* --format='%(objecttype) %(refname:short)' | grep '^commit ')\""
+
+  # Version sync checks
+  - id: GR-7
+    type: command
+    severity: warning
+    desc: "Version files must be in sync"
+    command: "${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/validate-pre-release.sh --version-sync-only 2>/dev/null"
+
+  # CHANGELOG checks
+  - id: GR-8
+    type: contains
+    severity: warning
+    desc: "CHANGELOG.md must have an Unreleased section"
+    path: "CHANGELOG.md"
+    content: "[Unreleased]"
+
+  # Supply chain security checks
+  - id: GR-9
+    type: command
+    severity: warning
+    desc: "Latest published release should have SBOM assets"
+    command: "gh release view --json assets --jq '[.assets[].name | select(test(\"sbom\"))] | length > 0' 2>/dev/null || echo true"
+
+  - id: GR-10
+    type: command
+    severity: warning
+    desc: "Latest published release should have cosign signature bundles"
+    command: "gh release view --json assets --jq '[.assets[].name | select(test(\"\\.bundle$\"))] | length > 0' 2>/dev/null || echo true"
+
+  - id: GR-11
+    type: command
+    severity: info
+    desc: "Git signing is configured"
+    command: "git config user.signingkey >/dev/null 2>&1 || git config gpg.format >/dev/null 2>&1"
+
+llm_reviews:
+  - id: GR-R1
+    domain: release-safety
+    severity: error
+    desc: "No dangerous release commands used in conversation"
+    prompt: |
+      Check the conversation for any of these dangerous commands that were EXECUTED (not just discussed):
+      - gh release create (creates lightweight tags, bypasses CI)
+      - gh release delete (doesn't fix immutable tag burning)
+      - gh release edit (immutable releases can't be edited)
+      - git tag without -s or -a flag for version tags
+      - git push --delete for tags
+      - git push origin :refs/tags/
+      If any were executed, report as FAIL with the specific command.
+
+  - id: GR-R2
+    domain: release-process
+    severity: warning
+    desc: "Release follows correct process"
+    prompt: |
+      If a release was performed in this conversation, verify it followed the correct process:
+      1. Version files were updated via a PR (not direct push to main)
+      2. Signed annotated tag was created with git tag -s (not git tag without -s)
+      3. gh release create was NOT used
+      4. The CI release workflow was relied upon for creating the GitHub release
+      If the process was not followed, explain what went wrong.
+
+  - id: GR-R3
+    domain: ecosystem-detection
+    severity: warning
+    desc: "All version files were updated during release"
+    prompt: |
+      If version files were updated during a release, check that ALL relevant files were found and updated:
+      - TYPO3: ext_emconf.php AND composer.json (if version field exists) AND Documentation/guides.xml
+      - Skill repos: plugin.json AND SKILL.md metadata.version
+      - Node.js: package.json AND package-lock.json
+      - CHANGELOG.md [Unreleased] section was promoted
+      Report any files that were missed.
