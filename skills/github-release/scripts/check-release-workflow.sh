@@ -52,8 +52,8 @@ workflow_content=$(cat "$WORKFLOW")
 # ---------------------------------------------------------------------------
 echo ""
 echo "Triggers:"
-if echo "$workflow_content" | grep -qP "tags:\s*\[?['\"]?v\*" 2>/dev/null || \
-   echo "$workflow_content" | grep -qP "^\s+-\s+['\"]?v\*" 2>/dev/null; then
+if echo "$workflow_content" | grep -qE "tags:[[:space:]]*\[?['\"]?v\*" 2>/dev/null || \
+   echo "$workflow_content" | grep -qE "^[[:space:]]+-[[:space:]]+['\"]?v\*" 2>/dev/null; then
     report "PRESENT" "Push tag trigger (v*)"
 else
     report "MISSING" "Push tag trigger (v*)"
@@ -70,19 +70,19 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "Permissions:"
-if echo "$workflow_content" | grep -qP 'id-token\s*:\s*write' 2>/dev/null; then
+if echo "$workflow_content" | grep -qE 'id-token[[:space:]]*:[[:space:]]*write' 2>/dev/null; then
     report "PRESENT" "id-token: write"
 else
     report "MISSING" "id-token: write"
 fi
 
-if echo "$workflow_content" | grep -qP 'attestations\s*:\s*write' 2>/dev/null; then
+if echo "$workflow_content" | grep -qE 'attestations[[:space:]]*:[[:space:]]*write' 2>/dev/null; then
     report "PRESENT" "attestations: write"
 else
     report "MISSING" "attestations: write"
 fi
 
-if echo "$workflow_content" | grep -qP 'contents\s*:\s*write' 2>/dev/null; then
+if echo "$workflow_content" | grep -qE 'contents[[:space:]]*:[[:space:]]*write' 2>/dev/null; then
     report "PRESENT" "contents: write"
 else
     report "MISSING" "contents: write"
@@ -93,9 +93,9 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "Reusable workflows:"
-if echo "$workflow_content" | grep -qP 'netresearch/typo3-ci-workflows' 2>/dev/null; then
+if echo "$workflow_content" | grep -qE 'netresearch/typo3-ci-workflows' 2>/dev/null; then
     report "PRESENT" "netresearch/typo3-ci-workflows"
-elif echo "$workflow_content" | grep -qP 'netresearch/\.github' 2>/dev/null; then
+elif echo "$workflow_content" | grep -qE 'netresearch/\.github' 2>/dev/null; then
     report "PRESENT" "netresearch/.github reusable workflows"
 else
     report "MISSING" "Netresearch reusable workflows" "netresearch/typo3-ci-workflows or netresearch/.github"
@@ -106,8 +106,8 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "Supply chain security:"
-if echo "$workflow_content" | grep -qP 'anchore/sbom-action|syft|cyclonedx|spdx' 2>/dev/null; then
-    match=$(echo "$workflow_content" | grep -oP 'anchore/sbom-action|syft|cyclonedx|spdx' | head -1)
+if echo "$workflow_content" | grep -qE 'anchore/sbom-action|syft|cyclonedx|spdx' 2>/dev/null; then
+    match=$(echo "$workflow_content" | grep -oE 'anchore/sbom-action|syft|cyclonedx|spdx' | head -1)
     report "PRESENT" "SBOM generation" "$match"
 else
     report "MISSING" "SBOM generation" "anchore/sbom-action or similar"
@@ -116,8 +116,8 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Signing
 # ---------------------------------------------------------------------------
-if echo "$workflow_content" | grep -qP 'cosign-installer|cosign|sigstore' 2>/dev/null; then
-    match=$(echo "$workflow_content" | grep -oP 'cosign-installer|cosign|sigstore' | head -1)
+if echo "$workflow_content" | grep -qE 'cosign-installer|cosign|sigstore' 2>/dev/null; then
+    match=$(echo "$workflow_content" | grep -oE 'cosign-installer|cosign|sigstore' | head -1)
     report "PRESENT" "Signing" "$match"
 else
     report "MISSING" "Signing" "cosign-installer or similar"
@@ -126,8 +126,8 @@ fi
 # ---------------------------------------------------------------------------
 # 7. Attestation
 # ---------------------------------------------------------------------------
-if echo "$workflow_content" | grep -qP 'actions/attest-build-provenance|actions/attest' 2>/dev/null; then
-    match=$(echo "$workflow_content" | grep -oP 'actions/attest-build-provenance|actions/attest' | head -1)
+if echo "$workflow_content" | grep -qE 'actions/attest-build-provenance|actions/attest' 2>/dev/null; then
+    match=$(echo "$workflow_content" | grep -oE 'actions/attest-build-provenance|actions/attest' | head -1)
     report "PRESENT" "Attestation" "$match"
 else
     report "MISSING" "Attestation" "actions/attest-build-provenance or similar"

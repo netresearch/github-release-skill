@@ -1,0 +1,16 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+      pull-requests: write

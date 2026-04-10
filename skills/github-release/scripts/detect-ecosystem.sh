@@ -14,29 +14,29 @@ set -euo pipefail
 # Usage: json_field <file> <field>
 json_field() {
     local file="$1" field="$2"
-    grep -oP "\"${field}\"\s*:\s*\"\\K[^\"]*" "$file" 2>/dev/null || true
+    sed -n "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$file" 2>/dev/null | head -1 || true
 }
 
 # Extract version from ext_emconf.php
 emconf_version() {
-    grep -oP "'version'\s*=>\s*'\\K[^']*" "$1" 2>/dev/null || true
+    sed -n "s/.*'version'[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" "$1" 2>/dev/null | head -1 || true
 }
 
 # Extract version from a Cargo.toml (top-level only, before first [dependencies] etc.)
 cargo_version() {
     sed -n '/^\[package\]/,/^\[/{/^version\s*=/p}' "$1" 2>/dev/null \
-        | grep -oP 'version\s*=\s*"\\K[^"]*' || true
+        | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' || true
 }
 
 # Extract version from pyproject.toml [project] section
 pyproject_version() {
     sed -n '/^\[project\]/,/^\[/{/^version\s*=/p}' "$1" 2>/dev/null \
-        | grep -oP 'version\s*=\s*"\\K[^"]*' || true
+        | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' || true
 }
 
 # Extract version from setup.py
 setup_py_version() {
-    grep -oP "version\s*=\s*['\"]\\K[^'\"]*" "$1" 2>/dev/null || true
+    sed -n 's/.*version[[:space:]]*=[[:space:]]*['"'"'"]\([^'"'"'"]*\).*/\1/p' "$1" 2>/dev/null | head -1 || true
 }
 
 # Extract version from pom.xml (first occurrence, project-level)
@@ -49,13 +49,13 @@ pom_version() {
 # Extract version from go.mod module line (Go modules don't carry semver in go.mod itself,
 # but the module path may contain /v2 etc.)
 go_mod_version() {
-    grep -oP '^module\s+\S+/v\K\d+' "$1" 2>/dev/null || true
+    sed -n 's/^module[[:space:]]\{1,\}.*\/v\([0-9]\{1,\}\).*/\1/p' "$1" 2>/dev/null | head -1 || true
 }
 
 # Extract version from guides.xml
 guides_xml_version() {
-    grep -oP '<release>\s*\K[^<\s]+' "$1" 2>/dev/null \
-        || grep -oP 'release="\K[^"]*' "$1" 2>/dev/null \
+    sed -n 's/.*<release>[[:space:]]*\([^<[:space:]]\{1,\}\).*/\1/p' "$1" 2>/dev/null | head -1 \
+        || sed -n 's/.*release="\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -1 \
         || true
 }
 
@@ -82,9 +82,9 @@ if [[ -f ext_emconf.php ]]; then
     # Scan Documentation/**/*.rst for versionadded / versionchanged directives
     if [[ -d Documentation ]]; then
         while IFS= read -r rstfile; do
-            grep -P '^\.\.\s+(versionadded|versionchanged)::' "$rstfile" 2>/dev/null | while IFS= read -r match; do
-                directive=$(echo "$match" | grep -oP '(versionadded|versionchanged)' || true)
-                dver=$(echo "$match" | grep -oP '::\s*\K\S+' || true)
+            grep -E '^\.\.[[:space:]]+(versionadded|versionchanged)::' "$rstfile" 2>/dev/null | while IFS= read -r match; do
+                directive=$(echo "$match" | grep -oE '(versionadded|versionchanged)' || true)
+                dver=$(echo "$match" | sed -n 's/.*::[[:space:]]*\([^[:space:]]\{1,\}\).*/\1/p' || true)
                 if [[ -n "$directive" ]]; then
                     echo "docs-version-ref:${rstfile}:${directive}::${dver}"
                 fi
@@ -104,7 +104,7 @@ if [[ -f .claude-plugin/plugin.json ]]; then
     # skills/*/SKILL.md - extract version from YAML frontmatter or version: line
     for skillmd in skills/*/SKILL.md; do
         [[ -f "$skillmd" ]] || continue
-        mdver=$(grep -oP '^version:\s*\K\S+' "$skillmd" 2>/dev/null | head -1 || true)
+        mdver=$(sed -n 's/^version:[[:space:]]*\([^[:space:]]\{1,\}\).*/\1/p' "$skillmd" 2>/dev/null | head -1 || true)
         echo "version-file:${skillmd}:${mdver}"
     done
 fi

@@ -75,7 +75,7 @@ fi
 echo ""
 echo "Changelog:"
 if [[ -f CHANGELOG.md ]]; then
-    if grep -qiP '^\#+ *\[?Unreleased\]?' CHANGELOG.md; then
+    if grep -qiE '^#+ *\[?Unreleased\]?' CHANGELOG.md; then
         # Check if there is content between [Unreleased] and the next heading
         unreleased_content=$(sed -n '/^\#\+ *\[*Unreleased\]*/,/^\#\+ *\[*[0-9]/{ /^\#/d; /^$/d; p; }' CHANGELOG.md 2>/dev/null)
         if [[ -n "$unreleased_content" ]]; then
@@ -149,10 +149,10 @@ if [[ -f .github/workflows/release.yml ]]; then
     # Check required permissions
     has_id_token=false
     has_attestations=false
-    if grep -qP 'id-token\s*:\s*write' .github/workflows/release.yml 2>/dev/null; then
+    if grep -qE 'id-token[[:space:]]*:[[:space:]]*write' .github/workflows/release.yml 2>/dev/null; then
         has_id_token=true
     fi
-    if grep -qP 'attestations\s*:\s*write' .github/workflows/release.yml 2>/dev/null; then
+    if grep -qE 'attestations[[:space:]]*:[[:space:]]*write' .github/workflows/release.yml 2>/dev/null; then
         has_attestations=true
     fi
 

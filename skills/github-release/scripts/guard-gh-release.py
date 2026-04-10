@@ -69,6 +69,7 @@ GH_API_RELEASE_RE = re.compile(
     r"""
     (?:^|[;&|]\s*|&&\s*|\|\|\s*)    # start or separator
     gh\s+api\s+                      # gh api
+    (?:(?:-\w+|--\w[\w-]*)(?:\s+(?:"[^"]*"|'[^']*'|\S+))?\s+)*  # optional flags (e.g. -X POST, -H "...")
     /?repos/[^\s]+/releases          # release endpoint path
     """,
     re.VERBOSE,

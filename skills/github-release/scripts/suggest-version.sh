@@ -49,11 +49,11 @@ other=0
 
 while IFS= read -r subject; do
     # Check for breaking changes
-    if echo "$subject" | grep -qP '^[a-z]+(\([^)]*\))?!:' || echo "$subject" | grep -qi 'BREAKING CHANGE'; then
+    if echo "$subject" | grep -qE '^[a-z]+(\([^)]*\))?!:' || echo "$subject" | grep -qi 'BREAKING CHANGE'; then
         ((breaking++)) || true
-    elif echo "$subject" | grep -qP '^feat(\([^)]*\))?:'; then
+    elif echo "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
         ((feat++)) || true
-    elif echo "$subject" | grep -qP '^(fix|perf|refactor)(\([^)]*\))?:'; then
+    elif echo "$subject" | grep -qE '^(fix|perf|refactor)(\([^)]*\))?:'; then
         ((fix++)) || true
     else
         ((other++)) || true
