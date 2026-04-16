@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires gh CLI, git with GPG/SSH signing configured."
 metadata:
   author: Netresearch DTT GmbH
-  version: "0.1.0"
+  version: "0.2.0"
   repository: https://github.com/netresearch/github-release-skill
 allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 ---
