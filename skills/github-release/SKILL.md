@@ -12,11 +12,13 @@ allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 
 # GitHub Release Skill
 
-## Critical Rule
+## Critical Rules
 
-**NEVER run `gh release create`, `gh release delete`, or `gh release edit`.**
+**NEVER run `gh release create` or `gh release delete`.**
 
 These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) make tag names permanent — a lightweight tag created by `gh release create` burns that tag name forever with no recovery path. CI handles release creation from signed tags.
+
+**`gh release edit` is allowed ONLY for `--notes` / `--notes-file`** to overhaul the release description after CI publishes. All other `gh release edit` flags are blocked.
 
 ## Release Flow
 
@@ -27,8 +29,8 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review
 6. **After PR merge** — create signed annotated tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
-8. **CI creates draft release** — with SBOM, provenance attestations, and artifacts
-9. **User publishes** — review draft in GitHub UI, then publish (immutability locks in)
+8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
+9. **Overhaul release description** — rewrite the auto-generated notes into a narrative summary using `gh release edit vX.Y.Z --notes "..."`
 
 ## Commands
 

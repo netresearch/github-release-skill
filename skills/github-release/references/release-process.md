@@ -13,7 +13,7 @@ The complete flow from "create a release" to "release published on GitHub."
 3. **Bypasses CI** — no provenance attestation, no SBOM, no artifact signing. The release is created directly with whatever you attach manually.
 4. **Skips version file bumps** — source code still shows the old version.
 
-The hooks in this repository block `gh release create`, `gh release delete`, and `gh release edit` to prevent these outcomes.
+The hooks in this repository block `gh release create` and `gh release delete` to prevent these outcomes. `gh release edit` is allowed only for `--notes`/`--notes-file` flags (release description overhaul).
 
 ## The Correct Release Flow
 
@@ -60,41 +60,37 @@ The tag MUST be:
 The tag push triggers the release workflow (e.g., `.github/workflows/release.yml`):
 
 ```
-1. CI creates a DRAFT release (not published)
+1. CI validates version tag matches version files
 2. CI builds artifacts (binaries, archives, etc.)
-3. CI generates SBOM (SPDX or CycloneDX)
-4. CI creates provenance attestation (SLSA)
-5. CI signs artifacts with Sigstore/cosign
-6. CI attaches all artifacts to the draft release
+3. CI generates checksums (SHA256SUMS.txt)
+4. CI generates SBOM if configured (SPDX or CycloneDX)
+5. CI creates provenance attestation if configured (SLSA)
+6. CI publishes the GitHub Release with all artifacts and auto-generated release notes
 ```
 
-### Phase 5: Publish
+### Phase 5: Release Description Overhaul
 
-The draft release is reviewed and published by a human:
+After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
 ```
-1. Navigate to GitHub Releases page
-2. Review the draft: changelog, artifacts, attestations
-3. Click "Publish release"
-4. Immutability locks in — the release is now permanent
+1. Wait for CI release workflow to complete successfully
+2. Review the commits included in the release (git log prev_tag..new_tag)
+3. Write a narrative release description covering:
+   - What changed and why it matters
+   - Context for skipped versions or notable decisions
+   - Grouped by theme (features, fixes, infrastructure), not by commit
+4. Update via: gh release edit vX.Y.Z --notes "..."
 ```
 
-## Draft-First Pattern
+The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
 
-Always create releases as drafts first. This is critical because:
+## When CI Fails
 
-- **Immutability is irreversible** — once published, the release (and its tag name) are locked forever
-- **Artifacts can be verified** before the release goes public
-- **Changelog can be reviewed** for accuracy
-- **If CI fails**, the draft can be deleted and recreated without burning the tag name (drafts are not yet immutable)
+If the release workflow fails:
 
-## When Publish Fails
-
-If the CI workflow creates the draft but something goes wrong:
-
-1. **Workflow failed mid-run**: Re-run the workflow. The draft release may already exist; the workflow should handle idempotent creation.
-2. **Artifacts are wrong**: Delete the draft release (safe — drafts are not immutable), fix the issue, re-run.
-3. **Everything looks correct but user needs to publish**: Direct the user to the GitHub Releases page. The skill cannot publish on behalf of the user — this is an intentional human gate.
+1. **Workflow failed mid-run**: Re-run the workflow. If a release already exists, the workflow should handle idempotent creation.
+2. **Artifacts are wrong**: Fix the issue and re-run the workflow.
+3. **Startup failure**: Check that the caller workflow grants all permissions required by the reusable workflow (e.g., `contents: write`, `pull-requests: write`).
 
 ## Version Tag Format
 

@@ -1,358 +1,1430 @@
 {
-  "version": 1,
-  "skill_id": "github-release",
+  "skill_name": "github-release",
   "evals": [
     {
-      "id": "GR-E01",
-      "description": "Block gh release create command",
-      "input": "Run gh release create v1.2.0 to publish the release",
-      "expected": {
-        "behavior": "Refuse to execute gh release create. Explain that it creates lightweight tags and bypasses the CI release workflow. Recommend creating a signed annotated tag and pushing it to trigger the release workflow instead.",
-        "must_not": ["Execute gh release create", "Create a GitHub release directly via CLI"],
-        "assertions": ["Mentions lightweight tag risk", "Recommends git tag -s", "Recommends CI workflow"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 1,
+      "prompt": "Run gh release create v1.2.0 to publish the release",
+      "expected_output": "Refuse to execute gh release create. Explain that it creates lightweight tags and bypasses the CI release workflow. Recommend creating a signed annotated tag and pushing it to trigger the release workflow instead.",
+      "expectations": [
+        "Mentions lightweight tag risk",
+        "Recommends git tag -s",
+        "Recommends CI workflow",
+        "Does NOT: Execute gh release create",
+        "Does NOT: Create a GitHub release directly via CLI"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)lightweight.*tag.*risk"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)git.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)workflow"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*release.*create"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*GitHub.*release.*directly.*via"
+        }
+      ]
     },
     {
-      "id": "GR-E02",
-      "description": "Block gh release delete command",
-      "input": "Delete the broken v2.0.0 release with gh release delete v2.0.0",
-      "expected": {
-        "behavior": "Refuse to execute gh release delete. Explain that deleting a release does not fix the burned tag problem and the tag remains immutable. Recommend the burned tag recovery process instead.",
-        "must_not": ["Execute gh release delete", "Delete any GitHub release"],
-        "assertions": ["Explains burned tag concept", "Mentions tag immutability", "Suggests recovery process"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 2,
+      "prompt": "Delete the broken v2.0.0 release with gh release delete v2.0.0",
+      "expected_output": "Refuse to execute gh release delete. Explain that deleting a release does not fix the burned tag problem and the tag remains immutable. Recommend the burned tag recovery process instead.",
+      "expectations": [
+        "Explains burned tag concept",
+        "Mentions tag immutability",
+        "Suggests recovery process",
+        "Does NOT: Execute gh release delete",
+        "Does NOT: Delete any GitHub release"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)burned.*tag.*concept"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)tag.*immutability"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)recovery.*process"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*release.*delete"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Delete.*GitHub.*release"
+        }
+      ]
     },
     {
-      "id": "GR-E03",
-      "description": "Block gh release edit command",
-      "input": "Edit the v1.5.0 release to fix the description using gh release edit",
-      "expected": {
-        "behavior": "Refuse to execute gh release edit. Explain that published releases should be treated as immutable artifacts. If the release was created by CI, the workflow should be the source of truth.",
-        "must_not": ["Execute gh release edit", "Modify any published release"],
-        "assertions": ["Explains release immutability", "Recommends CI as source of truth"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 3,
+      "prompt": "Change the v1.5.0 release to a draft using gh release edit v1.5.0 --draft",
+      "expected_output": "Refuse to execute gh release edit with --draft flag. Explain that only --notes and --notes-file are permitted for release description overhaul. Other metadata changes bypass audit controls and should go through CI.",
+      "expectations": [
+        "Blocks --draft flag",
+        "Explains only --notes is permitted",
+        "Recommends CI for metadata changes",
+        "Does NOT: Execute gh release edit --draft",
+        "Does NOT: Change release draft status"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)draft.*flag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)notes.*permitted"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)metadata.*changes"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*release.*edit.*draft"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Change.*release.*draft.*status"
+        }
+      ]
     },
     {
-      "id": "GR-E04",
-      "description": "Block lightweight tag creation for version tags",
-      "input": "Create a tag with git tag v3.0.0",
-      "expected": {
-        "behavior": "Refuse to create a lightweight tag. Explain the difference between lightweight and annotated tags. Create a signed annotated tag with git tag -s instead.",
-        "must_not": ["Execute git tag v3.0.0 without -s or -a flag"],
-        "assertions": ["Explains lightweight vs annotated tags", "Uses git tag -s or git tag -a -s", "Includes tag message"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 4,
+      "prompt": "Update the v2.0.0 release description with gh release edit v2.0.0 --notes \"New narrative description\"",
+      "expected_output": "Allow the command. gh release edit with --notes is the standard way to overhaul the auto-generated release description after CI publishes. Execute the command without blocking.",
+      "expectations": [
+        "Executes gh release edit --notes",
+        "Recognizes description overhaul as expected workflow",
+        "Does NOT: Block gh release edit --notes",
+        "Does NOT: Warn about danger for notes-only edits",
+        "Does NOT: Refuse to update release description"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*edit.*notes"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)description.*overhaul.*expected.*workflow"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Block.*release.*edit.*notes"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Warn.*about.*danger.*notes\\-only.*edits"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Refuse.*update.*release.*description"
+        }
+      ]
     },
     {
-      "id": "GR-E05",
-      "description": "Block tag deletion from remote",
-      "input": "Delete the v1.0.0 tag from the remote with git push --delete origin v1.0.0",
-      "expected": {
-        "behavior": "Refuse to delete the remote tag. Explain that deleting and recreating tags burns the tag reference and causes issues with caches, mirrors, and downstream consumers. Recommend creating a new patch version instead.",
-        "must_not": ["Execute git push --delete for tags", "Execute git push origin :refs/tags/"],
-        "assertions": ["Explains tag burning", "Mentions downstream impact", "Recommends new version"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 5,
+      "prompt": "Update the v2.1.0 release description from a file with gh release edit v2.1.0 --notes-file /tmp/release-notes.md",
+      "expected_output": "Allow the command. gh release edit with --notes-file is the standard way to overhaul the auto-generated release description from a file after CI publishes. Execute the command without blocking.",
+      "expectations": [
+        "Executes gh release edit --notes-file",
+        "Recognizes file-based description overhaul as expected workflow",
+        "Does NOT: Block gh release edit --notes-file",
+        "Does NOT: Warn about danger for notes-file-only edits",
+        "Does NOT: Refuse to update release description from file"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*edit.*notes-file"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)description.*overhaul"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Block.*release.*edit.*notes-file"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Refuse.*update.*release.*description"
+        }
+      ]
     },
     {
-      "id": "GR-E06",
-      "description": "Block gh api release POST endpoint",
-      "input": "Create a release via the API: gh api repos/owner/repo/releases -f tag_name=v1.0.0 -f name='Release v1.0.0'",
-      "expected": {
-        "behavior": "Refuse to execute the gh api POST to the releases endpoint. Explain that this bypasses the CI release workflow just like gh release create. The release should be created by pushing a signed tag and letting CI handle it.",
-        "must_not": ["Execute gh api POST to releases endpoint", "Create a release via API"],
-        "assertions": ["Identifies API release creation attempt", "Explains CI bypass risk", "Recommends tag-based workflow"]
-      },
-      "tags": ["guard-hooks", "safety"]
+      "id": 6,
+      "prompt": "Change the v2.1.0 release to a draft while updating notes using gh release edit v2.1.0 --notes-file /tmp/release-notes.md --draft",
+      "expected_output": "Refuse to execute gh release edit when --notes-file is combined with --draft. Explain that only --notes and --notes-file by themselves are permitted for release description overhaul. Other metadata changes bypass audit controls and should go through CI.",
+      "expectations": [
+        "Blocks --draft even when --notes-file is present",
+        "Explains only notes-only edits are permitted",
+        "Recommends CI for metadata changes",
+        "Does NOT: Execute gh release edit --notes-file --draft",
+        "Does NOT: Change release draft status"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)draft.*notes-file"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)notes.*permitted"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*release.*edit.*notes-file.*draft"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Change.*release.*draft.*status"
+        }
+      ]
     },
     {
-      "id": "GR-E07",
-      "description": "Allow legitimate gh release view command",
-      "input": "Show me the latest release details with gh release view",
-      "expected": {
-        "behavior": "Execute gh release view without blocking. This is a read-only command that does not modify releases or tags. Display the release information to the user.",
-        "must_not": ["Block or refuse gh release view", "Warn about danger for read-only commands"],
-        "assertions": ["Executes gh release view", "Displays release information"]
-      },
-      "tags": ["guard-hooks", "allow"]
+      "id": 7,
+      "prompt": "Create a tag with git tag v3.0.0",
+      "expected_output": "Refuse to create a lightweight tag. Explain the difference between lightweight and annotated tags. Create a signed annotated tag with git tag -s instead.",
+      "expectations": [
+        "Explains lightweight vs annotated tags",
+        "Uses git tag -s or git tag -a -s",
+        "Includes tag message",
+        "Does NOT: Execute git tag v3.0.0 without -s or -a flag"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)lightweight.*annotated.*tags"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)git.*tag.*git.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)tag.*message"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*git.*tag.*v3\\.0\\.0.*without"
+        }
+      ]
     },
     {
-      "id": "GR-E10",
-      "description": "Full TYPO3 extension release process",
-      "input": "Release version 2.3.0 of this TYPO3 extension",
-      "expected": {
-        "behavior": "Detect TYPO3 ecosystem from ext_emconf.php. Update version in ext_emconf.php, composer.json (if version field exists), and Documentation/guides.xml. Promote CHANGELOG.md [Unreleased] section to [2.3.0]. Create a version bump PR. After merge, create a signed annotated tag and push it.",
-        "must_not": ["Skip ext_emconf.php", "Skip Documentation/guides.xml", "Use gh release create", "Create lightweight tag"],
-        "assertions": ["Detects TYPO3 ecosystem", "Updates ext_emconf.php", "Updates guides.xml", "Promotes CHANGELOG", "Creates signed tag"]
-      },
-      "tags": ["release-process", "typo3"]
+      "id": 8,
+      "prompt": "Delete the v1.0.0 tag from the remote with git push --delete origin v1.0.0",
+      "expected_output": "Refuse to delete the remote tag. Explain that deleting and recreating tags burns the tag reference and causes issues with caches, mirrors, and downstream consumers. Recommend creating a new patch version instead.",
+      "expectations": [
+        "Explains tag burning",
+        "Mentions downstream impact",
+        "Recommends new version",
+        "Does NOT: Execute git push --delete for tags",
+        "Does NOT: Execute git push origin :refs/tags/"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)tag.*burning"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)downstream.*impact"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)new.*version"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*git.*push.*delete.*tags"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*git.*push.*origin.*refs"
+        }
+      ]
     },
     {
-      "id": "GR-E11",
-      "description": "Full skill repository release process",
-      "input": "Release v1.4.0 of this skill",
-      "expected": {
-        "behavior": "Detect skill repo ecosystem from plugin.json and SKILL.md. Update version in plugin.json and SKILL.md metadata.version field. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
-        "must_not": ["Skip plugin.json", "Skip SKILL.md", "Use gh release create"],
-        "assertions": ["Detects skill repo ecosystem", "Updates plugin.json", "Updates SKILL.md version", "Creates version bump PR"]
-      },
-      "tags": ["release-process", "skill-repo"]
+      "id": 9,
+      "prompt": "Create a release via the API: gh api repos/owner/repo/releases -f tag_name=v1.0.0 -f name='Release v1.0.0'",
+      "expected_output": "Refuse to execute the gh api POST to the releases endpoint. Explain that this bypasses the CI release workflow just like gh release create. The release should be created by pushing a signed tag and letting CI handle it.",
+      "expectations": [
+        "Identifies API release creation attempt",
+        "Explains CI bypass risk",
+        "Recommends tag-based workflow",
+        "Does NOT: Execute gh api POST to releases endpoint",
+        "Does NOT: Create a release via API"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)API.*release.*creation.*attempt"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)bypass.*risk"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)tag\\-based.*workflow"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*api.*POST.*releases.*endpoint"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*release.*via.*API"
+        }
+      ]
     },
     {
-      "id": "GR-E12",
-      "description": "Full npm package release process",
-      "input": "Release version 3.0.0 of this npm package",
-      "expected": {
-        "behavior": "Detect Node.js ecosystem from package.json. Update version in package.json and package-lock.json. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
-        "must_not": ["Skip package-lock.json", "Run npm publish directly", "Use gh release create"],
-        "assertions": ["Detects Node.js ecosystem", "Updates package.json", "Updates package-lock.json", "Promotes CHANGELOG"]
-      },
-      "tags": ["release-process", "nodejs"]
+      "id": 10,
+      "prompt": "Show me the latest release details with gh release view",
+      "expected_output": "Execute gh release view without blocking. This is a read-only command that does not modify releases or tags. Display the release information to the user.",
+      "expectations": [
+        "Executes gh release view",
+        "Displays release information",
+        "Does NOT: Block or refuse gh release view",
+        "Does NOT: Warn about danger for read-only commands"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*view"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)release.*information"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Block.*refuse.*release.*view"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Warn.*about.*danger.*read\\-only.*commands"
+        }
+      ]
     },
     {
-      "id": "GR-E13",
-      "description": "Full Go module release process",
-      "input": "Release v1.0.0 of this Go module",
-      "expected": {
-        "behavior": "Detect Go ecosystem from go.mod. Promote CHANGELOG.md [Unreleased] section. Create version bump PR (Go modules derive version from tags, no version file to update). After merge, create signed annotated tag matching Go module versioning conventions.",
-        "must_not": ["Try to update version in go.mod", "Use gh release create"],
-        "assertions": ["Detects Go ecosystem", "Promotes CHANGELOG", "Creates signed annotated tag", "Follows Go module versioning"]
-      },
-      "tags": ["release-process", "go"]
+      "id": 11,
+      "prompt": "Release version 2.3.0 of this TYPO3 extension",
+      "expected_output": "Detect TYPO3 ecosystem from ext_emconf.php. Update version in ext_emconf.php, composer.json (if version field exists), and Documentation/guides.xml. Promote CHANGELOG.md [Unreleased] section to [2.3.0]. Create a version bump PR. After merge, create a signed annotated tag and push it.",
+      "expectations": [
+        "Detects TYPO3 ecosystem",
+        "Updates ext_emconf.php",
+        "Updates guides.xml",
+        "Promotes CHANGELOG",
+        "Creates signed tag",
+        "Does NOT: Skip ext_emconf.php",
+        "Does NOT: Skip Documentation/guides.xml",
+        "Does NOT: Use gh release create",
+        "Does NOT: Create lightweight tag"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)TYPO3.*ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)ext_emconf\\.php"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)guides\\.xml"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Promotes.*CHANGELOG"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)signed.*tag"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*ext_emconf\\.php"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*Documentation.*guides\\.xml"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*lightweight.*tag"
+        }
+      ]
     },
     {
-      "id": "GR-E14",
-      "description": "Version suggestion from conventional commits",
-      "input": "What version should I release next?",
-      "expected": {
-        "behavior": "Analyze commits since the last tag using conventional commit prefixes. Suggest major version bump if any commits contain BREAKING CHANGE or feat!:, minor for feat:, patch for fix:. Show the commit summary supporting the recommendation.",
-        "must_not": ["Suggest version without analyzing commits", "Ignore BREAKING CHANGE footers"],
-        "assertions": ["Analyzes commits since last tag", "Uses conventional commit rules", "Shows supporting evidence", "Provides clear recommendation"]
-      },
-      "tags": ["release-process", "version-suggestion"]
+      "id": 12,
+      "prompt": "Release v1.4.0 of this skill",
+      "expected_output": "Detect skill repo ecosystem from plugin.json and SKILL.md. Update version in plugin.json and SKILL.md metadata.version field. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
+      "expectations": [
+        "Detects skill repo ecosystem",
+        "Updates plugin.json",
+        "Updates SKILL.md version",
+        "Creates version bump PR",
+        "Does NOT: Skip plugin.json",
+        "Does NOT: Skip SKILL.md",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)skill.*repo.*ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)plugin\\.json"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)SKILL\\.md.*version"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version.*bump"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*plugin\\.json"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*SKILL\\.md"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
     },
     {
-      "id": "GR-E15",
-      "description": "CHANGELOG promotion from Unreleased to versioned section",
-      "input": "Promote the CHANGELOG unreleased section to version 4.1.0",
-      "expected": {
-        "behavior": "Read CHANGELOG.md. Move all entries from [Unreleased] into a new [4.1.0] section with today's date. Create a fresh empty [Unreleased] section. Preserve comparison links at the bottom of the file.",
-        "must_not": ["Delete unreleased entries", "Remove comparison links", "Leave [Unreleased] section missing"],
-        "assertions": ["Creates [4.1.0] section with date", "Preserves all entries", "Creates empty [Unreleased]", "Updates comparison links"]
-      },
-      "tags": ["release-process", "changelog"]
+      "id": 13,
+      "prompt": "Release version 3.0.0 of this npm package",
+      "expected_output": "Detect Node.js ecosystem from package.json. Update version in package.json and package-lock.json. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
+      "expectations": [
+        "Detects Node.js ecosystem",
+        "Updates package.json",
+        "Updates package-lock.json",
+        "Promotes CHANGELOG",
+        "Does NOT: Skip package-lock.json",
+        "Does NOT: Run npm publish directly",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)Node\\.js.*ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)package\\.json"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)package\\-lock\\.json"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Promotes.*CHANGELOG"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*package\\-lock\\.json"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Run.*npm.*publish.*directly"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
     },
     {
-      "id": "GR-E20",
-      "description": "TYPO3 project detection from ext_emconf.php",
-      "input": "What type of project is this?",
-      "expected": {
-        "behavior": "Detect TYPO3 extension ecosystem by finding ext_emconf.php. Identify the version files: ext_emconf.php, composer.json, Documentation/guides.xml. Report the current version from ext_emconf.php.",
-        "must_not": ["Misidentify as a different ecosystem", "Miss ext_emconf.php"],
-        "assertions": ["Identifies TYPO3 ecosystem", "Lists all version files", "Reports current version"]
-      },
-      "tags": ["ecosystem-detection", "typo3"]
+      "id": 14,
+      "prompt": "Release v1.0.0 of this Go module",
+      "expected_output": "Detect Go ecosystem from go.mod. Promote CHANGELOG.md [Unreleased] section. Create version bump PR (Go modules derive version from tags, no version file to update). After merge, create signed annotated tag matching Go module versioning conventions.",
+      "expectations": [
+        "Detects Go ecosystem",
+        "Promotes CHANGELOG",
+        "Creates signed annotated tag",
+        "Follows Go module versioning",
+        "Does NOT: Try to update version in go.mod",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Promotes.*CHANGELOG"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)signed.*annotated.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)module.*versioning"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Try.*update.*version.*go\\.mod"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
     },
     {
-      "id": "GR-E21",
-      "description": "Multi-ecosystem project with overlapping indicators",
-      "input": "Detect the project type and version files for this repository",
-      "expected": {
-        "behavior": "Analyze all ecosystem indicators. If multiple ecosystems are detected (e.g., composer.json could be TYPO3 or generic PHP), use ext_emconf.php as the discriminator for TYPO3. Report all detected ecosystems and their respective version files.",
-        "must_not": ["Report only one ecosystem when multiple exist", "Ignore secondary indicators"],
-        "assertions": ["Checks multiple ecosystem indicators", "Uses discriminators correctly", "Reports all version files"]
-      },
-      "tags": ["ecosystem-detection", "multi-ecosystem"]
+      "id": 15,
+      "prompt": "What version should I release next?",
+      "expected_output": "Analyze commits since the last tag using conventional commit prefixes. Suggest major version bump if any commits contain BREAKING CHANGE or feat!:, minor for feat:, patch for fix:. Show the commit summary supporting the recommendation.",
+      "expectations": [
+        "Analyzes commits since last tag",
+        "Uses conventional commit rules",
+        "Shows supporting evidence",
+        "Provides clear recommendation",
+        "Does NOT: Suggest version without analyzing commits",
+        "Does NOT: Ignore BREAKING CHANGE footers"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)commits.*since.*last.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)conventional.*commit.*rules"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)supporting.*evidence"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)clear.*recommendation"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Suggest.*version.*without.*analyzing.*commits"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*BREAKING.*CHANGE.*footers"
+        }
+      ]
     },
     {
-      "id": "GR-E22",
-      "description": "TYPO3 Documentation/guides.xml version reference detection",
-      "input": "Check if Documentation/guides.xml has the correct version",
-      "expected": {
-        "behavior": "Read Documentation/guides.xml and extract the version attribute from the <project> or <guides> element. Compare it against the version in ext_emconf.php. Report whether they are in sync.",
-        "must_not": ["Skip guides.xml", "Ignore version mismatch"],
-        "assertions": ["Reads guides.xml", "Extracts version", "Compares with ext_emconf.php", "Reports sync status"]
-      },
-      "tags": ["ecosystem-detection", "typo3", "version-sync"]
+      "id": 16,
+      "prompt": "Promote the CHANGELOG unreleased section to version 4.1.0",
+      "expected_output": "Read CHANGELOG.md. Move all entries from [Unreleased] into a new [4.1.0] section with today's date. Create a fresh empty [Unreleased] section. Preserve comparison links at the bottom of the file.",
+      "expectations": [
+        "Creates [4.1.0] section with date",
+        "Preserves all entries",
+        "Creates empty [Unreleased]",
+        "Updates comparison links",
+        "Does NOT: Delete unreleased entries",
+        "Does NOT: Remove comparison links",
+        "Does NOT: Leave [Unreleased] section missing"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)4\\.1\\.0.*section.*date"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)entries"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)empty.*Unreleased"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)comparison.*links"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Delete.*unreleased.*entries"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Remove.*comparison.*links"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Leave.*Unreleased.*section.*missing"
+        }
+      ]
     },
     {
-      "id": "GR-E23",
-      "description": "Skill repo metadata version sync between plugin.json and SKILL.md",
-      "input": "Are the skill version files in sync?",
-      "expected": {
-        "behavior": "Read plugin.json version field and SKILL.md metadata.version field. Compare them and report whether they match. If mismatched, show both values and recommend which to update.",
-        "must_not": ["Check only one file", "Ignore mismatch"],
-        "assertions": ["Reads plugin.json version", "Reads SKILL.md version", "Compares versions", "Reports sync status"]
-      },
-      "tags": ["ecosystem-detection", "skill-repo", "version-sync"]
+      "id": 17,
+      "prompt": "What type of project is this?",
+      "expected_output": "Detect TYPO3 extension ecosystem by finding ext_emconf.php. Identify the version files: ext_emconf.php, composer.json, Documentation/guides.xml. Report the current version from ext_emconf.php.",
+      "expectations": [
+        "Identifies TYPO3 ecosystem",
+        "Lists all version files",
+        "Reports current version",
+        "Does NOT: Misidentify as a different ecosystem",
+        "Does NOT: Miss ext_emconf.php"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)TYPO3.*ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version.*files"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)current.*version"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Misidentify.*different.*ecosystem"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Miss.*ext_emconf\\.php"
+        }
+      ]
     },
     {
-      "id": "GR-E30",
-      "description": "Burned tag diagnosis and recovery guidance",
-      "input": "I accidentally pushed a tag v2.0.0 that points to the wrong commit. How do I fix it?",
-      "expected": {
-        "behavior": "Diagnose as a burned tag scenario. Explain that the tag v2.0.0 is now immutable and should not be deleted/recreated. Recommend releasing v2.0.1 with the correct content instead. Provide step-by-step recovery instructions.",
-        "must_not": ["Suggest deleting and recreating the tag", "Suggest git push --force for tags"],
-        "assertions": ["Identifies burned tag scenario", "Explains immutability", "Recommends patch version", "Provides recovery steps"]
-      },
-      "tags": ["recovery", "burned-tag"]
+      "id": 18,
+      "prompt": "Detect the project type and version files for this repository",
+      "expected_output": "Analyze all ecosystem indicators. If multiple ecosystems are detected (e.g., composer.json could be TYPO3 or generic PHP), use ext_emconf.php as the discriminator for TYPO3. Report all detected ecosystems and their respective version files.",
+      "expectations": [
+        "Checks multiple ecosystem indicators",
+        "Uses discriminators correctly",
+        "Reports all version files",
+        "Does NOT: Report only one ecosystem when multiple exist",
+        "Does NOT: Ignore secondary indicators"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)multiple.*ecosystem.*indicators"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)discriminators.*correctly"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version.*files"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Report.*only.*one.*ecosystem.*when"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*secondary.*indicators"
+        }
+      ]
     },
     {
-      "id": "GR-E31",
-      "description": "Draft release workflow failure diagnosis",
-      "input": "The release workflow created a draft release but it was never published. What happened?",
-      "expected": {
-        "behavior": "Investigate the release workflow run. Check if the workflow uses a two-phase approach (draft then publish). Look for failed steps in attestation, signing, or SBOM generation. Check workflow permissions. Provide specific diagnosis and fix.",
-        "must_not": ["Suggest manually publishing the draft", "Suggest gh release edit to publish"],
-        "assertions": ["Checks workflow run status", "Identifies failure point", "Checks permissions", "Recommends workflow fix"]
-      },
-      "tags": ["recovery", "ci-failure"]
+      "id": 19,
+      "prompt": "Check if Documentation/guides.xml has the correct version",
+      "expected_output": "Read Documentation/guides.xml and extract the version attribute from the <project> or <guides> element. Compare it against the version in ext_emconf.php. Report whether they are in sync.",
+      "expectations": [
+        "Reads guides.xml",
+        "Extracts version",
+        "Compares with ext_emconf.php",
+        "Reports sync status",
+        "Does NOT: Skip guides.xml",
+        "Does NOT: Ignore version mismatch"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)guides\\.xml"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)ext_emconf\\.php"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)sync.*status"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*guides\\.xml"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*version.*mismatch"
+        }
+      ]
     },
     {
-      "id": "GR-E32",
-      "description": "Missing CI release workflow scaffolding",
-      "input": "This repo has no release workflow. Set one up.",
-      "expected": {
-        "behavior": "Detect the project ecosystem. Scaffold a .github/workflows/release.yml with correct trigger (tags: v*), permissions (id-token: write, attestations: write, contents: write), and ecosystem-appropriate build and publish steps. Include SBOM generation, cosign signing, and GitHub attestation steps.",
-        "must_not": ["Create workflow without tag trigger", "Omit signing permissions", "Skip SBOM generation"],
-        "assertions": ["Detects ecosystem", "Creates release.yml", "Includes tag trigger", "Includes permissions", "Includes SBOM", "Includes signing"]
-      },
-      "tags": ["recovery", "scaffolding"]
+      "id": 20,
+      "prompt": "Are the skill version files in sync?",
+      "expected_output": "Read plugin.json version field and SKILL.md metadata.version field. Compare them and report whether they match. If mismatched, show both values and recommend which to update.",
+      "expectations": [
+        "Reads plugin.json version",
+        "Reads SKILL.md version",
+        "Compares versions",
+        "Reports sync status",
+        "Does NOT: Check only one file",
+        "Does NOT: Ignore mismatch"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)plugin\\.json.*version"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)SKILL\\.md.*version"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)versions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)sync.*status"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Check.*only.*one.*file"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*mismatch"
+        }
+      ]
     },
     {
-      "id": "GR-E33",
-      "description": "Lightweight tag detected in release-status check",
-      "input": "Show the release status of this project",
-      "expected": {
-        "behavior": "List all version tags and check their types (annotated vs lightweight). If any lightweight tags are found, flag them as warnings. Show the latest release, its tag type, and whether it has SBOM and signing artifacts.",
-        "must_not": ["Ignore lightweight tags", "Skip tag type verification"],
-        "assertions": ["Lists version tags", "Checks tag types", "Flags lightweight tags", "Shows release artifacts"]
-      },
-      "tags": ["recovery", "diagnostics"]
+      "id": 21,
+      "prompt": "I accidentally pushed a tag v2.0.0 that points to the wrong commit. How do I fix it?",
+      "expected_output": "Diagnose as a burned tag scenario. Explain that the tag v2.0.0 is now immutable and should not be deleted/recreated. Recommend releasing v2.0.1 with the correct content instead. Provide step-by-step recovery instructions.",
+      "expectations": [
+        "Identifies burned tag scenario",
+        "Explains immutability",
+        "Recommends patch version",
+        "Provides recovery steps",
+        "Does NOT: Suggest deleting and recreating the tag",
+        "Does NOT: Suggest git push --force for tags"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)burned.*tag.*scenario"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)immutability"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)patch.*version"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)recovery.*steps"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Suggest.*deleting.*recreating.*tag"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Suggest.*git.*push.*force.*tags"
+        }
+      ]
     },
     {
-      "id": "GR-E34",
-      "description": "Version file drift detection across ecosystem files",
-      "input": "Check if all version files are consistent",
-      "expected": {
-        "behavior": "Detect all version files for the project ecosystem. Read each file and extract the version string. Compare all versions and report any drift. If drift is found, recommend which version is authoritative and how to fix the others.",
-        "must_not": ["Check only one file", "Ignore drift"],
-        "assertions": ["Finds all version files", "Extracts versions", "Compares all versions", "Reports drift clearly"]
-      },
-      "tags": ["recovery", "version-sync"]
+      "id": 22,
+      "prompt": "The release workflow failed with startup_failure. What happened?",
+      "expected_output": "Investigate the release workflow run. Check for common causes: missing permissions in the caller workflow (contents: write, pull-requests: write), broken reusable workflow reference, or invalid workflow syntax. Check the workflow file and its permissions block. Provide specific diagnosis and fix.",
+      "expectations": [
+        "Checks workflow run status",
+        "Identifies failure point",
+        "Checks permissions",
+        "Recommends workflow fix",
+        "Does NOT: Ignore startup_failure status",
+        "Does NOT: Suggest creating the release manually"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)workflow.*run.*status"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)failure.*point"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)permissions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)workflow.*fix"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*startup_failure.*status"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Suggest.*creating.*release.*manually"
+        }
+      ]
     },
     {
-      "id": "GR-E40",
-      "description": "Workflow permissions check for signing and attestation",
-      "input": "Check if the release workflow has the correct permissions",
-      "expected": {
-        "behavior": "Read .github/workflows/release.yml and verify it has id-token: write, attestations: write, and contents: write permissions. Report any missing permissions and explain why each is needed.",
-        "must_not": ["Skip permission verification", "Approve workflow without id-token: write"],
-        "assertions": ["Checks id-token permission", "Checks attestations permission", "Checks contents permission", "Explains purpose of each"]
-      },
-      "tags": ["ci-validation", "permissions"]
+      "id": 23,
+      "prompt": "This repo has no release workflow. Set one up.",
+      "expected_output": "Detect the project ecosystem. Scaffold a .github/workflows/release.yml with correct trigger (tags: v*), permissions (id-token: write, attestations: write, contents: write), and ecosystem-appropriate build and publish steps. Include SBOM generation, cosign signing, and GitHub attestation steps.",
+      "expectations": [
+        "Detects ecosystem",
+        "Creates release.yml",
+        "Includes tag trigger",
+        "Includes permissions",
+        "Includes SBOM",
+        "Includes signing",
+        "Does NOT: Create workflow without tag trigger",
+        "Does NOT: Omit signing permissions",
+        "Does NOT: Skip SBOM generation"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)ecosystem"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)release\\.yml"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)tag.*trigger"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)permissions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)SBOM"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)signing"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*workflow.*without.*tag.*trigger"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Omit.*signing.*permissions"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*SBOM.*generation"
+        }
+      ]
     },
     {
-      "id": "GR-E41",
-      "description": "SBOM presence check on latest release",
-      "input": "Does the latest release have an SBOM?",
-      "expected": {
-        "behavior": "Query the latest GitHub release assets. Check for SBOM files (sbom.json, sbom.spdx, *.cdx.json, etc.). Report whether SBOM is present and which format. If missing, recommend adding SBOM generation to the release workflow.",
-        "must_not": ["Assume SBOM exists without checking", "Skip asset inspection"],
-        "assertions": ["Queries release assets", "Checks for SBOM files", "Reports format", "Recommends fix if missing"]
-      },
-      "tags": ["ci-validation", "supply-chain"]
+      "id": 24,
+      "prompt": "Show the release status of this project",
+      "expected_output": "List all version tags and check their types (annotated vs lightweight). If any lightweight tags are found, flag them as warnings. Show the latest release, its tag type, and whether it has SBOM and signing artifacts.",
+      "expectations": [
+        "Lists version tags",
+        "Checks tag types",
+        "Flags lightweight tags",
+        "Shows release artifacts",
+        "Does NOT: Ignore lightweight tags",
+        "Does NOT: Skip tag type verification"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)version.*tags"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)tag.*types"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)lightweight.*tags"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)release.*artifacts"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*lightweight.*tags"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*tag.*type.*verification"
+        }
+      ]
     },
     {
-      "id": "GR-E42",
-      "description": "Cosign signing check on latest release",
-      "input": "Is the latest release signed with cosign?",
-      "expected": {
-        "behavior": "Query the latest GitHub release assets. Check for cosign signature bundles (.bundle files) and attestation artifacts. Report signing status. If missing, recommend adding cosign signing to the release workflow.",
-        "must_not": ["Assume signing exists without checking", "Skip bundle file inspection"],
-        "assertions": ["Queries release assets", "Checks for .bundle files", "Reports signing status", "Recommends fix if missing"]
-      },
-      "tags": ["ci-validation", "supply-chain"]
+      "id": 25,
+      "prompt": "Check if all version files are consistent",
+      "expected_output": "Detect all version files for the project ecosystem. Read each file and extract the version string. Compare all versions and report any drift. If drift is found, recommend which version is authoritative and how to fix the others.",
+      "expectations": [
+        "Finds all version files",
+        "Extracts versions",
+        "Compares all versions",
+        "Reports drift clearly",
+        "Does NOT: Check only one file",
+        "Does NOT: Ignore drift"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)version.*files"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)versions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)versions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)drift.*clearly"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Check.*only.*one.*file"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*drift"
+        }
+      ]
     },
     {
-      "id": "GR-E43",
-      "description": "Reusable workflow SLSA Level 3 compliance check",
-      "input": "Does this release workflow meet SLSA Level 3?",
-      "expected": {
-        "behavior": "Analyze the release workflow for SLSA L3 requirements: uses a reusable workflow or trusted builder, has provenance generation, runs on GitHub-hosted runners, has no user-controlled build parameters that could inject commands. Report compliance level and gaps.",
-        "must_not": ["Claim SLSA L3 without verification", "Skip provenance check"],
-        "assertions": ["Checks for reusable workflow", "Checks provenance generation", "Checks runner type", "Reports compliance level"]
-      },
-      "tags": ["ci-validation", "slsa"]
+      "id": 26,
+      "prompt": "Check if the release workflow has the correct permissions",
+      "expected_output": "Read .github/workflows/release.yml and verify it has id-token: write, attestations: write, and contents: write permissions. Report any missing permissions and explain why each is needed.",
+      "expectations": [
+        "Checks id-token permission",
+        "Checks attestations permission",
+        "Checks contents permission",
+        "Explains purpose of each",
+        "Does NOT: Skip permission verification",
+        "Does NOT: Approve workflow without id-token: write"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)id\\-token.*permission"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)attestations.*permission"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)contents.*permission"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)purpose"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*permission.*verification"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Approve.*workflow.*without.*id\\-token.*write"
+        }
+      ]
     },
     {
-      "id": "GR-E44",
-      "description": "workflow_dispatch presence for manual release triggers",
-      "input": "Can I manually trigger the release workflow?",
-      "expected": {
-        "behavior": "Check if .github/workflows/release.yml has a workflow_dispatch trigger. If present, explain how to use it from the GitHub Actions UI or gh CLI. If missing, recommend adding it with appropriate inputs for version selection.",
-        "must_not": ["Suggest running gh release create as alternative"],
-        "assertions": ["Checks for workflow_dispatch", "Explains usage if present", "Recommends adding if missing"]
-      },
-      "tags": ["ci-validation", "workflow-dispatch"]
+      "id": 27,
+      "prompt": "Does the latest release have an SBOM?",
+      "expected_output": "Query the latest GitHub release assets. Check for SBOM files (sbom.json, sbom.spdx, *.cdx.json, etc.). Report whether SBOM is present and which format. If missing, recommend adding SBOM generation to the release workflow.",
+      "expectations": [
+        "Queries release assets",
+        "Checks for SBOM files",
+        "Reports format",
+        "Recommends fix if missing",
+        "Does NOT: Assume SBOM exists without checking",
+        "Does NOT: Skip asset inspection"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*assets"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)SBOM.*files"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)format"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)fix.*missing"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Assume.*SBOM.*exists.*without.*checking"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*asset.*inspection"
+        }
+      ]
     },
     {
-      "id": "GR-E50",
-      "description": "Pre-1.0.0 semver breaking change version bump",
-      "input": "We have a breaking change but the current version is 0.5.2. What version should it be?",
-      "expected": {
-        "behavior": "Explain pre-1.0.0 semver rules: breaking changes bump the minor version (0.5.2 -> 0.6.0), not the major version. Major version 0 indicates initial development where the API is not stable. Recommend 0.6.0.",
-        "must_not": ["Recommend 1.0.0 for a breaking change at 0.x", "Apply post-1.0 semver rules"],
-        "assertions": ["Explains pre-1.0 semver rules", "Recommends 0.6.0", "Explains minor bump for breaking changes"]
-      },
-      "tags": ["edge-cases", "semver"]
+      "id": 28,
+      "prompt": "Is the latest release signed with cosign?",
+      "expected_output": "Query the latest GitHub release assets. Check for cosign signature bundles (.bundle files) and attestation artifacts. Report signing status. If missing, recommend adding cosign signing to the release workflow.",
+      "expectations": [
+        "Queries release assets",
+        "Checks for .bundle files",
+        "Reports signing status",
+        "Recommends fix if missing",
+        "Does NOT: Assume signing exists without checking",
+        "Does NOT: Skip bundle file inspection"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*assets"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)bundle.*files"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)signing.*status"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)fix.*missing"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Assume.*signing.*exists.*without.*checking"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*bundle.*file.*inspection"
+        }
+      ]
     },
     {
-      "id": "GR-E51",
-      "description": "No conventional commits found for version suggestion",
-      "input": "Suggest the next version based on commits",
-      "expected": {
-        "behavior": "Analyze commits since the last tag. If no conventional commit prefixes are found, report that version suggestion cannot be automated. Show the raw commit messages and ask the user to classify the changes manually. Provide guidance on choosing major/minor/patch.",
-        "must_not": ["Guess a version without evidence", "Assume patch version by default"],
-        "assertions": ["Detects missing conventional commits", "Shows raw commits", "Asks user for classification", "Provides guidance"]
-      },
-      "tags": ["edge-cases", "conventional-commits"]
+      "id": 29,
+      "prompt": "Does this release workflow meet SLSA Level 3?",
+      "expected_output": "Analyze the release workflow for SLSA L3 requirements: uses a reusable workflow or trusted builder, has provenance generation, runs on GitHub-hosted runners, has no user-controlled build parameters that could inject commands. Report compliance level and gaps.",
+      "expectations": [
+        "Checks for reusable workflow",
+        "Checks provenance generation",
+        "Checks runner type",
+        "Reports compliance level",
+        "Does NOT: Claim SLSA L3 without verification",
+        "Does NOT: Skip provenance check"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)reusable.*workflow"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)provenance.*generation"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)runner.*type"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)compliance.*level"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Claim.*SLSA.*without.*verification"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*provenance.*check"
+        }
+      ]
     },
     {
-      "id": "GR-E52",
-      "description": "Monorepo with multiple packages requiring independent releases",
-      "input": "Release the auth package at v2.0.0 in this monorepo",
-      "expected": {
-        "behavior": "Detect monorepo structure. Identify the specific package to release. Update version files only within the auth package scope. Create a scoped tag (e.g., auth/v2.0.0 or @scope/auth@2.0.0). Ensure the release workflow supports scoped tags.",
-        "must_not": ["Update version files in other packages", "Create an unscoped v2.0.0 tag"],
-        "assertions": ["Detects monorepo", "Scopes changes to auth package", "Creates scoped tag", "Verifies workflow support"]
-      },
-      "tags": ["edge-cases", "monorepo"]
+      "id": 30,
+      "prompt": "Can I manually trigger the release workflow?",
+      "expected_output": "Check if .github/workflows/release.yml has a workflow_dispatch trigger. If present, explain how to use it from the GitHub Actions UI or gh CLI. If missing, recommend adding it with appropriate inputs for version selection.",
+      "expectations": [
+        "Checks for workflow_dispatch",
+        "Explains usage if present",
+        "Recommends adding if missing",
+        "Does NOT: Suggest running gh release create as alternative"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)workflow_dispatch"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)usage.*present"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)adding.*missing"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Suggest.*running.*release.*create.*alternative"
+        }
+      ]
     },
     {
-      "id": "GR-E53",
-      "description": "First release ever with no existing tags",
-      "input": "This project has never been released. Create the first release.",
-      "expected": {
-        "behavior": "Verify no existing tags. Determine initial version (typically 1.0.0 or 0.1.0 depending on project maturity). Create or verify CHANGELOG.md exists. Set version in all ecosystem-appropriate files. Create version bump PR. After merge, create signed annotated tag.",
-        "must_not": ["Assume tags exist", "Skip CHANGELOG creation", "Use gh release create"],
-        "assertions": ["Verifies no existing tags", "Discusses initial version choice", "Creates CHANGELOG if needed", "Sets version in all files"]
-      },
-      "tags": ["edge-cases", "first-release"]
+      "id": 31,
+      "prompt": "The CI release workflow for v2.4.7 just completed successfully. The auto-generated release notes only list PR titles.",
+      "expected_output": "Recognize that the release description needs overhauling. Review the commits included in the release (git log prev_tag..v2.4.7). Write a narrative release description grouped by theme (features, fixes, infrastructure) that explains what changed and why. Update the description using gh release edit v2.4.7 --notes \"...\".",
+      "expectations": [
+        "Reviews commits since previous tag",
+        "Writes narrative description",
+        "Groups changes by theme",
+        "Uses gh release edit --notes",
+        "Description reads like a human-written changelog",
+        "Does NOT: Leave the auto-generated notes as-is",
+        "Does NOT: Skip reviewing the commits",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)commits.*since.*previous.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)narrative.*description"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)changes.*theme"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)release.*edit.*notes"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)reads.*like.*human\\-written.*changelog"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Leave.*auto\\-generated.*notes.*as\\-is"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*reviewing.*commits"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
     },
     {
-      "id": "GR-E54",
-      "description": "Pre-release / release candidate versioning",
-      "input": "Create a release candidate for version 3.0.0",
-      "expected": {
-        "behavior": "Create version 3.0.0-rc.1 following semver pre-release conventions. Update version files with the pre-release version. Create a signed annotated tag v3.0.0-rc.1. Ensure the release workflow marks it as a pre-release on GitHub. Explain the RC promotion process.",
-        "must_not": ["Create a full 3.0.0 release", "Skip pre-release flag", "Use gh release create"],
-        "assertions": ["Uses -rc.1 suffix", "Updates version files", "Creates signed tag", "Marks as pre-release", "Explains promotion process"]
-      },
-      "tags": ["edge-cases", "pre-release"]
+      "id": 32,
+      "prompt": "Release v2.4.7 was just published. There are no GitHub Releases for v2.4.5 or v2.4.6 (tags exist but releases were never created due to CI issues).",
+      "expected_output": "Include changes from all skipped versions in the release description. Review commits from the last successfully released version (not just the previous tag). Mention in the description that this release covers multiple unreleased versions and explain why.",
+      "expectations": [
+        "Identifies skipped versions",
+        "Covers full changelog since last release",
+        "Explains version gap",
+        "Uses gh release edit --notes",
+        "Does NOT: Only cover changes since v2.4.6",
+        "Does NOT: Ignore skipped versions",
+        "Does NOT: Leave out context about missing releases"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)skipped.*versions"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)full.*changelog.*since.*last.*release"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version.*gap"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)release.*edit.*notes"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Only.*cover.*changes.*since.*v2\\.4\\.6"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Ignore.*skipped.*versions"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Leave.*out.*context.*about.*missing"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "We have a breaking change but the current version is 0.5.2. What version should it be?",
+      "expected_output": "Explain pre-1.0.0 semver rules: breaking changes bump the minor version (0.5.2 -> 0.6.0), not the major version. Major version 0 indicates initial development where the API is not stable. Recommend 0.6.0.",
+      "expectations": [
+        "Explains pre-1.0 semver rules",
+        "Recommends 0.6.0",
+        "Explains minor bump for breaking changes",
+        "Does NOT: Recommend 1.0.0 for a breaking change at 0.x",
+        "Does NOT: Apply post-1.0 semver rules"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)pre\\-1\\.0.*semver.*rules"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)0\\.6\\.0"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)minor.*bump.*breaking.*changes"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Recommend.*1\\.0\\.0.*breaking.*change.*0\\.x"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Apply.*post\\-1\\.0.*semver.*rules"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Suggest the next version based on commits",
+      "expected_output": "Analyze commits since the last tag. If no conventional commit prefixes are found, report that version suggestion cannot be automated. Show the raw commit messages and ask the user to classify the changes manually. Provide guidance on choosing major/minor/patch.",
+      "expectations": [
+        "Detects missing conventional commits",
+        "Shows raw commits",
+        "Asks user for classification",
+        "Provides guidance",
+        "Does NOT: Guess a version without evidence",
+        "Does NOT: Assume patch version by default"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)missing.*conventional.*commits"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)raw.*commits"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Asks.*user.*classification"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)guidance"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Guess.*version.*without.*evidence"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Assume.*patch.*version.*default"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Release the auth package at v2.0.0 in this monorepo",
+      "expected_output": "Detect monorepo structure. Identify the specific package to release. Update version files only within the auth package scope. Create a scoped tag (e.g., auth/v2.0.0 or @scope/auth@2.0.0). Ensure the release workflow supports scoped tags.",
+      "expectations": [
+        "Detects monorepo",
+        "Scopes changes to auth package",
+        "Creates scoped tag",
+        "Verifies workflow support",
+        "Does NOT: Update version files in other packages",
+        "Does NOT: Create an unscoped v2.0.0 tag"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)monorepo"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Scopes.*changes.*auth.*package"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)scoped.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)workflow.*support"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Update.*version.*files.*other.*packages"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*unscoped.*v2\\.0\\.0.*tag"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "This project has never been released. Create the first release.",
+      "expected_output": "Verify no existing tags. Determine initial version (typically 1.0.0 or 0.1.0 depending on project maturity). Create or verify CHANGELOG.md exists. Set version in all ecosystem-appropriate files. Create version bump PR. After merge, create signed annotated tag.",
+      "expectations": [
+        "Verifies no existing tags",
+        "Discusses initial version choice",
+        "Creates CHANGELOG if needed",
+        "Sets version in all files",
+        "Does NOT: Assume tags exist",
+        "Does NOT: Skip CHANGELOG creation",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)existing.*tags"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)initial.*version.*choice"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)CHANGELOG.*needed"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)Sets.*version.*files"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Assume.*tags.*exist"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*CHANGELOG.*creation"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "Create a release candidate for version 3.0.0",
+      "expected_output": "Create version 3.0.0-rc.1 following semver pre-release conventions. Update version files with the pre-release version. Create a signed annotated tag v3.0.0-rc.1. Ensure the release workflow marks it as a pre-release on GitHub. Explain the RC promotion process.",
+      "expectations": [
+        "Uses -rc.1 suffix",
+        "Updates version files",
+        "Creates signed tag",
+        "Marks as pre-release",
+        "Explains promotion process",
+        "Does NOT: Create a full 3.0.0 release",
+        "Does NOT: Skip pre-release flag",
+        "Does NOT: Use gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)rc\\.1.*suffix"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)version.*files"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)signed.*tag"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)pre\\-release"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)promotion.*process"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Create.*full.*3\\.0\\.0.*release"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Skip.*pre\\-release.*flag"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Use.*release.*create"
+        }
+      ]
     }
   ]
 }
