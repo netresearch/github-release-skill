@@ -3,11 +3,14 @@
 PreToolUse hook that blocks dangerous GitHub release operations.
 
 Blocks:
-  - gh release create/delete/edit (always)
+  - gh release create/delete (always)
+  - gh release edit (unless only --notes or --notes-file flags are used)
   - gh api calls to release endpoints with mutating HTTP methods
 
 Allows:
   - gh release view/list/download (read-only)
+  - gh release edit --notes "..." (release description overhaul)
+  - gh release edit --notes-file ... (release description overhaul)
   - gh run commands (workflow management)
   - Any non-release gh commands
 
@@ -83,6 +86,34 @@ MUTATING_METHOD_RE = re.compile(
 )
 
 
+# Flags for gh release edit that modify metadata other than notes.
+# See: gh release edit --help
+_DANGEROUS_EDIT_FLAGS = re.compile(
+    r"""
+    (?:^|\s)
+    (?:
+        --draft
+        |--prerelease
+        |--latest
+        |--tag
+        |--target
+        |--title
+        |-t\b
+        |--discussion-category
+        |--verify-tag
+    )
+    """,
+    re.VERBOSE,
+)
+
+
+def _is_notes_only_edit(args: str) -> bool:
+    """Return True if gh release edit args only modify notes."""
+    has_notes = bool(re.search(r"(?:^|\s)(?:--notes(?:\s|=)|--notes-file(?:\s|=)|-n\s)", args))
+    has_dangerous = bool(_DANGEROUS_EDIT_FLAGS.search(args))
+    return has_notes and not has_dangerous
+
+
 def check_command(command: str) -> None:
     """Check the command and block if it is a dangerous release operation."""
     # Normalise for easier matching (collapse multiple spaces).
@@ -112,11 +143,17 @@ def check_command(command: str) -> None:
                 "to mark it as deprecated via the CI pipeline.",
             )
         elif subcommand == "edit":
+            # Allow notes-only edits for release description overhaul.
+            # Extract the portion of the command after "gh release edit".
+            edit_args = cmd[match.end():]
+            if _is_notes_only_edit(edit_args):
+                continue
             block(
-                "Editing a GitHub release outside of CI bypasses audit controls. "
-                "Release metadata should be managed through the release workflow.",
-                "Update release notes through the CI pipeline or by updating "
-                "the CHANGELOG and triggering a new release.",
+                "Editing a GitHub release outside of notes overhaul bypasses audit "
+                "controls. Only --notes and --notes-file are permitted.",
+                "Use 'gh release edit vX.Y.Z --notes \"...\"' to overhaul the "
+                "release description. Other release metadata should be managed "
+                "through the CI release workflow.",
             )
         else:
             # Unknown subcommand -- block to be safe.
