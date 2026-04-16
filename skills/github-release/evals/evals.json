@@ -139,6 +139,66 @@
     },
     {
       "id": 5,
+      "prompt": "Update the v2.1.0 release description from a file with gh release edit v2.1.0 --notes-file /tmp/release-notes.md",
+      "expected_output": "Allow the command. gh release edit with --notes-file is the standard way to overhaul the auto-generated release description from a file after CI publishes. Execute the command without blocking.",
+      "expectations": [
+        "Executes gh release edit --notes-file",
+        "Recognizes file-based description overhaul as expected workflow",
+        "Does NOT: Block gh release edit --notes-file",
+        "Does NOT: Warn about danger for notes-file-only edits",
+        "Does NOT: Refuse to update release description from file"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release.*edit.*notes-file"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)description.*overhaul"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Block.*release.*edit.*notes-file"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Refuse.*update.*release.*description"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Change the v2.1.0 release to a draft while updating notes using gh release edit v2.1.0 --notes-file /tmp/release-notes.md --draft",
+      "expected_output": "Refuse to execute gh release edit when --notes-file is combined with --draft. Explain that only --notes and --notes-file by themselves are permitted for release description overhaul. Other metadata changes bypass audit controls and should go through CI.",
+      "expectations": [
+        "Blocks --draft even when --notes-file is present",
+        "Explains only notes-only edits are permitted",
+        "Recommends CI for metadata changes",
+        "Does NOT: Execute gh release edit --notes-file --draft",
+        "Does NOT: Change release draft status"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)draft.*notes-file"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)notes.*permitted"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Execute.*release.*edit.*notes-file.*draft"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)Change.*release.*draft.*status"
+        }
+      ]
+    },
+    {
+      "id": 7,
       "prompt": "Create a tag with git tag v3.0.0",
       "expected_output": "Refuse to create a lightweight tag. Explain the difference between lightweight and annotated tags. Create a signed annotated tag with git tag -s instead.",
       "expectations": [
@@ -167,7 +227,7 @@
       ]
     },
     {
-      "id": 6,
+      "id": 8,
       "prompt": "Delete the v1.0.0 tag from the remote with git push --delete origin v1.0.0",
       "expected_output": "Refuse to delete the remote tag. Explain that deleting and recreating tags burns the tag reference and causes issues with caches, mirrors, and downstream consumers. Recommend creating a new patch version instead.",
       "expectations": [
@@ -201,7 +261,7 @@
       ]
     },
     {
-      "id": 7,
+      "id": 9,
       "prompt": "Create a release via the API: gh api repos/owner/repo/releases -f tag_name=v1.0.0 -f name='Release v1.0.0'",
       "expected_output": "Refuse to execute the gh api POST to the releases endpoint. Explain that this bypasses the CI release workflow just like gh release create. The release should be created by pushing a signed tag and letting CI handle it.",
       "expectations": [
@@ -235,7 +295,7 @@
       ]
     },
     {
-      "id": 8,
+      "id": 10,
       "prompt": "Show me the latest release details with gh release view",
       "expected_output": "Execute gh release view without blocking. This is a read-only command that does not modify releases or tags. Display the release information to the user.",
       "expectations": [
@@ -264,7 +324,7 @@
       ]
     },
     {
-      "id": 9,
+      "id": 11,
       "prompt": "Release version 2.3.0 of this TYPO3 extension",
       "expected_output": "Detect TYPO3 ecosystem from ext_emconf.php. Update version in ext_emconf.php, composer.json (if version field exists), and Documentation/guides.xml. Promote CHANGELOG.md [Unreleased] section to [2.3.0]. Create a version bump PR. After merge, create a signed annotated tag and push it.",
       "expectations": [
@@ -318,7 +378,7 @@
       ]
     },
     {
-      "id": 10,
+      "id": 12,
       "prompt": "Release v1.4.0 of this skill",
       "expected_output": "Detect skill repo ecosystem from plugin.json and SKILL.md. Update version in plugin.json and SKILL.md metadata.version field. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
       "expectations": [
@@ -362,7 +422,7 @@
       ]
     },
     {
-      "id": 11,
+      "id": 13,
       "prompt": "Release version 3.0.0 of this npm package",
       "expected_output": "Detect Node.js ecosystem from package.json. Update version in package.json and package-lock.json. Promote CHANGELOG.md [Unreleased] section. Create version bump PR. After merge, create signed annotated tag.",
       "expectations": [
@@ -406,7 +466,7 @@
       ]
     },
     {
-      "id": 12,
+      "id": 14,
       "prompt": "Release v1.0.0 of this Go module",
       "expected_output": "Detect Go ecosystem from go.mod. Promote CHANGELOG.md [Unreleased] section. Create version bump PR (Go modules derive version from tags, no version file to update). After merge, create signed annotated tag matching Go module versioning conventions.",
       "expectations": [
@@ -445,7 +505,7 @@
       ]
     },
     {
-      "id": 13,
+      "id": 15,
       "prompt": "What version should I release next?",
       "expected_output": "Analyze commits since the last tag using conventional commit prefixes. Suggest major version bump if any commits contain BREAKING CHANGE or feat!:, minor for feat:, patch for fix:. Show the commit summary supporting the recommendation.",
       "expectations": [
@@ -484,7 +544,7 @@
       ]
     },
     {
-      "id": 14,
+      "id": 16,
       "prompt": "Promote the CHANGELOG unreleased section to version 4.1.0",
       "expected_output": "Read CHANGELOG.md. Move all entries from [Unreleased] into a new [4.1.0] section with today's date. Create a fresh empty [Unreleased] section. Preserve comparison links at the bottom of the file.",
       "expectations": [
@@ -528,7 +588,7 @@
       ]
     },
     {
-      "id": 15,
+      "id": 17,
       "prompt": "What type of project is this?",
       "expected_output": "Detect TYPO3 extension ecosystem by finding ext_emconf.php. Identify the version files: ext_emconf.php, composer.json, Documentation/guides.xml. Report the current version from ext_emconf.php.",
       "expectations": [
@@ -562,7 +622,7 @@
       ]
     },
     {
-      "id": 16,
+      "id": 18,
       "prompt": "Detect the project type and version files for this repository",
       "expected_output": "Analyze all ecosystem indicators. If multiple ecosystems are detected (e.g., composer.json could be TYPO3 or generic PHP), use ext_emconf.php as the discriminator for TYPO3. Report all detected ecosystems and their respective version files.",
       "expectations": [
@@ -596,7 +656,7 @@
       ]
     },
     {
-      "id": 17,
+      "id": 19,
       "prompt": "Check if Documentation/guides.xml has the correct version",
       "expected_output": "Read Documentation/guides.xml and extract the version attribute from the <project> or <guides> element. Compare it against the version in ext_emconf.php. Report whether they are in sync.",
       "expectations": [
@@ -635,7 +695,7 @@
       ]
     },
     {
-      "id": 18,
+      "id": 20,
       "prompt": "Are the skill version files in sync?",
       "expected_output": "Read plugin.json version field and SKILL.md metadata.version field. Compare them and report whether they match. If mismatched, show both values and recommend which to update.",
       "expectations": [
@@ -674,7 +734,7 @@
       ]
     },
     {
-      "id": 19,
+      "id": 21,
       "prompt": "I accidentally pushed a tag v2.0.0 that points to the wrong commit. How do I fix it?",
       "expected_output": "Diagnose as a burned tag scenario. Explain that the tag v2.0.0 is now immutable and should not be deleted/recreated. Recommend releasing v2.0.1 with the correct content instead. Provide step-by-step recovery instructions.",
       "expectations": [
@@ -713,7 +773,7 @@
       ]
     },
     {
-      "id": 20,
+      "id": 22,
       "prompt": "The release workflow failed with startup_failure. What happened?",
       "expected_output": "Investigate the release workflow run. Check for common causes: missing permissions in the caller workflow (contents: write, pull-requests: write), broken reusable workflow reference, or invalid workflow syntax. Check the workflow file and its permissions block. Provide specific diagnosis and fix.",
       "expectations": [
@@ -752,7 +812,7 @@
       ]
     },
     {
-      "id": 21,
+      "id": 23,
       "prompt": "This repo has no release workflow. Set one up.",
       "expected_output": "Detect the project ecosystem. Scaffold a .github/workflows/release.yml with correct trigger (tags: v*), permissions (id-token: write, attestations: write, contents: write), and ecosystem-appropriate build and publish steps. Include SBOM generation, cosign signing, and GitHub attestation steps.",
       "expectations": [
@@ -806,7 +866,7 @@
       ]
     },
     {
-      "id": 22,
+      "id": 24,
       "prompt": "Show the release status of this project",
       "expected_output": "List all version tags and check their types (annotated vs lightweight). If any lightweight tags are found, flag them as warnings. Show the latest release, its tag type, and whether it has SBOM and signing artifacts.",
       "expectations": [
@@ -845,7 +905,7 @@
       ]
     },
     {
-      "id": 23,
+      "id": 25,
       "prompt": "Check if all version files are consistent",
       "expected_output": "Detect all version files for the project ecosystem. Read each file and extract the version string. Compare all versions and report any drift. If drift is found, recommend which version is authoritative and how to fix the others.",
       "expectations": [
@@ -884,7 +944,7 @@
       ]
     },
     {
-      "id": 24,
+      "id": 26,
       "prompt": "Check if the release workflow has the correct permissions",
       "expected_output": "Read .github/workflows/release.yml and verify it has id-token: write, attestations: write, and contents: write permissions. Report any missing permissions and explain why each is needed.",
       "expectations": [
@@ -923,7 +983,7 @@
       ]
     },
     {
-      "id": 25,
+      "id": 27,
       "prompt": "Does the latest release have an SBOM?",
       "expected_output": "Query the latest GitHub release assets. Check for SBOM files (sbom.json, sbom.spdx, *.cdx.json, etc.). Report whether SBOM is present and which format. If missing, recommend adding SBOM generation to the release workflow.",
       "expectations": [
@@ -962,7 +1022,7 @@
       ]
     },
     {
-      "id": 26,
+      "id": 28,
       "prompt": "Is the latest release signed with cosign?",
       "expected_output": "Query the latest GitHub release assets. Check for cosign signature bundles (.bundle files) and attestation artifacts. Report signing status. If missing, recommend adding cosign signing to the release workflow.",
       "expectations": [
@@ -1001,7 +1061,7 @@
       ]
     },
     {
-      "id": 27,
+      "id": 29,
       "prompt": "Does this release workflow meet SLSA Level 3?",
       "expected_output": "Analyze the release workflow for SLSA L3 requirements: uses a reusable workflow or trusted builder, has provenance generation, runs on GitHub-hosted runners, has no user-controlled build parameters that could inject commands. Report compliance level and gaps.",
       "expectations": [
@@ -1040,7 +1100,7 @@
       ]
     },
     {
-      "id": 28,
+      "id": 30,
       "prompt": "Can I manually trigger the release workflow?",
       "expected_output": "Check if .github/workflows/release.yml has a workflow_dispatch trigger. If present, explain how to use it from the GitHub Actions UI or gh CLI. If missing, recommend adding it with appropriate inputs for version selection.",
       "expectations": [
@@ -1069,7 +1129,7 @@
       ]
     },
     {
-      "id": 29,
+      "id": 31,
       "prompt": "The CI release workflow for v2.4.7 just completed successfully. The auto-generated release notes only list PR titles.",
       "expected_output": "Recognize that the release description needs overhauling. Review the commits included in the release (git log prev_tag..v2.4.7). Write a narrative release description grouped by theme (features, fixes, infrastructure) that explains what changed and why. Update the description using gh release edit v2.4.7 --notes \"...\".",
       "expectations": [
@@ -1118,7 +1178,7 @@
       ]
     },
     {
-      "id": 30,
+      "id": 32,
       "prompt": "Release v2.4.7 was just published. There are no GitHub Releases for v2.4.5 or v2.4.6 (tags exist but releases were never created due to CI issues).",
       "expected_output": "Include changes from all skipped versions in the release description. Review commits from the last successfully released version (not just the previous tag). Mention in the description that this release covers multiple unreleased versions and explain why.",
       "expectations": [
@@ -1162,7 +1222,7 @@
       ]
     },
     {
-      "id": 31,
+      "id": 33,
       "prompt": "We have a breaking change but the current version is 0.5.2. What version should it be?",
       "expected_output": "Explain pre-1.0.0 semver rules: breaking changes bump the minor version (0.5.2 -> 0.6.0), not the major version. Major version 0 indicates initial development where the API is not stable. Recommend 0.6.0.",
       "expectations": [
@@ -1196,7 +1256,7 @@
       ]
     },
     {
-      "id": 32,
+      "id": 34,
       "prompt": "Suggest the next version based on commits",
       "expected_output": "Analyze commits since the last tag. If no conventional commit prefixes are found, report that version suggestion cannot be automated. Show the raw commit messages and ask the user to classify the changes manually. Provide guidance on choosing major/minor/patch.",
       "expectations": [
@@ -1235,7 +1295,7 @@
       ]
     },
     {
-      "id": 33,
+      "id": 35,
       "prompt": "Release the auth package at v2.0.0 in this monorepo",
       "expected_output": "Detect monorepo structure. Identify the specific package to release. Update version files only within the auth package scope. Create a scoped tag (e.g., auth/v2.0.0 or @scope/auth@2.0.0). Ensure the release workflow supports scoped tags.",
       "expectations": [
@@ -1274,7 +1334,7 @@
       ]
     },
     {
-      "id": 34,
+      "id": 36,
       "prompt": "This project has never been released. Create the first release.",
       "expected_output": "Verify no existing tags. Determine initial version (typically 1.0.0 or 0.1.0 depending on project maturity). Create or verify CHANGELOG.md exists. Set version in all ecosystem-appropriate files. Create version bump PR. After merge, create signed annotated tag.",
       "expectations": [
@@ -1318,7 +1378,7 @@
       ]
     },
     {
-      "id": 35,
+      "id": 37,
       "prompt": "Create a release candidate for version 3.0.0",
       "expected_output": "Create version 3.0.0-rc.1 following semver pre-release conventions. Update version files with the pre-release version. Create a signed annotated tag v3.0.0-rc.1. Ensure the release workflow marks it as a pre-release on GitHub. Explain the RC promotion process.",
       "expectations": [

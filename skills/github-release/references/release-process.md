@@ -70,7 +70,7 @@ The tag push triggers the release workflow (e.g., `.github/workflows/release.yml
 
 ### Phase 5: Release Description Overhaul
 
-After CI publishes the release, the agent overhaults the auto-generated description into a narrative format:
+After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
 ```
 1. Wait for CI release workflow to complete successfully

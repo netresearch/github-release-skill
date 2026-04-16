@@ -110,7 +110,10 @@ _DANGEROUS_EDIT_FLAGS = re.compile(
 
 def _is_notes_only_edit(args: str) -> bool:
     """Return True if gh release edit args only modify notes."""
-    # Strip quoted strings to avoid false positives from notes content
+    # Truncate at shell separators so chained commands don't pollute the check.
+    # e.g. "v1.0.0 --notes '...' ; other-cmd --draft" → "v1.0.0 --notes '...'"
+    args = re.split(r"\s*(?:;|&&|\|\|)\s*", args)[0]
+    # Strip quoted strings to avoid false positives from notes content.
     # e.g. --notes "Changed --draft behavior" should not trigger --draft block.
     clean_args = re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
     has_notes = bool(
