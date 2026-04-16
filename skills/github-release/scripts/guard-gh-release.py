@@ -88,19 +88,20 @@ MUTATING_METHOD_RE = re.compile(
 
 # Flags for gh release edit that modify metadata other than notes.
 # See: gh release edit --help
+# Uses \b word boundaries to avoid prefix collisions with future flags.
 _DANGEROUS_EDIT_FLAGS = re.compile(
     r"""
     (?:^|\s)
     (?:
-        --draft
-        |--prerelease
-        |--latest
-        |--tag
-        |--target
-        |--title
+        --draft\b
+        |--prerelease\b
+        |--latest\b
+        |--tag\b
+        |--target\b
+        |--title\b
         |-t\b
-        |--discussion-category
-        |--verify-tag
+        |--discussion-category\b
+        |--verify-tag\b
     )
     """,
     re.VERBOSE,
@@ -109,8 +110,13 @@ _DANGEROUS_EDIT_FLAGS = re.compile(
 
 def _is_notes_only_edit(args: str) -> bool:
     """Return True if gh release edit args only modify notes."""
-    has_notes = bool(re.search(r"(?:^|\s)(?:--notes(?:\s|=)|--notes-file(?:\s|=)|-n\s)", args))
-    has_dangerous = bool(_DANGEROUS_EDIT_FLAGS.search(args))
+    # Strip quoted strings to avoid false positives from notes content
+    # e.g. --notes "Changed --draft behavior" should not trigger --draft block.
+    clean_args = re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
+    has_notes = bool(
+        re.search(r"(?:^|\s)(?:--notes\b|--notes-file\b|-n\b|-F\b)", clean_args)
+    )
+    has_dangerous = bool(_DANGEROUS_EDIT_FLAGS.search(clean_args))
     return has_notes and not has_dangerous
 
 
@@ -145,7 +151,7 @@ def check_command(command: str) -> None:
         elif subcommand == "edit":
             # Allow notes-only edits for release description overhaul.
             # Extract the portion of the command after "gh release edit".
-            edit_args = cmd[match.end():]
+            edit_args = cmd[match.end() :]
             if _is_notes_only_edit(edit_args):
                 continue
             block(
@@ -170,9 +176,7 @@ def check_command(command: str) -> None:
         # but POST when -f/--field or --input is present. We block if a
         # mutating method is specified OR if data-sending flags are present.
         has_mutating_method = MUTATING_METHOD_RE.search(cmd)
-        has_data_flags = re.search(
-            r"\s(-f|--field|-F|--json-field|--input)\s", cmd
-        )
+        has_data_flags = re.search(r"\s(-f|--field|-F|--json-field|--input)\s", cmd)
         if has_mutating_method or has_data_flags:
             method = ""
             if has_mutating_method:
