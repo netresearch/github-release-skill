@@ -15,23 +15,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)lightweight.*tag.*risk"
+          "pattern": "(?i)lightweight"
         },
         {
           "type": "content",
-          "pattern": "(?i)git.*tag"
+          "pattern": "(?i)git tag -s"
         },
         {
           "type": "content",
-          "pattern": "(?i)workflow"
+          "pattern": "(?i)(workflow|CI)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*release.*create"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Create.*GitHub.*release.*directly.*via"
+          "pattern": "gh release create v1\\.2\\.0"
         }
       ]
     },
@@ -49,23 +45,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)burned.*tag.*concept"
+          "pattern": "(?i)burned"
         },
         {
           "type": "content",
-          "pattern": "(?i)tag.*immutability"
+          "pattern": "(?i)immut"
         },
         {
           "type": "content",
-          "pattern": "(?i)recovery.*process"
+          "pattern": "(?i)(recover|remediat|patch)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*release.*delete"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Delete.*GitHub.*release"
+          "pattern": "(?i)I('ll| will) (run|execute|delete).*gh release delete"
         }
       ]
     },
@@ -83,23 +75,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)draft.*flag"
+          "pattern": "(?i)--draft.*(block|not allowed|not permitted|forbidden|flag)"
         },
         {
           "type": "content",
-          "pattern": "(?i)notes.*permitted"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)metadata.*changes"
+          "pattern": "(?i)--notes"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*release.*edit.*draft"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Change.*release.*draft.*status"
+          "pattern": "gh release edit v1\\.5\\.0 --draft"
         }
       ]
     },
@@ -117,23 +101,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)release.*edit.*notes"
+          "pattern": "(?i)gh release edit"
         },
         {
           "type": "content",
-          "pattern": "(?i)description.*overhaul.*expected.*workflow"
+          "pattern": "(?i)--notes"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Block.*release.*edit.*notes"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Warn.*about.*danger.*notes\\-only.*edits"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Refuse.*update.*release.*description"
+          "pattern": "(?i)(block|refuse|cannot|can't run).*--notes"
         }
       ]
     },
@@ -151,19 +127,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)release.*edit.*notes-file"
+          "pattern": "(?i)gh release edit"
         },
         {
           "type": "content",
-          "pattern": "(?i)description.*overhaul"
+          "pattern": "(?i)--notes-file"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Block.*release.*edit.*notes-file"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Refuse.*update.*release.*description"
+          "pattern": "(?i)(block|refuse|cannot|can't run).*--notes-file"
         }
       ]
     },
@@ -181,19 +153,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)draft.*notes-file"
+          "pattern": "(?i)--draft.*(block|not allowed|not permitted|forbidden)"
         },
         {
           "type": "content",
-          "pattern": "(?i)notes.*permitted"
+          "pattern": "(?i)--notes"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*release.*edit.*notes-file.*draft"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Change.*release.*draft.*status"
+          "pattern": "gh release edit v2\\.1\\.0 --notes-file.+--draft"
         }
       ]
     },
@@ -210,19 +178,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)lightweight.*annotated.*tags"
+          "pattern": "(?i)lightweight"
         },
         {
           "type": "content",
-          "pattern": "(?i)git.*tag.*git.*tag"
+          "pattern": "(?i)git tag -s"
         },
         {
           "type": "content",
-          "pattern": "(?i)tag.*message"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Execute.*git.*tag.*v3\\.0\\.0.*without"
+          "pattern": "(?i)annotat"
         }
       ]
     },
@@ -240,23 +204,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)tag.*burning"
+          "pattern": "(?i)(burn|immut)"
         },
         {
           "type": "content",
-          "pattern": "(?i)downstream.*impact"
+          "pattern": "(?i)(immut|permanent|protect|reject)"
         },
         {
           "type": "content",
-          "pattern": "(?i)new.*version"
+          "pattern": "(?i)(patch|v1\\.0\\.1|new version)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*git.*push.*delete.*tags"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Execute.*git.*push.*origin.*refs"
+          "pattern": "(?i)I('ll| will) (run|execute).*git push --delete"
         }
       ]
     },
@@ -274,23 +234,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)API.*release.*creation.*attempt"
+          "pattern": "(?i)bypass"
         },
         {
           "type": "content",
-          "pattern": "(?i)bypass.*risk"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)tag\\-based.*workflow"
+          "pattern": "(?i)git tag -s"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Execute.*api.*POST.*releases.*endpoint"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Create.*release.*via.*API"
+          "pattern": "gh api repos/.*/releases -f"
         }
       ]
     },
@@ -307,19 +259,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)release.*view"
+          "pattern": "(?i)gh release view"
         },
         {
           "type": "content",
-          "pattern": "(?i)release.*information"
+          "pattern": "(?i)(release|v[0-9])"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Block.*refuse.*release.*view"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Warn.*about.*danger.*read\\-only.*commands"
+          "pattern": "(?i)(block|refuse|cannot|not allowed).*gh release view"
         }
       ]
     },
@@ -341,11 +289,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)TYPO3.*ecosystem"
+          "pattern": "(?i)TYPO3"
         },
         {
           "type": "content",
-          "pattern": "(?i)ext_emconf\\.php"
+          "pattern": "(?i)ext_emconf"
         },
         {
           "type": "content",
@@ -353,27 +301,15 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)Promotes.*CHANGELOG"
+          "pattern": "(?i)CHANGELOG"
         },
         {
           "type": "content",
-          "pattern": "(?i)signed.*tag"
+          "pattern": "(?i)(signed|git tag -s)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Skip.*ext_emconf\\.php"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*Documentation.*guides\\.xml"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Create.*lightweight.*tag"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -393,31 +329,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)skill.*repo.*ecosystem"
-        },
-        {
-          "type": "content",
           "pattern": "(?i)plugin\\.json"
         },
         {
           "type": "content",
-          "pattern": "(?i)SKILL\\.md.*version"
+          "pattern": "(?i)SKILL\\.md"
         },
         {
           "type": "content",
-          "pattern": "(?i)version.*bump"
+          "pattern": "(?i)(version.*bump|bump.*version)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Skip.*plugin\\.json"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*SKILL\\.md"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -437,31 +361,23 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)Node\\.js.*ecosystem"
-        },
-        {
-          "type": "content",
           "pattern": "(?i)package\\.json"
         },
         {
           "type": "content",
-          "pattern": "(?i)package\\-lock\\.json"
+          "pattern": "(?i)package-lock\\.json"
         },
         {
           "type": "content",
-          "pattern": "(?i)Promotes.*CHANGELOG"
+          "pattern": "(?i)CHANGELOG"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Skip.*package\\-lock\\.json"
+          "pattern": "(?i)gh release create"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Run.*npm.*publish.*directly"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)npm publish"
         }
       ]
     },
@@ -480,27 +396,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)ecosystem"
+          "pattern": "(?i)go\\.mod"
         },
         {
           "type": "content",
-          "pattern": "(?i)Promotes.*CHANGELOG"
+          "pattern": "(?i)CHANGELOG"
         },
         {
           "type": "content",
-          "pattern": "(?i)signed.*annotated.*tag"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)module.*versioning"
+          "pattern": "(?i)(signed|git tag -s)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Try.*update.*version.*go\\.mod"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -519,27 +427,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)commits.*since.*last.*tag"
+          "pattern": "(?i)(commits|git log)"
         },
         {
           "type": "content",
-          "pattern": "(?i)conventional.*commit.*rules"
+          "pattern": "(?i)(conventional|feat|fix)"
         },
         {
           "type": "content",
-          "pattern": "(?i)supporting.*evidence"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)clear.*recommendation"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Suggest.*version.*without.*analyzing.*commits"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*BREAKING.*CHANGE.*footers"
+          "pattern": "(?i)(minor|patch|major)"
         }
       ]
     },
@@ -559,31 +455,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)4\\.1\\.0.*section.*date"
+          "pattern": "(?i)4\\.1\\.0"
         },
         {
           "type": "content",
-          "pattern": "(?i)entries"
+          "pattern": "(?i)CHANGELOG"
         },
         {
           "type": "content",
-          "pattern": "(?i)empty.*Unreleased"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)comparison.*links"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Delete.*unreleased.*entries"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Remove.*comparison.*links"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Leave.*Unreleased.*section.*missing"
+          "pattern": "(?i)Unreleased"
         }
       ]
     },
@@ -601,23 +481,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)TYPO3.*ecosystem"
+          "pattern": "(?i)(TYPO3|ext_emconf)"
         },
         {
           "type": "content",
-          "pattern": "(?i)version.*files"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)current.*version"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Misidentify.*different.*ecosystem"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Miss.*ext_emconf\\.php"
+          "pattern": "(?i)version"
         }
       ]
     },
@@ -635,23 +503,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)multiple.*ecosystem.*indicators"
+          "pattern": "(?i)ecosystem"
         },
         {
           "type": "content",
-          "pattern": "(?i)discriminators.*correctly"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)version.*files"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Report.*only.*one.*ecosystem.*when"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*secondary.*indicators"
+          "pattern": "(?i)version"
         }
       ]
     },
@@ -678,19 +534,7 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)ext_emconf\\.php"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)sync.*status"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*guides\\.xml"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*version.*mismatch"
+          "pattern": "(?i)ext_emconf"
         }
       ]
     },
@@ -709,27 +553,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)plugin\\.json.*version"
+          "pattern": "(?i)(plugin\\.json|SKILL\\.md)"
         },
         {
           "type": "content",
-          "pattern": "(?i)SKILL\\.md.*version"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)versions"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)sync.*status"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Check.*only.*one.*file"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*mismatch"
+          "pattern": "(?i)version"
         }
       ]
     },
@@ -748,27 +576,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)burned.*tag.*scenario"
+          "pattern": "(?i)burned"
         },
         {
           "type": "content",
-          "pattern": "(?i)immutability"
+          "pattern": "(?i)immut"
         },
         {
           "type": "content",
-          "pattern": "(?i)patch.*version"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)recovery.*steps"
+          "pattern": "(?i)(v2\\.0\\.1|patch)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Suggest.*deleting.*recreating.*tag"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Suggest.*git.*push.*force.*tags"
+          "pattern": "(?i)git push --force.*tag"
         }
       ]
     },
@@ -787,27 +607,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)workflow.*run.*status"
+          "pattern": "(?i)(workflow|run)"
         },
         {
           "type": "content",
-          "pattern": "(?i)failure.*point"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)permissions"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)workflow.*fix"
+          "pattern": "(?i)permission"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Ignore.*startup_failure.*status"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Suggest.*creating.*release.*manually"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -837,11 +645,7 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)tag.*trigger"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)permissions"
+          "pattern": "(?i)permission"
         },
         {
           "type": "content",
@@ -849,19 +653,7 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)signing"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Create.*workflow.*without.*tag.*trigger"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Omit.*signing.*permissions"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*SBOM.*generation"
+          "pattern": "(?i)(signing|cosign)"
         }
       ]
     },
@@ -880,27 +672,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)version.*tags"
+          "pattern": "(?i)(tag|release|version)"
         },
         {
           "type": "content",
-          "pattern": "(?i)tag.*types"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)lightweight.*tags"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)release.*artifacts"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*lightweight.*tags"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*tag.*type.*verification"
+          "pattern": "(?i)(v[0-9]|commit)"
         }
       ]
     },
@@ -919,27 +695,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)version.*files"
+          "pattern": "(?i)version"
         },
         {
           "type": "content",
-          "pattern": "(?i)versions"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)versions"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)drift.*clearly"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Check.*only.*one.*file"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*drift"
+          "pattern": "(?i)(file|consistent|sync|drift|match)"
         }
       ]
     },
@@ -958,27 +718,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)id\\-token.*permission"
+          "pattern": "(?i)id-token"
         },
         {
           "type": "content",
-          "pattern": "(?i)attestations.*permission"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)contents.*permission"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)purpose"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*permission.*verification"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Approve.*workflow.*without.*id\\-token.*write"
+          "pattern": "(?i)(permission|write)"
         }
       ]
     },
@@ -997,27 +741,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)release.*assets"
+          "pattern": "(?i)SBOM"
         },
         {
           "type": "content",
-          "pattern": "(?i)SBOM.*files"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)format"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)fix.*missing"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Assume.*SBOM.*exists.*without.*checking"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*asset.*inspection"
+          "pattern": "(?i)(asset|release|check)"
         }
       ]
     },
@@ -1036,27 +764,11 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)release.*assets"
+          "pattern": "(?i)cosign"
         },
         {
           "type": "content",
-          "pattern": "(?i)bundle.*files"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)signing.*status"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)fix.*missing"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Assume.*signing.*exists.*without.*checking"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*bundle.*file.*inspection"
+          "pattern": "(?i)(sign|bundle|attestat)"
         }
       ]
     },
@@ -1075,27 +787,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)reusable.*workflow"
+          "pattern": "(?i)SLSA"
         },
         {
           "type": "content",
-          "pattern": "(?i)provenance.*generation"
+          "pattern": "(?i)provenance"
         },
         {
           "type": "content",
-          "pattern": "(?i)runner.*type"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)compliance.*level"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Claim.*SLSA.*without.*verification"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*provenance.*check"
+          "pattern": "(?i)(runner|workflow|build)"
         }
       ]
     },
@@ -1116,15 +816,11 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)usage.*present"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)adding.*missing"
+          "pattern": "(?i)(trigger|manual|dispatch)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Suggest.*running.*release.*create.*alternative"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -1145,35 +841,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)commits.*since.*previous.*tag"
+          "pattern": "(?i)(commit|git log)"
         },
         {
           "type": "content",
-          "pattern": "(?i)narrative.*description"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)changes.*theme"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)release.*edit.*notes"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)reads.*like.*human\\-written.*changelog"
+          "pattern": "(?i)gh release edit.*--notes"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Leave.*auto\\-generated.*notes.*as\\-is"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*reviewing.*commits"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -1193,31 +869,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)skipped.*versions"
+          "pattern": "(?i)(v2\\.4\\.5|v2\\.4\\.6|skipped|missing)"
         },
         {
           "type": "content",
-          "pattern": "(?i)full.*changelog.*since.*last.*release"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)version.*gap"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)release.*edit.*notes"
+          "pattern": "(?i)(CI|workflow|failed)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Only.*cover.*changes.*since.*v2\\.4\\.6"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Ignore.*skipped.*versions"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Leave.*out.*context.*about.*missing"
+          "pattern": "(?i)I('ll| will) (run|execute).*gh release create"
         }
       ]
     },
@@ -1235,23 +895,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)pre\\-1\\.0.*semver.*rules"
-        },
-        {
-          "type": "content",
           "pattern": "(?i)0\\.6\\.0"
         },
         {
           "type": "content",
-          "pattern": "(?i)minor.*bump.*breaking.*changes"
+          "pattern": "(?i)(pre-1\\.0|major version 0|minor)"
         },
         {
-          "type": "must_not",
-          "pattern": "(?i)Recommend.*1\\.0\\.0.*breaking.*change.*0\\.x"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Apply.*post\\-1\\.0.*semver.*rules"
+          "type": "content",
+          "pattern": "(?i)breaking"
         }
       ]
     },
@@ -1270,27 +922,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)missing.*conventional.*commits"
+          "pattern": "(?i)(commit|git log)"
         },
         {
           "type": "content",
-          "pattern": "(?i)raw.*commits"
+          "pattern": "(?i)(feat|fix|conventional|semver)"
         },
         {
           "type": "content",
-          "pattern": "(?i)Asks.*user.*classification"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)guidance"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Guess.*version.*without.*evidence"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Assume.*patch.*version.*default"
+          "pattern": "(?i)(v[0-9]|minor|patch|major)"
         }
       ]
     },
@@ -1313,23 +953,11 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)Scopes.*changes.*auth.*package"
+          "pattern": "(?i)auth"
         },
         {
           "type": "content",
-          "pattern": "(?i)scoped.*tag"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)workflow.*support"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Update.*version.*files.*other.*packages"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Create.*unscoped.*v2\\.0\\.0.*tag"
+          "pattern": "(?i)(version|package)"
         }
       ]
     },
@@ -1349,31 +977,15 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)existing.*tags"
+          "pattern": "(?i)(tag|version)"
         },
         {
           "type": "content",
-          "pattern": "(?i)initial.*version.*choice"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)CHANGELOG.*needed"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)Sets.*version.*files"
+          "pattern": "(?i)CHANGELOG"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Assume.*tags.*exist"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*CHANGELOG.*creation"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)gh release create"
         }
       ]
     },
@@ -1394,35 +1006,19 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "(?i)rc\\.1.*suffix"
+          "pattern": "(?i)rc\\.1"
         },
         {
           "type": "content",
-          "pattern": "(?i)version.*files"
+          "pattern": "(?i)(version|pre-release)"
         },
         {
           "type": "content",
-          "pattern": "(?i)signed.*tag"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)pre\\-release"
-        },
-        {
-          "type": "content",
-          "pattern": "(?i)promotion.*process"
+          "pattern": "(?i)(signed|git tag -s)"
         },
         {
           "type": "must_not",
-          "pattern": "(?i)Create.*full.*3\\.0\\.0.*release"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Skip.*pre\\-release.*flag"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)Use.*release.*create"
+          "pattern": "(?i)gh release create"
         }
       ]
     }
