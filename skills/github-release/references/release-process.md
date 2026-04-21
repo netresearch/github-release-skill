@@ -113,11 +113,11 @@ Release notes are for the people deciding whether to upgrade — users, admins, 
 
 #### `--latest=false` for non-default-branch releases
 
-**GitHub marks the most recently *created* release as "Latest" — by timestamp, not by semver.**
+**GitHub marks the most recently *created* release as "Latest" — by timestamp, not by SemVer.**
 
 Creating a backport release (say v11.0.17) AFTER a newer release on a higher branch (v13.5.0) steals the "Latest" badge from v13.5.0, and users who click "Latest release" then get the old major.
 
-**Rule:** on the rare paths where a manual `gh release create` is appropriate (repos WITHOUT a release workflow — most of netresearch's are NOT in this bucket), pass `--latest=false` for non-default-branch releases:
+**Rule:** this guidance does **not** override the policy above. On repositories guarded by this skill's hooks (including every Netresearch repo with a release workflow), manual `gh release create` stays blocked — CI creates releases from signed tags, not the agent. The rest of this subsection applies only to the rare unguarded case: repos WITHOUT a release workflow, where manual `gh release create` is the only path. In that case, pass `--latest=false` for non-default-branch releases:
 
 ```bash
 # Backport release on TYPO3_11 branch while main is on v13
