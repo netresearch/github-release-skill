@@ -84,6 +84,51 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
 
 The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
 
+#### Narrative over implementation details
+
+Release notes are for the people deciding whether to upgrade — users, admins, integrators — not for developers reading the diff. Lead with the user-facing story, then brief feature sections.
+
+**Don't list:**
+
+- Internal types, DTOs, enums, service-class names
+- File paths or class paths touched by the release
+- i18n unit counts or translation-bundle diffs
+- Refactor details that don't change behavior
+
+**Do describe:**
+
+- What a user can now do that they couldn't before
+- The configuration levels / option values a feature exposes
+- Breaking-change surfaces with migration notes
+
+**Bad example (diff-focused):**
+
+> - `EnforcementLevel` enum, `EnforcementStatus` DTO, `EnforcementService`, `AdoptionStatsService`
+> - 47 new i18n units in `locallang_db.xlf`
+> - Refactored `UserController::indexAction` into 3 helper methods
+
+**Good example (user-focused):**
+
+> Per-group passkey enforcement with four levels: Off, Encourage, Required, Enforced. Admins can now configure whether a group's members may log in with passwords, are nudged toward passkeys, must enroll at least one, or must use one for every sign-in.
+
+#### `--latest=false` for non-default-branch releases
+
+**GitHub marks the most recently *created* release as "Latest" — by timestamp, not by semver.**
+
+Creating a backport release (say v11.0.17) AFTER a newer release on a higher branch (v13.5.0) steals the "Latest" badge from v13.5.0, and users who click "Latest release" then get the old major.
+
+**Rule:** on the rare paths where a manual `gh release create` is appropriate (repos WITHOUT a release workflow — most of netresearch's are NOT in this bucket), pass `--latest=false` for non-default-branch releases:
+
+```bash
+# Backport release on TYPO3_11 branch while main is on v13
+gh release create v11.0.17 \
+  --latest=false \
+  --title "v11.0.17" \
+  --notes "Backport: CVE-2026-XXXX fix"
+```
+
+Default-branch (highest-version) releases keep the Latest badge; backports publish without stealing it.
+
 ## When CI Fails
 
 If the release workflow fails:
