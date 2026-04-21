@@ -129,6 +129,17 @@ gh release create v11.0.17 \
 
 Default-branch (highest-version) releases keep the Latest badge; backports publish without stealing it.
 
+**For the CI-driven flow (the common case)** — the release workflow, not the agent, creates the release, so the analogous setting is `make_latest: false` on the `softprops/action-gh-release` step (or the equivalent on whatever action publishes the release). A backport branch's workflow should set it conditionally, e.g., based on the branch name or a boolean input:
+
+```yaml
+- uses: softprops/action-gh-release@... # pinned SHA
+  with:
+    tag_name: ${{ github.ref_name }}
+    make_latest: ${{ github.ref_name == format('refs/heads/{0}', github.event.repository.default_branch) && 'true' || 'false' }}
+```
+
+If your repo uses the shared `release-generic.yml` reusable workflow and it doesn't yet expose a `make-latest` input, file a patch there rather than forking per-repo.
+
 ## When CI Fails
 
 If the release workflow fails:
