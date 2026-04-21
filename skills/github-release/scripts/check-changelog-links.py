@@ -30,6 +30,7 @@ Exits:
 
 Usage: check-changelog-links.py [path-to-changelog]
 """
+
 from __future__ import annotations
 
 import re
@@ -42,9 +43,7 @@ HEADER_RE = re.compile(
 # Matches footer definitions like: [0.5.0]: https://...
 FOOTER_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:\s*(?P<url>\S.*)\s*$")
 # Matches an Unreleased compare range ending in HEAD
-UNRELEASED_COMPARE_RE = re.compile(
-    r"/compare/(?P<from>[^./]+)\.\.\.HEAD\s*$"
-)
+UNRELEASED_COMPARE_RE = re.compile(r"/compare/(?P<from>[^./]+)\.\.\.HEAD\s*$")
 
 
 def main(argv: list[str]) -> int:
@@ -79,9 +78,10 @@ def main(argv: list[str]) -> int:
     # Only enforce if the project is actually using reference-style links.
     # Detect that by the presence of at least one footer key that matches any
     # header version or the literal "Unreleased".
-    uses_reference_style = any(
-        key in footer_keys for key in header_versions
-    ) or "Unreleased" in footer_keys
+    uses_reference_style = (
+        any(key in footer_keys for key in header_versions)
+        or "Unreleased" in footer_keys
+    )
     if not uses_reference_style:
         return 0
 
