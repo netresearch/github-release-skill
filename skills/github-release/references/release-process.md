@@ -156,20 +156,25 @@ jobs:
           # builds assets from the wrong commit and publishes them to the tag.
           # On push.tags the expression below resolves to ref_name (the tag)
           # which is equivalent to the default checkout.
-          ref: ${{ inputs.tag || github.ref_name }}
+          # Use github.event.inputs.* (not inputs.*) so the expression stays
+          # safe on push.tags runs — github.event.inputs resolves to an empty
+          # string on non-dispatch events, while inputs.* is only defined
+          # under workflow_dispatch / workflow_call.
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
           fetch-tags: true
       # ... build assets here ...
       - uses: softprops/action-gh-release@...  # pinned SHA
         with:
           # push.tags: ref_name IS the tag; workflow_dispatch: use the input.
-          tag_name: ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           # Default to Latest on tag push; honor the boolean input on dispatch.
           # GitHub Actions expressions have no ternary — this is the idiomatic
-          # and/or chain: `inputs.make_latest` is only defined on dispatch.
-          make_latest: ${{ github.event_name == 'workflow_dispatch' && (inputs.make_latest && 'true' || 'false') || 'true' }}
+          # and/or chain. fromJSON() parses the 'true'/'false' string from
+          # github.event.inputs into an actual boolean for the `&&` short-circuit.
+          make_latest: ${{ github.event_name == 'workflow_dispatch' && (fromJSON(github.event.inputs.make_latest || 'true') && 'true' || 'false') || 'true' }}
 ```
 
-For dispatch-only publishes (no tag-push trigger), drop the `push:` block and always use `inputs.tag` / `inputs.make_latest`. For tag-push-only workflows, drop the `workflow_dispatch:` block and always use `github.ref_name` with a fixed `make_latest` — but note that the fixed approach can't express "backport, don't steal Latest" without the dispatch input.
+For dispatch-only publishes (no tag-push trigger), drop the `push:` block; the combined expressions above still work, and you can simplify if you like. For tag-push-only workflows, drop the `workflow_dispatch:` block and always use `github.ref_name` with a fixed `make_latest` — but note that the fixed approach can't express "backport, don't steal Latest" without the dispatch input.
 
 For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make_latest` input (keep the name underscored to match GitHub's own action parameter; hyphenated names would force bracket-expression access, which is easy to get wrong) rather than forking per-repo.
 
