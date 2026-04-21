@@ -3,11 +3,14 @@
 PreToolUse hook that blocks dangerous GitHub release operations.
 
 Blocks:
-  - gh release create/delete/edit (always)
+  - gh release create/delete (always)
+  - gh release edit (unless only --notes or --notes-file flags are used)
   - gh api calls to release endpoints with mutating HTTP methods
 
 Allows:
   - gh release view/list/download (read-only)
+  - gh release edit --notes "..." (release description overhaul)
+  - gh release edit --notes-file ... (release description overhaul)
   - gh run commands (workflow management)
   - Any non-release gh commands
 
@@ -83,6 +86,43 @@ MUTATING_METHOD_RE = re.compile(
 )
 
 
+# Flags for gh release edit that modify metadata other than notes.
+# See: gh release edit --help
+# Uses \b word boundaries to avoid prefix collisions with future flags.
+_DANGEROUS_EDIT_FLAGS = re.compile(
+    r"""
+    (?:^|\s)
+    (?:
+        --draft\b
+        |--prerelease\b
+        |--latest\b
+        |--tag\b
+        |--target\b
+        |--title\b
+        |-t\b
+        |--discussion-category\b
+        |--verify-tag\b
+    )
+    """,
+    re.VERBOSE,
+)
+
+
+def _is_notes_only_edit(args: str) -> bool:
+    """Return True if gh release edit args only modify notes."""
+    # Truncate at shell separators so chained commands don't pollute the check.
+    # e.g. "v1.0.0 --notes '...' ; other-cmd --draft" → "v1.0.0 --notes '...'"
+    args = re.split(r"\s*(?:;|&&|\|\|)\s*", args)[0]
+    # Strip quoted strings to avoid false positives from notes content.
+    # e.g. --notes "Changed --draft behavior" should not trigger --draft block.
+    clean_args = re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
+    has_notes = bool(
+        re.search(r"(?:^|\s)(?:--notes\b|--notes-file\b|-n\b|-F\b)", clean_args)
+    )
+    has_dangerous = bool(_DANGEROUS_EDIT_FLAGS.search(clean_args))
+    return has_notes and not has_dangerous
+
+
 def check_command(command: str) -> None:
     """Check the command and block if it is a dangerous release operation."""
     # Normalise for easier matching (collapse multiple spaces).
@@ -112,11 +152,17 @@ def check_command(command: str) -> None:
                 "to mark it as deprecated via the CI pipeline.",
             )
         elif subcommand == "edit":
+            # Allow notes-only edits for release description overhaul.
+            # Extract the portion of the command after "gh release edit".
+            edit_args = cmd[match.end() :]
+            if _is_notes_only_edit(edit_args):
+                continue
             block(
-                "Editing a GitHub release outside of CI bypasses audit controls. "
-                "Release metadata should be managed through the release workflow.",
-                "Update release notes through the CI pipeline or by updating "
-                "the CHANGELOG and triggering a new release.",
+                "Editing a GitHub release outside of notes overhaul bypasses audit "
+                "controls. Only --notes and --notes-file are permitted.",
+                "Use 'gh release edit vX.Y.Z --notes \"...\"' to overhaul the "
+                "release description. Other release metadata should be managed "
+                "through the CI release workflow.",
             )
         else:
             # Unknown subcommand -- block to be safe.
@@ -133,9 +179,7 @@ def check_command(command: str) -> None:
         # but POST when -f/--field or --input is present. We block if a
         # mutating method is specified OR if data-sending flags are present.
         has_mutating_method = MUTATING_METHOD_RE.search(cmd)
-        has_data_flags = re.search(
-            r"\s(-f|--field|-F|--json-field|--input)\s", cmd
-        )
+        has_data_flags = re.search(r"\s(-f|--field|-F|--json-field|--input)\s", cmd)
         if has_mutating_method or has_data_flags:
             method = ""
             if has_mutating_method:

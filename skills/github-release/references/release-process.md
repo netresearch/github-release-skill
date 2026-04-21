@@ -13,7 +13,7 @@ The complete flow from "create a release" to "release published on GitHub."
 3. **Bypasses CI** — no provenance attestation, no SBOM, no artifact signing. The release is created directly with whatever you attach manually.
 4. **Skips version file bumps** — source code still shows the old version.
 
-The hooks in this repository block `gh release create`, `gh release delete`, and `gh release edit` to prevent these outcomes.
+The hooks in this repository block `gh release create` and `gh release delete` to prevent these outcomes. `gh release edit` is allowed only for `--notes`/`--notes-file` flags (release description overhaul).
 
 ## The Correct Release Flow
 
@@ -60,41 +60,82 @@ The tag MUST be:
 The tag push triggers the release workflow (e.g., `.github/workflows/release.yml`):
 
 ```
-1. CI creates a DRAFT release (not published)
+1. CI validates version tag matches version files
 2. CI builds artifacts (binaries, archives, etc.)
-3. CI generates SBOM (SPDX or CycloneDX)
-4. CI creates provenance attestation (SLSA)
-5. CI signs artifacts with Sigstore/cosign
-6. CI attaches all artifacts to the draft release
+3. CI generates checksums (SHA256SUMS.txt)
+4. CI generates SBOM if configured (SPDX or CycloneDX)
+5. CI creates provenance attestation if configured (SLSA)
+6. CI publishes the GitHub Release with all artifacts and auto-generated release notes
 ```
 
-### Phase 5: Publish
+### Phase 5: Release Description Overhaul
 
-The draft release is reviewed and published by a human:
+After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
 ```
-1. Navigate to GitHub Releases page
-2. Review the draft: changelog, artifacts, attestations
-3. Click "Publish release"
-4. Immutability locks in — the release is now permanent
+1. Wait for CI release workflow to complete successfully
+2. Review the commits included in the release (git log prev_tag..new_tag)
+3. Write a narrative release description covering:
+   - What changed and why it matters
+   - Context for skipped versions or notable decisions
+   - Grouped by theme (features, fixes, infrastructure), not by commit
+4. Update via: gh release edit vX.Y.Z --notes "..."
 ```
 
-## Draft-First Pattern
+The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
 
-Always create releases as drafts first. This is critical because:
+#### Narrative over implementation details
 
-- **Immutability is irreversible** — once published, the release (and its tag name) are locked forever
-- **Artifacts can be verified** before the release goes public
-- **Changelog can be reviewed** for accuracy
-- **If CI fails**, the draft can be deleted and recreated without burning the tag name (drafts are not yet immutable)
+Release notes are for the people deciding whether to upgrade — users, admins, integrators — not for developers reading the diff. Lead with the user-facing story, then brief feature sections.
 
-## When Publish Fails
+**Don't list:**
 
-If the CI workflow creates the draft but something goes wrong:
+- Internal types, DTOs, enums, service-class names
+- File paths or class paths touched by the release
+- i18n unit counts or translation-bundle diffs
+- Refactor details that don't change behavior
 
-1. **Workflow failed mid-run**: Re-run the workflow. The draft release may already exist; the workflow should handle idempotent creation.
-2. **Artifacts are wrong**: Delete the draft release (safe — drafts are not immutable), fix the issue, re-run.
-3. **Everything looks correct but user needs to publish**: Direct the user to the GitHub Releases page. The skill cannot publish on behalf of the user — this is an intentional human gate.
+**Do describe:**
+
+- What a user can now do that they couldn't before
+- The configuration levels / option values a feature exposes
+- Breaking-change surfaces with migration notes
+
+**Bad example (diff-focused):**
+
+> - `EnforcementLevel` enum, `EnforcementStatus` DTO, `EnforcementService`, `AdoptionStatsService`
+> - 47 new i18n units in `locallang_db.xlf`
+> - Refactored `UserController::indexAction` into 3 helper methods
+
+**Good example (user-focused):**
+
+> Per-group passkey enforcement with four levels: Off, Encourage, Required, Enforced. Admins can now configure whether a group's members may log in with passwords, are nudged toward passkeys, must enroll at least one, or must use one for every sign-in.
+
+#### `--latest=false` for non-default-branch releases
+
+**GitHub marks the most recently *created* release as "Latest" — by timestamp, not by semver.**
+
+Creating a backport release (say v11.0.17) AFTER a newer release on a higher branch (v13.5.0) steals the "Latest" badge from v13.5.0, and users who click "Latest release" then get the old major.
+
+**Rule:** on the rare paths where a manual `gh release create` is appropriate (repos WITHOUT a release workflow — most of netresearch's are NOT in this bucket), pass `--latest=false` for non-default-branch releases:
+
+```bash
+# Backport release on TYPO3_11 branch while main is on v13
+gh release create v11.0.17 \
+  --latest=false \
+  --title "v11.0.17" \
+  --notes "Backport: CVE-2026-XXXX fix"
+```
+
+Default-branch (highest-version) releases keep the Latest badge; backports publish without stealing it.
+
+## When CI Fails
+
+If the release workflow fails:
+
+1. **Workflow failed mid-run**: Re-run the workflow. If a release already exists, the workflow should handle idempotent creation.
+2. **Artifacts are wrong**: Fix the issue and re-run the workflow.
+3. **Startup failure**: Check that the caller workflow grants all permissions required by the reusable workflow (e.g., `contents: write`, `pull-requests: write`).
 
 ## Version Tag Format
 

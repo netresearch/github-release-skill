@@ -85,7 +85,21 @@ gh run list --workflow=release.yml --limit=1
 If the run is still in progress, report the URL so the user can watch it.
 If it completed, report success or failure with a link to the run.
 
-### 12. Report result
+### 12. Overhaul release description
+
+After CI publishes the release, rewrite the auto-generated release notes into a
+narrative description. The auto-generated notes (PR titles, contributor lists) are
+a starting point, not the final product.
+
+1. Review commits since the previous tag: `git log prev_tag..vX.Y.Z --oneline --no-merges`
+2. Check for skipped versions (tags without corresponding GitHub Releases)
+3. Write a narrative body covering what changed and why, grouped by theme
+4. Update via: `gh release edit vX.Y.Z --notes "..."`
+
+The description should read like a changelog written for humans — not a list of
+commit messages or PR titles.
+
+### 13. Report result
 
 Summarize what was done:
 - Version bumped from X.Y.Z to A.B.C
@@ -93,3 +107,4 @@ Summarize what was done:
 - PR URL
 - Tag created
 - Release workflow status
+- Release description overhauled
