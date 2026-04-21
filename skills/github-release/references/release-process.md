@@ -129,16 +129,30 @@ gh release create v11.0.17 \
 
 Default-branch (highest-version) releases keep the Latest badge; backports publish without stealing it.
 
-**For the CI-driven flow (the common case)** — the release workflow, not the agent, creates the release, so the analogous setting is `make_latest: false` on the `softprops/action-gh-release` step (or the equivalent on whatever action publishes the release). A backport branch's workflow should set it conditionally, e.g., based on the branch name or a boolean input:
+**For the CI-driven flow (the common case)** — the release workflow, not the agent, creates the release, so the analogous setting is `make_latest: false` on the `softprops/action-gh-release` step (or the equivalent on whatever action publishes the release). Release workflows typically trigger on tag push (`on.push.tags`), so `github.ref_name` holds the tag (e.g. `v1.2.3`), **not** a branch name — branch-name comparisons will never match on that trigger. Drive `make_latest` from an explicit source of truth instead:
 
 ```yaml
-- uses: softprops/action-gh-release@... # pinned SHA
-  with:
-    tag_name: ${{ github.ref_name }}
-    make_latest: ${{ github.ref_name == format('refs/heads/{0}', github.event.repository.default_branch) && 'true' || 'false' }}
+# Option A: explicit workflow_dispatch input
+on:
+  workflow_dispatch:
+    inputs:
+      make_latest:
+        type: boolean
+        default: true
+jobs:
+  publish:
+    steps:
+      - uses: softprops/action-gh-release@... # pinned SHA
+        with:
+          tag_name: ${{ github.ref_name }}
+          make_latest: ${{ inputs.make_latest && 'true' || 'false' }}
+
+# Option B: parse the tag and compare to the default branch's current major
+# (needs a prior step that computed the default-branch major into an output)
+# make_latest: ${{ steps.compare.outputs.is_latest_major }}
 ```
 
-If your repo uses the shared `release-generic.yml` reusable workflow and it doesn't yet expose a `make-latest` input, file a patch there rather than forking per-repo.
+For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make-latest` input rather than forking per-repo.
 
 ## When CI Fails
 
