@@ -86,18 +86,39 @@ This means: **if a release workflow fails before the create-release step runs** 
 
 ### Verify before moving
 
-Always confirm the tag name is not burned before deleting and re-pushing:
+Always confirm the tag name is not burned before deleting and re-pushing.
+Burning is tied to **publication** — a draft release does *not* burn the tag
+name, so the check has to distinguish draft from published.
+
+The safest programmatic check uses `--json isDraft`:
 
 ```bash
-gh release view vX.Y.Z
+STATE=$(gh release view "vX.Y.Z" --json isDraft 2>/dev/null || echo "notfound")
+if [[ "$STATE" == "notfound" ]] || [[ "$STATE" == *'"isDraft":true'* ]]; then
+    echo "Safe to move (no release OR draft only — tag name not burned)"
+else
+    echo "BURNED — release is published; bump the version instead"
+fi
 ```
 
-- Output of `release not found` (exit 1) → the tag name is **unburned** and safe to move.
-- Any other output, including a draft or published release → the tag name is **burned**. Do not move it; bump the version instead (see "The Only Recovery" above).
+Interpretation:
+
+- `notfound` (gh returns non-zero, typically "release not found") → the tag
+  name is **unburned** and safe to move.
+- `{"isDraft":true}` → a **draft** release exists. The tag name is
+  **unburned** (GitHub reserves the name but does not lock it until
+  publication), so the tag is still safe to move. If you do move it, delete
+  the stale draft first (`gh release delete vX.Y.Z`) so the re-triggered
+  workflow can recreate it cleanly.
+- `{"isDraft":false}` → a **published** release exists. The tag name is
+  **burned**. Do not move it; bump the version instead (see "The Only
+  Recovery" above).
 
 ### Safe move flow
 
-If `gh release view` reports "release not found" and the tag needs to point at a corrected commit (typically the fix for whatever broke the workflow):
+If the verification step above reports the tag name is unburned (no release
+or draft only) and the tag needs to point at a corrected commit (typically
+the fix for whatever broke the workflow):
 
 ```bash
 # 1. Delete the local tag
@@ -117,7 +138,12 @@ The re-push triggers the release workflow again against the corrected commit. If
 
 ### Hard rule
 
-**Never move a tag after a successful release.** Once `gh release view vX.Y.Z` returns any release object (draft or published), the tag name is off-limits. See "The Only Recovery: New Version Number" above.
+**Never move a tag after a successful (published) release.** Once
+`gh release view vX.Y.Z --json isDraft` returns `{"isDraft":false}`, the tag
+name is off-limits — see "The Only Recovery: New Version Number" above. A
+draft release (`{"isDraft":true}`) does *not* burn the tag name; the top of
+"When Moving a Tag IS Safe" explains why, and the verification step above
+tells you how to distinguish the two.
 
 ### Real-world example: t3x-nr-vault v0.5.0
 

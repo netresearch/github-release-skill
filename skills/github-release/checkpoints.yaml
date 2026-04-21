@@ -87,7 +87,7 @@ mechanical:
   - id: GR-12
     type: command
     severity: error
-    desc: "Reusable-workflow reference in release.yml points to a path that no longer exists at the pinned SHA. Release workflow will fail on tag push. Update the ref or remove the job."
+    desc: "Reusable-workflow reference in `.github/workflows/release*.yml` files points to a path that no longer exists at the pinned SHA (override the default glob via the WORKFLOW_GLOB env var). Release workflow will fail on tag push. Update the ref or remove the job."
     command: "${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/validate-reusable-workflows.sh"
 
   - id: GR-13

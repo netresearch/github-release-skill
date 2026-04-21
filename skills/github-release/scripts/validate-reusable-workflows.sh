@@ -75,27 +75,59 @@ echo "======================================"
 for wf in "${files[@]}"; do
     [[ -f "$wf" ]] || continue
 
-    # Strip comments and read line-by-line. We match patterns like:
+    # Parse `uses:` declarations. We match patterns like:
     #   uses: owner/repo/.github/workflows/file.yml@ref
     #   uses: 'owner/repo/.github/workflows/file.yml@ref'
-    # Spaces, quotes, and indentation are tolerated.
+    #   - uses: "owner/repo/.github/workflows/file.yml@ref"  # inline comment
+    # Leading dashes (list items), spaces, quotes, and inline comments are
+    # tolerated. Processing order for the extracted value: strip the inline
+    # comment FIRST (so the trailing quote is still at the end of the string),
+    # then strip surrounding quotes, then trim whitespace.
     while IFS= read -r line; do
-        # Strip leading whitespace + optional leading `-`
+        # Strip leading whitespace
         stripped="${line#"${line%%[![:space:]]*}"}"
         # Skip comments and empties
         [[ -z "$stripped" || "$stripped" == \#* ]] && continue
 
-        # Only lines that contain "uses:"
+        # Drop an optional leading list-item dash ("- uses: ...")
+        if [[ "$stripped" == -* ]]; then
+            stripped="${stripped#-}"
+            stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+        fi
+
+        # Only lines that begin with "uses:"
         [[ "$stripped" != uses:* ]] && continue
 
         # Extract the value after uses:
         value="${stripped#uses:}"
-        # Trim leading spaces and surrounding quotes
+        # Trim leading whitespace
         value="${value#"${value%%[![:space:]]*}"}"
-        value="${value%\"}"; value="${value#\"}"
-        value="${value%\'}"; value="${value#\'}"
-        # Drop inline comments
-        value="${value%%#*}"
+
+        # Strip inline comment FIRST. In YAML, a `#` that begins a comment must
+        # be preceded by whitespace (or start the line). A `#` inside a quoted
+        # string is literal. Handle quoted and unquoted values separately so we
+        # don't accidentally truncate a URL or path that contains `#`.
+        if [[ "$value" == \"* ]]; then
+            # Double-quoted: strip to the matching closing quote, then discard
+            # anything after it (e.g. `  # comment`).
+            rest="${value#\"}"
+            value="${rest%%\"*}"
+        elif [[ "$value" == \'* ]]; then
+            # Single-quoted: strip to the matching closing quote.
+            rest="${value#\'}"
+            value="${rest%%\'*}"
+        else
+            # Unquoted: an inline comment requires whitespace before `#`.
+            # Drop everything from the first whitespace+# onward.
+            if [[ "$value" =~ ^([^[:space:]]+)([[:space:]]+#.*)?$ ]]; then
+                value="${BASH_REMATCH[1]}"
+            else
+                # Fallback: take the first whitespace-delimited token.
+                value="${value%%[[:space:]]*}"
+            fi
+        fi
+
+        # Trim any residual trailing whitespace.
         value="${value%"${value##*[![:space:]]}"}"
 
         # Match owner/repo/.github/workflows/FILE.yml@REF

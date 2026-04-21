@@ -25,7 +25,11 @@ This script parses CHANGELOG.md and reports:
 
 Exits:
   0 - all references resolve / file absent / no reference-style headers used
-  1 - one or more reference-style headers lack a footer link
+  1 - a CHANGELOG error was detected. Either:
+        * one or more reference-style headers lack a footer link, or
+        * the `[Unreleased]: .../compare/<from>...HEAD` range is stale
+          (i.e., `<from>` is not the newest released version in the
+          header list).
   2 - environment error (file unreadable, etc.)
 
 Usage: check-changelog-links.py [path-to-changelog]
@@ -42,8 +46,11 @@ HEADER_RE = re.compile(
 )
 # Matches footer definitions like: [0.5.0]: https://...
 FOOTER_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:\s*(?P<url>\S.*)\s*$")
-# Matches an Unreleased compare range ending in HEAD
-UNRELEASED_COMPARE_RE = re.compile(r"/compare/(?P<from>[^./]+)\.\.\.HEAD\s*$")
+# Matches an Unreleased compare range ending in HEAD. The capture group must
+# allow dots so it can match common forms like `v0.5.0...HEAD` or `0.5.0...HEAD`
+# (the previous `[^./]+` class excluded dots and therefore missed semver
+# versions entirely — it would only match refs like `main` or `abc1234`).
+UNRELEASED_COMPARE_RE = re.compile(r"/compare/(?P<from>[^/]+?)\.\.\.HEAD\s*$")
 
 
 def main(argv: list[str]) -> int:
