@@ -132,25 +132,32 @@ Default-branch (highest-version) releases keep the Latest badge; backports publi
 **For the CI-driven flow (the common case)** — the release workflow, not the agent, creates the release, so the analogous setting is `make_latest: false` on the `softprops/action-gh-release` step (or the equivalent on whatever action publishes the release). Release workflows typically trigger on tag push (`on.push.tags`), so `github.ref_name` holds the tag (e.g. `v1.2.3`), **not** a branch name — branch-name comparisons will never match on that trigger. Drive `make_latest` from an explicit source of truth instead:
 
 ```yaml
-# Option A: explicit workflow_dispatch input
+# Combined trigger: tag push (normal case) + workflow_dispatch with explicit
+# tag + make_latest inputs (for manual backport publishes).
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
+      tag:
+        description: 'Tag to publish (must already exist)'
+        required: true
       make_latest:
         type: boolean
         default: true
+
 jobs:
   publish:
     steps:
       - uses: softprops/action-gh-release@... # pinned SHA
         with:
-          tag_name: ${{ github.ref_name }}
-          make_latest: ${{ inputs.make_latest && 'true' || 'false' }}
-
-# Option B: parse the tag and compare to the default branch's current major
-# (needs a prior step that computed the default-branch major into an output)
-# make_latest: ${{ steps.compare.outputs.is_latest_major }}
+          # push.tags: github.ref_name IS the tag; workflow_dispatch: use the input.
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          # push.tags defaults to latest; workflow_dispatch uses the boolean input.
+          make_latest: ${{ (github.event_name == 'workflow_dispatch' && inputs.make_latest) && 'true' || (github.event_name == 'push' && 'true' || 'false') }}
 ```
+
+For dispatch-only publishes (no tag-push trigger), drop the `push:` block and always use `inputs.tag` / `inputs.make_latest`. For tag-push-only workflows, drop the `workflow_dispatch:` block and always use `github.ref_name` with a fixed `make_latest` — but note that the fixed approach can't express "backport, don't steal Latest" without the dispatch input.
 
 For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make-latest` input rather than forking per-repo.
 
