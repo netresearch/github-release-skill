@@ -149,17 +149,29 @@ on:
 jobs:
   publish:
     steps:
-      - uses: softprops/action-gh-release@... # pinned SHA
+      - uses: actions/checkout@...  # pinned SHA
         with:
-          # push.tags: github.ref_name IS the tag; workflow_dispatch: use the input.
+          # CRITICAL on workflow_dispatch: ref_name is the branch the dispatch
+          # was launched from (e.g. 'main'), not the tag. Without this, the job
+          # builds assets from the wrong commit and publishes them to the tag.
+          # On push.tags the expression below resolves to ref_name (the tag)
+          # which is equivalent to the default checkout.
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-tags: true
+      # ... build assets here ...
+      - uses: softprops/action-gh-release@...  # pinned SHA
+        with:
+          # push.tags: ref_name IS the tag; workflow_dispatch: use the input.
           tag_name: ${{ inputs.tag || github.ref_name }}
-          # push.tags defaults to latest; workflow_dispatch uses the boolean input.
-          make_latest: ${{ (github.event_name == 'workflow_dispatch' && inputs.make_latest) && 'true' || (github.event_name == 'push' && 'true' || 'false') }}
+          # Default to Latest on tag push; honor the boolean input on dispatch.
+          # GitHub Actions expressions have no ternary — this is the idiomatic
+          # and/or chain: `inputs.make_latest` is only defined on dispatch.
+          make_latest: ${{ github.event_name == 'workflow_dispatch' && (inputs.make_latest && 'true' || 'false') || 'true' }}
 ```
 
 For dispatch-only publishes (no tag-push trigger), drop the `push:` block and always use `inputs.tag` / `inputs.make_latest`. For tag-push-only workflows, drop the `workflow_dispatch:` block and always use `github.ref_name` with a fixed `make_latest` — but note that the fixed approach can't express "backport, don't steal Latest" without the dispatch input.
 
-For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make-latest` input rather than forking per-repo.
+For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make_latest` input (keep the name underscored to match GitHub's own action parameter; hyphenated names would force bracket-expression access, which is easy to get wrong) rather than forking per-repo.
 
 ## When CI Fails
 
