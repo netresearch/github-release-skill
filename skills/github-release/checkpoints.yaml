@@ -83,6 +83,23 @@ mechanical:
     desc: "Git signing is configured"
     command: "git config user.signingkey >/dev/null 2>&1 || git config gpg.format >/dev/null 2>&1"
 
+  # Release pipeline integrity checks
+  - id: GR-12
+    type: command
+    severity: error
+    desc: >-
+      Reusable-workflow reference in `.github/workflows/release*.yml` files
+      (override the default glob via the WORKFLOW_GLOB env var) points to a
+      path that no longer exists at the pinned SHA. Release workflow will
+      fail on tag push. Update the ref or remove the job.
+    command: "${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/validate-reusable-workflows.sh"
+
+  - id: GR-13
+    type: command
+    severity: warning
+    desc: "CHANGELOG.md reference-style header [X.Y.Z] missing matching [X.Y.Z]: <URL> footer link. Add the link entry and update the [Unreleased]: compare/vX.Y.Z...HEAD range to the new version."
+    command: "python3 ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/check-changelog-links.py"
+
 llm_reviews:
   - id: GR-R1
     domain: release-safety

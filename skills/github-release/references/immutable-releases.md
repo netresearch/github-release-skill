@@ -78,6 +78,90 @@ See `recovery-procedures.md` for detailed recovery steps.
 - Never delete and recreate tags expecting to reuse the name
 - Never assume a failed release can be "retried" with the same version number
 
+## When Moving a Tag IS Safe
+
+Tag-name burning is tied to **release publication**, not to the tag push itself. A tag pushed to the remote is *not* automatically burned. Burning happens only when `gh release create` (or the equivalent REST/GraphQL API call, or the Release workflow's create-release step) actually creates the release object.
+
+This means: **if a release workflow fails before the create-release step runs** — e.g., a broken reusable-workflow reference, a failing build, a failing SBOM step, a failing signing step — the tag name is still available to re-use. The workflow never reached the publication event, so the tag name is not burned.
+
+### Verify before moving
+
+Always confirm the tag name is not burned before deleting and re-pushing.
+Burning is tied to **publication** — a draft release does *not* burn the tag
+name, so the check has to distinguish draft from published.
+
+The safest programmatic check uses `--json isDraft`:
+
+```bash
+STATE=$(gh release view "vX.Y.Z" --json isDraft 2>/dev/null || echo "notfound")
+if [[ "$STATE" == "notfound" ]] || [[ "$STATE" == *'"isDraft":true'* ]]; then
+    echo "Safe to move (no release OR draft only — tag name not burned)"
+else
+    echo "BURNED — release is published; bump the version instead"
+fi
+```
+
+Interpretation:
+
+- `notfound` (gh returns non-zero, typically "release not found") → the tag
+  name is **unburned** and safe to move.
+- `{"isDraft":true}` → a **draft** release exists. The tag name is
+  **unburned** (GitHub reserves the name but does not lock it until
+  publication), so the tag is still safe to move. If you do move it, delete
+  the stale draft first (`gh release delete vX.Y.Z`) so the re-triggered
+  workflow can recreate it cleanly.
+- `{"isDraft":false}` → a **published** release exists. The tag name is
+  **burned**. Do not move it; bump the version instead (see "The Only
+  Recovery" above).
+
+### Safe move flow
+
+If the verification step above reports the tag name is unburned (no release
+or draft only) and the tag needs to point at a corrected commit (typically
+the fix for whatever broke the workflow):
+
+```bash
+# 1. Delete the local tag
+git tag -d vX.Y.Z
+
+# 2. Delete the remote tag (pushing an empty ref)
+git push origin :vX.Y.Z
+
+# 3. Re-create the signed annotated tag at the corrected commit
+git tag -s vX.Y.Z -m "vX.Y.Z" <new-sha>
+
+# 4. Push the tag — this re-triggers the release workflow
+git push origin vX.Y.Z
+```
+
+The re-push triggers the release workflow again against the corrected commit. If the workflow now succeeds, it creates the release and the tag name is burned from that point forward.
+
+### Hard rule
+
+**Never move a tag after a successful (published) release.** Once
+`gh release view vX.Y.Z --json isDraft` returns `{"isDraft":false}`, the tag
+name is off-limits — see "The Only Recovery: New Version Number" above. A
+draft release (`{"isDraft":true}`) does *not* burn the tag name; the top of
+"When Moving a Tag IS Safe" explains why, and the verification step above
+tells you how to distinguish the two.
+
+### Real-world example: t3x-nr-vault v0.5.0
+
+A production release session hit this exact situation:
+
+1. Version bump PR merged on `main`.
+2. Signed tag `v0.5.0` pushed.
+3. Release workflow failed immediately with "workflow file not found" — the release.yml referenced `netresearch/skill-repo-skill/.github/workflows/slsa-provenance.yml@<sha>` but that file had been consolidated into `release.yml` upstream.
+4. Verification step:
+   ```bash
+   $ gh release view v0.5.0
+   release not found
+   ```
+5. Because the workflow never reached the create-release step, the tag name was unburned. Safe move flow applied: `git tag -d v0.5.0 && git push origin :v0.5.0`, fix the release.yml reference on main, re-sign `v0.5.0` at the fix commit, re-push.
+6. Workflow succeeded on the re-push. `v0.5.0` was published — from that point forward the tag name is burned, as expected.
+
+The mechanical checkpoint `GR-12` (`validate-reusable-workflows.sh`) catches this class of failure before the tag is ever pushed.
+
 ## Timeline
 
 | Date | Event |
