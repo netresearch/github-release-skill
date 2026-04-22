@@ -1,6 +1,6 @@
 {
   "name": "github-release",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Safe, automated GitHub releases with supply chain security. Prevents dangerous gh release commands, orchestrates version bumps, signed tags, and CI-driven releases across ecosystems (TYPO3, PHP, Node.js, Go, Python, Rust, skill repos).",
   "repository": "https://github.com/netresearch/github-release-skill",
   "license": "(MIT AND CC-BY-SA-4.0)",
