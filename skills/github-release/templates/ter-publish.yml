@@ -1,0 +1,37 @@
+# Optional companion to release-typo3.yml — add this file ONLY if you need
+# to re-push to TER without re-tagging (e.g. after editing release notes on
+# GitHub, or after a transient tailor / TER API failure).
+#
+# Triggered manually via:
+#     gh workflow run ter-publish.yml --ref <branch>
+#
+# Why branch-ref, not tag-ref: GitHub rejects `--ref <tag>` when the caller
+# workflow file does not exist at that tag — common when this workflow is
+# added AFTER older tags have been published. The shared
+# publish-to-ter.yml reusable workflow reads the version from
+# ext_emconf.php and derives the matching release tag automatically.
+#
+# See references/ter-republish.md for the full pattern.
+name: Publish to TER (manual)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  publish-to-ter:
+    uses: netresearch/typo3-ci-workflows/.github/workflows/publish-to-ter.yml@main
+    permissions:
+      contents: read
+    secrets:
+      # TYPO3_EXTENSION_KEY is NOT forwarded on purpose. The shared
+      # netresearch/typo3-ci-workflows/.github/workflows/publish-to-ter.yml
+      # declares it as `required: false, description: "Deprecated:
+      # extension key is auto-resolved from composer.json"`. The
+      # downstream "Resolve extension key" step reads
+      # extra.typo3/cms.extension-key from composer.json and hard-errors
+      # if missing, so the composer.json is the single source of truth.
+      # Existing release-typo3.yml callers may still forward the secret
+      # for historic reasons; new callers should not.
+      TYPO3_TER_ACCESS_TOKEN: ${{ secrets.TYPO3_TER_ACCESS_TOKEN }}

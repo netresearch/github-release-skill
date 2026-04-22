@@ -30,7 +30,8 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 6. **After PR merge** — create signed annotated tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
 8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
-9. **Overhaul release description** — rewrite the auto-generated notes into a narrative summary using `gh release edit vX.Y.Z --notes "..."`
+9. **Overhaul release description** — rewrite the auto-generated notes into a narrative summary in a local file, then apply with `gh release edit vX.Y.Z --notes-file notes.md`. Use `--notes-file` (not `--notes "..."`) so multi-line Markdown doesn't trip over shell quoting.
+10. **Do NOT re-run the release workflow after step 9** — many release workflows (e.g. `softprops/action-gh-release`) regenerate the body from the commit log on every run and will overwrite the manual overhaul. If a downstream job (TER publish, artifact upload) needs a retry, use a dedicated dispatcher workflow (see `references/ter-republish.md` for the TYPO3 pattern).
 
 ## Commands
 
@@ -49,5 +50,6 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 - `references/ecosystem-detection.md` — version file patterns per ecosystem
 - `references/immutable-releases.md` — GitHub immutable releases and tag burning
 - `references/supply-chain-security.md` — SLSA, Sigstore, SBOMs, attestations
-- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift
+- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering after manual overhaul, mis-tagged SemVer releases, branch-protection gotchas
+- `references/ter-republish.md` — TYPO3 Extension Repository re-publish patterns (workflow_dispatch-only caller, codepoint-safe comment truncation, v-prefix + bare-version tag compatibility)
 - `references/ci-workflow-templates.md` — CI workflow structure and templates
