@@ -59,6 +59,8 @@ Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/n
 }
 ```
 
+> **Limitation:** This installation method only registers the skill's `SKILL.md` content (procedural knowledge that the agent reads). The slash commands (`/release`, `/release-prepare`, `/release-status`) and the PreToolUse guard hooks defined in `.claude-plugin/` are **not** loaded by Claude Code when the skill is installed via npm — those require Claude Code's plugin mechanism. To get the full skill (slash commands + guard hooks + procedural knowledge), install via the [Claude Code Marketplace](#claude-code-marketplace-recommended) instead.
+
 ### Manual
 
 Download the latest release and extract to `~/.claude/plugins/`.
