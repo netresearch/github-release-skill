@@ -1,0 +1,35 @@
+{
+  "name": "@netresearch/github-release-skill",
+  "version": "0.0.0-source",
+  "description": "Claude Code skill for safe GitHub releases with supply chain security.",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
+  "homepage": "https://github.com/netresearch/github-release-skill",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netresearch/github-release-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/netresearch/github-release-skill/issues"
+  },
+  "keywords": [
+    "ai-agent-skill",
+    "github-release",
+    "supply-chain-security",
+    "slsa",
+    "release-management",
+    "anthropic",
+    "claude-code"
+  ],
+  "aiAgentSkill": "skills/github-release/SKILL.md",
+  "files": [
+    "skills/github-release/",
+    "hooks/",
+    "LICENSE-MIT",
+    "LICENSE-CC-BY-SA-4.0",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@netresearch/agent-skill-coordinator": "^0.1"
+  }
+}
