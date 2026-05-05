@@ -187,6 +187,8 @@ reference implementation.
 
 ## Related
 
+- `typo3-ter-publishing.md` — initial-publish gotchas (tag/`ext_emconf.php`
+  version match, `v`-prefix handling in custom workflows)
 - `recovery-procedures.md` — generic release recovery
 - `release-process.md` — the standard release flow
 - `immutable-releases.md` — why we can't just re-tag

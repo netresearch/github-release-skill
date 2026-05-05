@@ -50,6 +50,7 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 - `references/ecosystem-detection.md` — version file patterns per ecosystem
 - `references/immutable-releases.md` — GitHub immutable releases and tag burning
 - `references/supply-chain-security.md` — SLSA, Sigstore, SBOMs, attestations
-- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering, mis-tagged SemVer releases, branch-protection gotchas
-- `references/ter-republish.md` — TYPO3 Extension Repository re-publish patterns
+- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering, branch-protection gotchas
+- `references/ter-republish.md` — TYPO3 TER re-publish patterns
+- `references/typo3-ter-publishing.md` — TYPO3 initial-publish gotchas (tag/`ext_emconf.php` version match, `v`-prefix handling)
 - `references/ci-workflow-templates.md` — CI workflow structure and templates
