@@ -26,12 +26,12 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 2. **Determine next version** — based on conventional commits or user input (major/minor/patch)
 3. **Bump version files** — update all ecosystem-specific version files consistently
 4. **Update CHANGELOG.md** — add release section with date and changes
-5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always prefer a PR over pushing version bumps directly to `main`, even though many tutorials show direct pushes — branch protection often blocks them anyway, and the PR gives CI one final chance to verify the version bump didn't break anything)
-6. **After PR merge** — `git checkout main && git pull`, then create signed annotated tag on the **merge commit**: `git tag -s vX.Y.Z -m "vX.Y.Z"` (NOT from the `release/vX.Y.Z` branch tip — see `references/release-process.md` Phase 3)
+5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always use a PR; branch protection typically blocks direct pushes anyway, and CI gets one last chance to validate)
+6. **After PR merge** — `git checkout main && git pull`, then tag `main`'s HEAD: `git tag -s vX.Y.Z -m "vX.Y.Z"`. Tag from `main`, not from the `release/vX.Y.Z` branch tip — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
 8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
-9. **Overhaul release description** — rewrite the auto-generated notes into a narrative summary in a local file, then apply with `gh release edit vX.Y.Z --notes-file notes.md`. Use `--notes-file` (not `--notes "..."`) so multi-line Markdown doesn't trip over shell quoting.
-10. **Do NOT re-run the release workflow after step 9** — many release workflows (e.g. `softprops/action-gh-release`) regenerate the body from the commit log on every run and will overwrite the manual overhaul. If a downstream job (TER publish, artifact upload) needs a retry, use a dedicated dispatcher workflow (see `references/ter-republish.md` for the TYPO3 pattern).
+9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary, apply with `gh release edit vX.Y.Z --notes-file notes.md` (use `--notes-file`, not `--notes "..."`, to avoid shell quoting issues with multi-line Markdown)
+10. **Do NOT re-run the release workflow after step 9** — many workflows (e.g. `softprops/action-gh-release`) regenerate the body each run and will overwrite the overhaul. For downstream retries (TER publish, artifact upload), use a dedicated dispatcher workflow — see `references/ter-republish.md`.
 
 ## Commands
 
@@ -50,6 +50,6 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 - `references/ecosystem-detection.md` — version file patterns per ecosystem
 - `references/immutable-releases.md` — GitHub immutable releases and tag burning
 - `references/supply-chain-security.md` — SLSA, Sigstore, SBOMs, attestations
-- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering after manual overhaul, mis-tagged SemVer releases, branch-protection gotchas
-- `references/ter-republish.md` — TYPO3 Extension Repository re-publish patterns (workflow_dispatch-only caller, codepoint-safe comment truncation, v-prefix + bare-version tag compatibility)
+- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering, mis-tagged SemVer releases, branch-protection gotchas
+- `references/ter-republish.md` — TYPO3 Extension Repository re-publish patterns
 - `references/ci-workflow-templates.md` — CI workflow structure and templates

@@ -45,17 +45,23 @@ The hooks in this repository block `gh release create` and `gh release delete` t
 After the PR is merged into main:
 
 ```
-1. git checkout main && git pull          # fast-forward to the merge commit
-2. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags HEAD == the merge commit
+1. git checkout main && git pull          # advance to main's post-merge HEAD
+2. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
 3. git push origin vX.Y.Z                 # release orchestrator picks it up
 ```
 
 The tag MUST be:
 - **Annotated** (`-a` or `-s`), never lightweight
 - **Signed** (`-s` for GPG/SSH signing) — required for SLSA L1+
-- **On the merge commit** — not on the `release/vX.Y.Z` branch tip, not on an older commit
+- **On `main`'s HEAD after the PR merges** — not on the `release/vX.Y.Z` branch tip, not on an older commit
 
-**Why the merge commit and not the branch HEAD:** the `release/vX.Y.Z` branch's tip is the version-bump commit *before* it was merged. After the PR merges, `main` advances to either that same commit (fast-forward / squash) or a new merge commit (merge-commit strategy). The tag must point to whatever is now the tip of `main` — that is what consumers will check out, what CI will build artifacts from, and what shows up as "the release commit" on the GitHub release page. Tagging the branch tip directly skips the merge commit on merge-commit-strategy repos and produces a tag that points to a commit that's not reachable from `main` cleanly.
+**Why `main`'s post-merge HEAD and not the release branch tip:** depending on the project's merge strategy, `main`'s HEAD after merge is one of:
+
+- The original branch-tip commit, if the PR was fast-forwarded;
+- A new squash commit, if the PR was squash-merged;
+- A new merge commit, if the PR was merge-committed.
+
+The tag must point to whatever is now the tip of `main` — that is what consumers will check out, what CI will build artifacts from, and what shows up as "the release commit" on the GitHub release page. With squash- or merge-commit strategies, the `release/vX.Y.Z` branch tip is *not* on `main`'s first-parent history, so tagging it produces a tag that doesn't correspond to any commit on `main`.
 
 In practice: do NOT `git tag` from inside the worktree on the `release/vX.Y.Z` branch. Switch to `main`, pull, then tag — the steps above already enforce this order.
 
