@@ -3,85 +3,117 @@ skill_id: github-release
 
 preconditions:
   - type: file_exists
-    path: ".git"
-    message: "Must be inside a git repository"
+    target: ".git"
 
 mechanical:
   # Release workflow checks
   - id: GR-1
     type: file_exists
+    target: ".github/workflows/release.yml"
     severity: error
     desc: "Release workflow must exist"
-    path: ".github/workflows/release.yml"
 
   - id: GR-2
     type: contains
+    target: ".github/workflows/release.yml"
+    pattern: "tags:"
     severity: error
     desc: "Release workflow must trigger on version tags"
-    path: ".github/workflows/release.yml"
-    content: "tags:"
 
   - id: GR-3
     type: contains
+    target: ".github/workflows/release.yml"
+    pattern: "id-token: write"
     severity: error
     desc: "Release workflow must have id-token write permission for signing"
-    path: ".github/workflows/release.yml"
-    content: "id-token: write"
 
   - id: GR-4
     type: contains
+    target: ".github/workflows/release.yml"
+    pattern: "attestations: write"
     severity: error
     desc: "Release workflow must have attestations write permission"
-    path: ".github/workflows/release.yml"
-    content: "attestations: write"
 
   - id: GR-5
     type: contains
-    severity: warning
-    desc: "Release workflow should have workflow_dispatch for manual triggers"
-    path: ".github/workflows/release.yml"
-    content: "workflow_dispatch"
+    target: ".github/workflows/release.yml"
+    pattern: "workflow_dispatch"
+    severity: info
+    desc: >-
+      Release workflow may have workflow_dispatch for manual triggers (info
+      only — netresearch skill-repo release workflow is intentionally
+      tag-push-only because workflow_dispatch + auto-bump produced unsigned
+      tags. Inline workflows that build on it can opt-in safely).
 
   # Tag integrity checks
   - id: GR-6
     type: command
+    pattern: "git for-each-ref refs/tags/v* --format='%(objecttype) %(refname:short)' | grep -v '^tag '"
     severity: error
-    desc: "All version tags must be annotated (not lightweight)"
-    command: "test -z \"$(git for-each-ref refs/tags/v* --format='%(objecttype) %(refname:short)' | grep '^commit ')\""
+    desc: >-
+      All version tags must be annotated (not lightweight). Pipeline emits
+      anything that is NOT an annotated tag — `!` (PIPELINE) inverts so the
+      check passes only when no offenders are found.
 
   # Version sync checks
   - id: GR-7
     type: command
+    pattern: "vendor/bin/validate-pre-release.sh --version-sync-only 2>/dev/null"
     severity: warning
-    desc: "Version files must be in sync"
-    command: "${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/validate-pre-release.sh --version-sync-only 2>/dev/null"
+    desc: >-
+      Version files must be in sync. Requires the github-release skill's
+      validate-pre-release.sh to be installed at vendor/bin/ (the runner's
+      command whitelist disallows ${CLAUDE_PLUGIN_ROOT} paths).
 
   # CHANGELOG checks
   - id: GR-8
     type: contains
+    target: "CHANGELOG.md"
+    pattern: "[Unreleased]"
     severity: warning
     desc: "CHANGELOG.md must have an Unreleased section"
-    path: "CHANGELOG.md"
-    content: "[Unreleased]"
 
   # Supply chain security checks
   - id: GR-9
     type: command
+    pattern: "gh release view --json assets --jq '[.assets[].name | select(test(\"sbom\"))] | length > 0' 2>/dev/null"
     severity: warning
     desc: "Latest published release should have SBOM assets"
-    command: "gh release view --json assets --jq '[.assets[].name | select(test(\"sbom\"))] | length > 0' 2>/dev/null || echo true"
 
   - id: GR-10
     type: command
+    pattern: "gh release view --json assets --jq '[.assets[].name | select(test(\"\\\\.(bundle|sig|pem)$\"))] | length > 0' 2>/dev/null"
     severity: warning
-    desc: "Latest published release should have cosign signature bundles"
-    command: "gh release view --json assets --jq '[.assets[].name | select(test(\"\\.bundle$\"))] | length > 0' 2>/dev/null || echo true"
+    desc: >-
+      Latest published release should have cosign signature artefacts:
+      modern `.bundle` (Sigstore bundle) OR detached `.sig` + `.pem`
+      (used by netresearch/skill-repo-skill release workflow).
 
   - id: GR-11
     type: command
+    pattern: "git config user.signingkey >/dev/null 2>&1"
     severity: info
-    desc: "Git signing is configured"
-    command: "git config user.signingkey >/dev/null 2>&1 || git config gpg.format >/dev/null 2>&1"
+    desc: "Git signing is configured (signing key set)"
+
+  # Release pipeline integrity checks
+  - id: GR-12
+    type: command
+    pattern: "vendor/bin/validate-reusable-workflows.sh"
+    severity: error
+    desc: >-
+      Reusable-workflow reference in `.github/workflows/release*.yml` files
+      points to a path that no longer exists at the pinned SHA. Release
+      workflow will fail on tag push. Update the ref or remove the job.
+      Requires the validator at vendor/bin/.
+
+  - id: GR-13
+    type: command
+    pattern: "vendor/bin/check-changelog-links.py"
+    severity: warning
+    desc: >-
+      CHANGELOG.md reference-style header [X.Y.Z] missing matching
+      [X.Y.Z]: <URL> footer link. Add the link entry and update the
+      [Unreleased]: compare/vX.Y.Z...HEAD range to the new version.
 
   # Release pipeline integrity checks
   - id: GR-12
