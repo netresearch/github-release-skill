@@ -752,14 +752,15 @@
     {
       "id": 28,
       "prompt": "Is the latest release signed with cosign?",
-      "expected_output": "Query the latest GitHub release assets. Check for cosign signature bundles (.bundle files) and attestation artifacts. Report signing status. If missing, recommend adding cosign signing to the release workflow.",
+      "expected_output": "Query the latest GitHub release assets. Check for cosign signature bundles (preferred extension `.sigstore.json`, with `.bundle` accepted as legacy) and attestation artifacts. Report signing status. If missing or using only `.bundle`, recommend `.sigstore.json` for OSSF Scorecard Signed-Releases compliance.",
       "expectations": [
         "Queries release assets",
-        "Checks for .bundle files",
+        "Checks for .sigstore.json or .bundle signature files",
         "Reports signing status",
         "Recommends fix if missing",
+        "Notes OSSF Scorecard requires .sigstore.json (or another allowlisted extension) — .bundle alone scores 0/10",
         "Does NOT: Assume signing exists without checking",
-        "Does NOT: Skip bundle file inspection"
+        "Does NOT: Skip signature file inspection"
       ],
       "assertions": [
         {

@@ -88,14 +88,20 @@ mechanical:
 
   - id: GR-10
     type: command
-    pattern: "gh release view --json assets --jq -e '[.assets[].name] as $n | ($n|any(test(\"\\\\.bundle$\"))) or ($n|any(test(\"\\\\.sig$\")) and ($n|any(test(\"\\\\.pem$\"))))' >/dev/null 2>&1"
+    pattern: "gh release view --json assets --jq -e '[.assets[].name] as $n | ($n|any(test(\"\\\\.sigstore\\\\.json$\"))) or ($n|any(test(\"\\\\.bundle$\"))) or ($n|any(test(\"\\\\.sig$\")) and ($n|any(test(\"\\\\.pem$\"))))' >/dev/null 2>&1"
     severity: warning
     desc: >-
-      Latest published release should have cosign signature artefacts:
-      either a modern `.bundle` (Sigstore bundle), or BOTH a detached `.sig`
-      and matching `.pem` certificate (used by netresearch/skill-repo-skill
-      release workflow). A lone `.sig` or lone `.pem` is incomplete and
-      fails. `jq -e` ensures the boolean is reflected in the exit code.
+      Latest published release should have cosign signature artefacts.
+      Accepted (in priority order): `.sigstore.json` (preferred — the
+      OSSF Scorecard Signed-Releases check pattern-matches against a fixed
+      allowlist that includes `.sigstore.json` but NOT `.bundle`, so
+      `.sigstore.json` is required for a non-zero Signed-Releases score),
+      `.bundle` (legacy cosign default — bytes are identical to
+      `.sigstore.json`, only the filename differs), or BOTH a detached
+      `.sig` and matching `.pem` certificate (used by
+      netresearch/skill-repo-skill release workflow). A lone `.sig` or
+      lone `.pem` is incomplete and fails. `jq -e` ensures the boolean
+      is reflected in the exit code.
 
   - id: GR-11
     type: command
