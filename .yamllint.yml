@@ -1,0 +1,13 @@
+extends: default
+
+rules:
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  indentation: disable
+  # Checkpoint patterns embed jq expressions that can be long single-line strings;
+  # raise the limit to accommodate them without splitting and risking regex changes.
+  line-length:
+    max: 300
+  truthy:
+    allowed-values: ['true', 'false', 'on']

@@ -40,8 +40,17 @@ jobs:
         uses: sigstore/cosign-installer@v3
       - name: Sign artifacts
         run: |
+          # Use .sigstore.json extension (NOT cosign's default .bundle).
+          # OSSF Scorecard's Signed-Releases check pattern-matches against a
+          # fixed allowlist of signature extensions (.sig, .asc, .minisig,
+          # .sigstore, .sigstore.json, .intoto.jsonl). The .bundle extension
+          # cosign writes by default is NOT on that list, so cosign-signed
+          # releases score 0/10. The bytes inside the bundle file ARE the
+          # Sigstore bundle JSON format — the rename is purely cosmetic for
+          # tooling detection. `cosign verify-blob --bundle file.sigstore.json`
+          # works identically.
           for f in dist/*; do
-            cosign sign-blob "$f" --bundle "${f}.bundle" --yes
+            cosign sign-blob "$f" --bundle "${f}.sigstore.json" --yes
           done
       - name: Generate attestation
         uses: actions/attest-build-provenance@v2
