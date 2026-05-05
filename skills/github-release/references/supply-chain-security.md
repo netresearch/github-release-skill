@@ -35,8 +35,43 @@ GitHub Actions natively supports SLSA L1 via `actions/attest-build-provenance`. 
 
 ```yaml
 - uses: sigstore/cosign-installer@v3
-- run: cosign sign-blob --yes --oidc-issuer https://token.actions.githubusercontent.com artifact.tar.gz
+- run: |
+    cosign sign-blob --yes \
+      --oidc-issuer https://token.actions.githubusercontent.com \
+      --bundle artifact.tar.gz.sigstore.json \
+      artifact.tar.gz
 ```
+
+### Output extension matters for OSSF Scorecard
+
+**Use `.sigstore.json` for the cosign bundle output, NOT cosign's default `.bundle`.**
+
+OSSF Scorecard's [Signed-Releases](https://github.com/ossf/scorecard/blob/main/docs/checks.md#signed-releases) check pattern-matches release-asset filenames against a fixed allowlist of signature extensions:
+
+- `.sig`
+- `.asc`
+- `.minisig`
+- `.sigstore`
+- `.sigstore.json`
+- `.intoto.jsonl`
+
+The `.bundle` extension that `cosign sign-blob --bundle` writes by default is **not** on that list, so cosign-signed releases that use `.bundle` are reported as unsigned (`Signed-Releases` score `0/10`).
+
+**The bytes inside the file are identical** — cosign's bundle format IS the Sigstore bundle JSON. Only the filename matters for tooling detection. `cosign verify-blob --bundle file.sigstore.json` works exactly the same as `--bundle file.bundle`.
+
+**Concrete fix in a workflow:**
+
+```yaml
+# Wrong — Scorecard sees this as unsigned
+cosign sign-blob --yes "$file" --bundle "${file}.bundle"
+
+# Right — Scorecard recognizes this as signed
+cosign sign-blob --yes "$file" --bundle "${file}.sigstore.json"
+```
+
+**Past releases cannot be retroactively fixed.** GitHub releases are immutable once assets are attached, so renaming or replacing assets on already-published releases is not possible. Only future releases benefit from the fix. Scorecard averages the Signed-Releases score over the **last 4 releases**, so the score climbs gradually as new releases ship.
+
+Reference upstream change for the netresearch shared workflows: [netresearch/typo3-ci-workflows#84](https://github.com/netresearch/typo3-ci-workflows/pull/84) — applied to both `release.yml` and `release-typo3-extension.yml`.
 
 ### Verification
 
@@ -44,6 +79,7 @@ GitHub Actions natively supports SLSA L1 via `actions/attest-build-provenance`. 
 cosign verify-blob \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp "github.com/org/repo" \
+  --bundle artifact.tar.gz.sigstore.json \
   artifact.tar.gz
 ```
 
