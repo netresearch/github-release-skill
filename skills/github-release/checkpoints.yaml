@@ -165,3 +165,17 @@ llm_reviews:
       - Node.js: package.json AND package-lock.json
       - CHANGELOG.md [Unreleased] section was promoted
       Report any files that were missed.
+
+  - id: GR-R4
+    domain: release-notes
+    severity: warning
+    desc: "Published release description was overhauled into a narrative"
+    prompt: |
+      If a GitHub Release was published in this conversation, verify its description was
+      overhauled from the auto-generated commit/PR dump into a user-facing narrative summary
+      (SKILL.md step 9 "Overhaul release description"; references/release-process.md
+      "Narrative over implementation details").
+      The published description must lead with the user-facing story and brief feature sections,
+      NOT a raw "## Changes" list of feat:/fix:/chore(deps): commit lines and PR numbers.
+      If the release was left with only the auto-generated commit/PR dump, or if the
+      description is empty or missing, report as FAIL.
