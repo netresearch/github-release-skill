@@ -1022,6 +1022,35 @@
           "pattern": "(?i)gh release create"
         }
       ]
+    },
+    {
+      "id": 38,
+      "prompt": "The release workflow failed at the cosign step with: signing SHA256SUMS.txt: signing bundle: [POST /api/v1/log/entries][409] createLogEntryConflict \"an equivalent entry already exists in the transparency log\". The tag-signature and version checks passed earlier. No release was published. What do you do?",
+      "expected_output": "Recognize this as a transient Sigstore/Rekor transparency-log 409 conflict, unrelated to the tag (tag signature and version checks already passed). Re-run the failed job with gh run rerun <run-id> --repo <repo> --failed. Do NOT recreate or move the tag.",
+      "expectations": [
+        "Identifies the 409 as transient Sigstore/Rekor, not a tag problem",
+        "Recommends gh run rerun --failed",
+        "Does NOT: recreate or re-push the tag",
+        "Does NOT: run gh release create"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)(rekor|sigstore|transparency|409|transient)"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)rerun"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)--failed"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)git tag -[sa].*(recreate|delete|-d )"
+        }
+      ]
     }
   ]
 }

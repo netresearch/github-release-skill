@@ -49,6 +49,26 @@
 
 **Important**: The tag is NOT burned while the release is in draft state. If the draft is fundamentally broken, you can delete it and recreate.
 
+## Sigstore/Rekor 409 on Checksum Signing
+
+**Symptom**: The release workflow's signing/attestation step (cosign / sigstore) fails with:
+
+```
+Error: signing SHA256SUMS.txt: signing bundle: error signing bundle:
+[POST /api/v1/log/entries][409] createLogEntryConflict
+{"message":"an equivalent entry already exists in the transparency log with UUID ..."}
+```
+
+**Cause**: A transient conflict in the Sigstore Rekor public transparency log — an equivalent entry already exists for the artifact being signed. It is **not** a problem with your tag: the tag-signature check and the tag-vs-version-file check run *before* this step and have already passed. The release simply does not get published.
+
+**Recovery**: Re-run the failed job — do **not** recreate the tag (the tag is fine, and recreating it risks burning the name):
+
+```bash
+gh run rerun <run-id> --repo <owner>/<repo> --failed
+```
+
+`--failed` re-runs only the failed jobs. This is safe: it creates no new tag and there is no published release/notes to clobber yet. In a 19-repo bulk release this hit roughly 3 repos; every re-run published cleanly on the second attempt.
+
 ## Lightweight Tag Already Pushed
 
 **Symptom**: `git cat-file -t vX.Y.Z` returns `commit` instead of `tag` (meaning it's lightweight, not annotated).
