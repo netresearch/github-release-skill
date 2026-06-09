@@ -1048,7 +1048,11 @@
         },
         {
           "type": "must_not",
-          "pattern": "(?i)git tag -[sa].*(recreate|delete|-d )"
+          "pattern": "(?i)(git tag.*(-d|-f|--delete)|git push.*delete)"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)gh release create"
         }
       ]
     }

@@ -59,7 +59,7 @@ Error: signing SHA256SUMS.txt: signing bundle: error signing bundle:
 {"message":"an equivalent entry already exists in the transparency log with UUID ..."}
 ```
 
-**Cause**: A transient conflict in the Sigstore Rekor public transparency log — an equivalent entry already exists for the artifact being signed. It is **not** a problem with your tag: the tag-signature check and the tag-vs-version-file check run *before* this step and have already passed. The release simply does not get published.
+**Cause**: A transient conflict in the Sigstore Rekor public transparency log — an equivalent entry already exists for the artifact being signed. It is **not** a problem with your tag. If the workflow validates the tag signature and the tag-vs-version-file match *before* the signing step (as the netresearch skill-repo release workflow does), those gates have already passed by the time a 409 occurs — so recreating the tag would not help. Confirm via the failed-job log that the failure is the signing step and not an earlier validation gate; then the release simply needs the job re-run.
 
 **Recovery**: Re-run the failed job — do **not** recreate the tag (the tag is fine, and recreating it risks burning the name):
 
