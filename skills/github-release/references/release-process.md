@@ -46,14 +46,33 @@ After the PR is merged into main:
 
 ```
 1. git checkout main && git pull          # advance to main's post-merge HEAD
-2. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
-3. git push origin vX.Y.Z                 # release orchestrator picks it up
+2. git fetch origin main &&
+   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] \
+     || { echo "HEAD is not origin/main - aborting tag"; }   # pre-tag guard
+3. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
+4. git push origin vX.Y.Z                 # release orchestrator picks it up
 ```
+
+**The pre-tag guard is not optional.** `git pull` fails *silently* in
+practice more often than expected — a dirty generated file blocks the
+fast-forward, and in a `cmd | tail` pipeline the non-zero exit status is
+masked. The session that motivated this guard tagged and pushed a release
+on a stale local `main` (the CI image build started from pre-merge code)
+because the failed pull scrolled past unnoticed. Comparing
+`git rev-parse HEAD` against the **freshly fetched** `origin/main` costs one
+command and makes that failure mode impossible.
+
+**Recovery when a wrong tag was pushed but no GitHub release object exists
+yet:** the tag is NOT burned — cancel any CI run it triggered (before
+artifacts are pushed), delete the tag (`git push origin :refs/tags/vX.Y.Z`,
+`git tag -d vX.Y.Z`), fix `main`, then re-tag on the verified HEAD. Tag
+names only become permanent once an (immutable) release object references
+them.
 
 The tag MUST be:
 - **Annotated** (`-a` or `-s`), never lightweight
 - **Signed** (`-s` for GPG/SSH signing) — required for SLSA L1+
-- **On `main`'s HEAD after the PR merges** — not on the `release/vX.Y.Z` branch tip, not on an older commit
+- **On `main`'s HEAD after the PR merges** — not on the `release/vX.Y.Z` branch tip, not on an older commit, verified via the pre-tag guard above
 
 **Why `main`'s post-merge HEAD and not the release branch tip:** depending on the project's merge strategy, `main`'s HEAD after merge is one of:
 
