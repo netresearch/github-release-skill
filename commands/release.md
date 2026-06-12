@@ -44,9 +44,12 @@ release branch:
   verification job for a registry the package is not on polls until failure:
 
   ```bash
-  curl -s -o /dev/null -w '%{http_code}' https://repo.packagist.org/p2/VENDOR/PACKAGE.json   # 404 = not on Packagist
-  curl -s -o /dev/null -w '%{http_code}' https://extensions.typo3.org/extension/EXT_KEY      # 404 = not on TER
-  curl -s -o /dev/null -w '%{http_code}' https://docs.typo3.org/p/VENDOR/PACKAGE/main/en-us/ # 404 = docs not rendered
+  curl -s -o /dev/null -w '%{http_code}' https://repo.packagist.org/p2/vendor/package.json   # 404 = not on Packagist
+  curl -s -o /dev/null -w '%{http_code}' https://extensions.typo3.org/extension/ext_key      # 404 = not on TER
+  curl -s -o /dev/null -w '%{http_code}' https://docs.typo3.org/p/vendor/package/main/en-us/ # 404 = docs not rendered
+
+  Substitute lowercase values — these registries are case-sensitive, and a
+  mixed-case probe yields a false 404 for a published package.
   ```
 
   Set the reusable workflow's `skip-packagist` / `skip-ter` / `skip-docs`
