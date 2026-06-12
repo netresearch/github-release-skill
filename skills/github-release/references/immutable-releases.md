@@ -84,6 +84,10 @@ Tag-name burning is tied to **release publication**, not to the tag push itself.
 
 This means: **if a release workflow fails before the create-release step runs** — e.g., a broken reusable-workflow reference, a failing build, a failing SBOM step, a failing signing step — the tag name is still available to re-use. The workflow never reached the publication event, so the tag name is not burned.
 
+**GitHub is only half the picture.** Moving a tag is safe only when no
+package registry has consumed it — see "Wrong tag already pushed:
+registries publish on tag push" below before applying the safe move flow.
+
 ### Verify before moving
 
 Always confirm the tag name is not burned before deleting and re-pushing.
@@ -114,7 +118,51 @@ Interpretation:
   **burned**. Do not move it; bump the version instead (see "The Only
   Recovery" above).
 
+### Wrong tag already pushed: registries publish on tag push
+
+A pushed `v*` tag must be treated as **published immediately**, regardless
+of what GitHub shows. Package registries (Packagist, TER) consume the tag
+push via webhook within seconds — a failed or never-started GitHub release
+workflow proves nothing about whether the version is already live
+downstream. Deleting and re-tagging "a minute later" is already too late.
+
+- **NEVER delete + re-tag a version that might be on a registry.** Check
+  Packagist explicitly before any move:
+
+  ```bash
+  # 200 = published on Packagist; 404 = absent (use lowercase names)
+  curl -s -o /dev/null -w '%{http_code}' \
+    https://repo.packagist.org/p2/vendor/package.json
+  ```
+
+  A consumer installing the package via a `repositories` VCS entry in its
+  `composer.json` does NOT mean the package is absent from Packagist —
+  verify against the registry, never infer from consumer configuration.
+- **Packagist stable versions are immutable.** After a delete + re-tag,
+  Packagist keeps serving the original ref and sends maintainers an
+  "attempted update blocked" warning — the moved tag silently diverges
+  from what consumers actually install.
+- **Recovery is fix-forward.** Tag the NEXT patch version with the
+  intended content. Only restore the bad tag — pointed at the exact ref
+  the registry serves — if the registry requests it (Packagist does: it
+  expects the tag to keep matching the version it already serves).
+- **When pushing such a restore tag**: disable the release workflow first
+  (`gh workflow disable release.yml`), push the tag, and expect a queued
+  tag event to spawn a run anyway — cancel that run before it publishes
+  artifacts from the old commit, then re-enable the workflow.
+
+Real incident (a netresearch extension release): a tag was pushed from a
+stale local `main`, then deleted and re-tagged about one minute later —
+but the Packagist webhook had already published the bad ref. Recovery
+required shipping a fix-forward patch release, then restoring the
+original tag to the registry-served ref under the workflow-disabled
+procedure above.
+
 ### Safe move flow
+
+Apply this flow only when BOTH the tag name is unburned on GitHub (no
+release or draft only, per the verification step) AND the version is not
+on any registry (per the registry check above).
 
 If the verification step above reports the tag name is unburned (no release
 or draft only) and the tag needs to point at a corrected commit (typically

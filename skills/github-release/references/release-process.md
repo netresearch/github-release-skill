@@ -46,14 +46,25 @@ After the PR is merged into main:
 
 ```
 1. git checkout main && git pull          # advance to main's post-merge HEAD
-2. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
-3. git push origin vX.Y.Z                 # release orchestrator picks it up
+2. git fetch origin main &&
+   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] \
+     || echo "ABORT: HEAD != remote tip"  # MANDATORY pre-tag verification
+3. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
+4. git push origin vX.Y.Z                 # release orchestrator picks it up
 ```
+
+**The pre-tag verification (step 2) is mandatory, not advisory.**
+Bare-repo/worktree layouts can have a stale local `main` that "switch to
+main" happily lands on — "pull latest" then looks satisfied while HEAD is
+still commits behind the remote tip, and the tag lands on pre-merge code.
+On mismatch, abort: do not tag, do not push. Cross-check against the API
+when in doubt: `gh api repos/{owner}/{repo}/commits/main --jq .sha` must
+equal `git rev-parse HEAD`.
 
 The tag MUST be:
 - **Annotated** (`-a` or `-s`), never lightweight
 - **Signed** (`-s` for GPG/SSH signing) — required for SLSA L1+
-- **On `main`'s HEAD after the PR merges** — not on the `release/vX.Y.Z` branch tip, not on an older commit
+- **On `main`'s HEAD after the PR merges** — not on the `release/vX.Y.Z` branch tip, not on an older commit, proven by the pre-tag verification above
 
 **Why `main`'s post-merge HEAD and not the release branch tip:** depending on the project's merge strategy, `main`'s HEAD after merge is one of:
 

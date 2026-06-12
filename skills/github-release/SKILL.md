@@ -26,8 +26,8 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 2. **Determine next version** — based on conventional commits or user input (major/minor/patch)
 3. **Bump version files** — update all ecosystem-specific version files consistently
 4. **Update CHANGELOG.md** — add release section with date and changes
-5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always use a PR; branch protection typically blocks direct pushes anyway, and CI gets one last chance to validate)
-6. **After PR merge** — `git checkout main && git pull`, then tag `main`'s HEAD: `git tag -s vX.Y.Z -m "vX.Y.Z"`. Tag from `main`, not from the `release/vX.Y.Z` branch tip — see `references/release-process.md` Phase 3.
+5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always use a PR — branch protection typically blocks direct pushes)
+6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the fetched remote tip (stale-worktree guard; abort on mismatch), then tag `main`'s HEAD, never the `release/vX.Y.Z` branch tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
 8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
 9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary, apply with `gh release edit vX.Y.Z --notes-file notes.md` (use `--notes-file`, not `--notes "..."`, to avoid shell quoting issues with multi-line Markdown)
