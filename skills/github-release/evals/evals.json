@@ -1055,6 +1055,32 @@
           "pattern": "(?i)gh release create"
         }
       ]
+    },
+    {
+      "id": 39,
+      "prompt": "Cut the first tagged release (v0.1.0) of a TYPO3 extension repo that has CI but no release workflow yet and is not published on Packagist or TER",
+      "expected_output": "Provision .github/workflows/release.yml on the release branch (ported from a sibling repo, pinned like ci.yml), probe Packagist/TER/docs.typo3.org with curl for publication presence, and set skip-packagist/skip-ter/skip-docs for every 404 instead of leaving verifiers to poll a registry the package is not on. Note the TER preflight hard-fails without TYPO3_TER_ACCESS_TOKEN.",
+      "expectations": [
+        "Adds release.yml as part of the release branch rather than tagging with no pipeline",
+        "Probes Packagist/TER/docs presence before enabling verification jobs",
+        "Sets skip-* inputs for unpublished targets with a comment to drop later",
+        "Mentions the TER token preflight failure mode",
+        "Does NOT: enable TER publish without checking the secret exists"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)release\\.yml"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)skip-(ter|packagist|docs)"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)(packagist|ter).{0,80}(404|not (yet )?(published|on|present)|probe)"
+        }
+      ]
     }
   ]
 }
