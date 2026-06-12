@@ -30,6 +30,39 @@ confirm or override with their preferred version number.
 Run `validate-pre-release.sh` from the skill's scripts directory. If any checks fail,
 report the issues and ask the user whether to proceed or abort.
 
+### 3b. First release: provision the release pipeline
+
+When `suggest-version.sh` reports no prior version tags (first release) or
+validation flags a missing `.github/workflows/release.yml`, the tag-only flow
+of steps 10-11 has nothing to trigger — provision the pipeline as part of the
+release branch:
+
+- **Port the workflow from a sibling repo** of the same ecosystem when one
+  exists (same org, same reusable workflow), pinning `uses:` refs the same way
+  the repo's `ci.yml` does (full commit SHA where that is the convention).
+- **Probe the publication targets before enabling their verifiers.** A
+  verification job for a registry the package is not on polls until failure:
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}' https://repo.packagist.org/p2/vendor/package.json   # 404 = not on Packagist
+  curl -s -o /dev/null -w '%{http_code}' https://extensions.typo3.org/extension/ext_key      # 404 = not on TER
+  curl -s -o /dev/null -w '%{http_code}' https://docs.typo3.org/p/vendor/package/main/en-us/ # 404 = docs not rendered
+
+  Substitute lowercase values — these registries are case-sensitive, and a
+  mixed-case probe yields a false 404 for a published package.
+  ```
+
+  Set the reusable workflow's `skip-packagist` / `skip-ter` / `skip-docs`
+  inputs for every 404, with a comment to drop them once published.
+- **TER preflight hard-fails without a token**: the netresearch
+  `release-typo3-extension.yml` orchestrator exits with an error when
+  `skip-ter` is false and `TYPO3_TER_ACCESS_TOKEN` resolves empty — check
+  `gh secret list` before leaving TER enabled.
+- A first release has no previous tag: the auto-generated notes say only
+  "Initial release", so step 12's narrative rewrite is mandatory, and the
+  install instructions must not show a bare `composer require`/`npm install`
+  if the package is not on its registry yet (show the VCS-repository variant).
+
 ### 4. Create release branch
 
 Create and switch to a new branch named `release/vX.Y.Z` where X.Y.Z is the
