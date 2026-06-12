@@ -101,12 +101,30 @@ summarize the version changes.
 
 **Wait for the user to confirm the PR has been merged**, then:
 - Switch to the main branch and pull latest
+- **MANDATORY pre-tag verification** — assert local HEAD is the remote tip:
+
+  ```bash
+  git fetch origin main   # substitute the repo's default branch
+  remote_tip=$(gh api repos/{owner}/{repo}/commits/main --jq .sha)
+  [ "$(git rev-parse HEAD)" = "$remote_tip" ] \
+    || { echo "ABORT: HEAD != remote tip — do not tag"; exit 1; }
+  ```
+
+  Abort on mismatch — do not tag, do not push. Rationale: bare-repo/worktree
+  layouts can have a stale local `main` that "switch to main" happily lands
+  on; "pull latest" then looks satisfied while HEAD is still commits behind
+  the remote tip, and the tag lands on pre-merge code.
 - Create a **signed, annotated** tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 - Push the tag: `git push origin vX.Y.Z`
 
 **IMPORTANT**: NEVER use `gh release create`. NEVER create lightweight tags.
 Always use `git tag -s` to create signed annotated tags. The CI workflow
 triggered by the tag push handles GitHub release creation.
+
+**If a wrong tag was already pushed**: treat it as published — registries
+(Packagist, TER) consume the tag push via webhook within seconds. NEVER
+delete and re-tag; see "Wrong tag already pushed" in
+`references/immutable-releases.md` for the recovery procedure.
 
 ### 11. Monitor CI
 

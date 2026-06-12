@@ -1081,6 +1081,31 @@
           "pattern": "(?i)(packagist|ter).{0,80}(404|not (yet )?(published|on|present)|probe)"
         }
       ]
+    },
+    {
+      "id": 40,
+      "prompt": "The release PR for v1.4.0 just merged. You are in a pre-existing worktree whose local main was last updated days ago. Tag and push v1.4.0.",
+      "expected_output": "Before tagging, run git fetch origin main and assert git rev-parse HEAD equals the freshly fetched remote tip (cross-check: gh api repos/{owner}/{repo}/commits/main --jq .sha). Refuse to tag while HEAD differs — a pre-existing worktree main can be stale even after 'switch to main and pull latest' nominally succeeds. Only create and push the signed tag once HEAD matches the remote tip.",
+      "expectations": [
+        "Fetches the default branch from origin immediately before tagging",
+        "Compares git rev-parse HEAD against the freshly fetched remote tip SHA",
+        "Refuses to tag when HEAD does not equal the remote tip",
+        "Does NOT: tag right after 'git checkout main && git pull' without verifying HEAD against the remote"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)git fetch origin"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)rev-parse HEAD"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)(abort|refuse|stop|do not tag|mismatch|stale)"
+        }
+      ]
     }
   ]
 }

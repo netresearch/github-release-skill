@@ -77,6 +77,11 @@ gh run rerun <run-id> --repo <owner>/<repo> --failed
 
 **Recovery if no release was published against it**:
 
+**Registry check first**: if the package is on Packagist/TER, the pushed
+tag is already published downstream regardless of GitHub release state —
+do NOT delete + re-tag; follow "Wrong tag already pushed: registries
+publish on tag push" in `immutable-releases.md` instead.
+
 1. Delete the remote tag:
    ```bash
    git push --delete origin vX.Y.Z
