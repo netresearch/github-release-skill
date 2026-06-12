@@ -48,7 +48,7 @@ After the PR is merged into main:
 1. git checkout main && git pull          # advance to main's post-merge HEAD
 2. git fetch origin main &&
    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] \
-     || echo "ABORT: HEAD != remote tip"  # MANDATORY pre-tag verification
+     || { echo "ABORT: HEAD != remote tip"; exit 1; }  # MANDATORY pre-tag verification
 3. git tag -s vX.Y.Z -m "vX.Y.Z"          # tags main's HEAD
 4. git push origin vX.Y.Z                 # release orchestrator picks it up
 ```

@@ -107,7 +107,7 @@ summarize the version changes.
   git fetch origin main   # substitute the repo's default branch
   remote_tip=$(gh api repos/{owner}/{repo}/commits/main --jq .sha)
   [ "$(git rev-parse HEAD)" = "$remote_tip" ] \
-    || { echo "ABORT: HEAD != remote tip — do not tag"; }
+    || { echo "ABORT: HEAD != remote tip — do not tag"; exit 1; }
   ```
 
   Abort on mismatch — do not tag, do not push. Rationale: bare-repo/worktree
