@@ -39,10 +39,11 @@ owner="${REPO%/*}"; name="${REPO#*/}"
 
 # PR numbers from the compare range's commit messages (squash "(#N)" + merge refs),
 # sourced from the API so this works from any directory.
-mapfile -t PRS < <(
-  gh api --paginate "repos/${REPO}/compare/${FROM}...${TO}" --jq '.commits[].commit.message' 2>/dev/null \
-    | grep -oE '#[0-9]+' | tr -d '#' | sort -un
-)
+# Run gh api directly (not inside the process substitution) so a failure — auth,
+# rate limit, bad range — trips `set -e` instead of silently yielding an empty
+# list and a misleading "No PRs found".
+commit_messages="$(gh api --paginate "repos/${REPO}/compare/${FROM}...${TO}" --jq '.commits[].commit.message')"
+mapfile -t PRS < <(grep -oE '#[0-9]+' <<<"$commit_messages" | tr -d '#' | sort -un || true)
 [ "${#PRS[@]}" -gt 0 ] || { echo "No PRs found in ${REPO} ${FROM}...${TO}." >&2; exit 0; }
 
 # GitHub bot logins end in "[bot]"; also drop known automation by bare name.
@@ -67,8 +68,9 @@ for pr in "${PRS[@]}"; do
         }
       }
     }' -F o="$owner" -F n="$name" -F pr="$pr" 2>/dev/null)" || continue
-  # Numbers that are issues (not PRs) simply return a null pullRequest — skipped.
-
+  # A number that is an issue (not a PR) returns pullRequest: null. jq tolerates
+  # indexing null (yields null -> // empty), and .nodes[]? guards the iteration,
+  # so the null case is handled without erroring under set -e.
   a="$(jq -r '.data.repository.pullRequest.author.login // empty' <<<"$json")"
   if [ -n "$a" ] && ! is_bot "$a"; then CODE["$a"]=1; fi
 
@@ -96,7 +98,9 @@ fi
 line="- **Reported issues fixed here:** "; any=0
 for k in $(printf '%s\n' "${!REPORTERS[@]}" | sort -f); do
   [ -n "${CODE["$k"]:-}" ] && continue
-  refs="$(printf '%s\n' "${REPORTERS["$k"]}" | tr ' ' '\n' | grep . | sort -un | sed 's/^/#/' | paste -sd', ' -)"
+  # paste -d takes the delimiter chars cyclically, so -d', ' would alternate
+  # "," and " " between fields — join with a single "," then expand to ", ".
+  refs="$(printf '%s\n' "${REPORTERS["$k"]}" | tr ' ' '\n' | grep . | sort -un | sed 's/^/#/' | paste -sd, - | sed 's/,/, /g')"
   line="${line}@${k} (${refs}), "; any=1
 done
 [ "$any" -eq 1 ] && echo "${line%, }"
