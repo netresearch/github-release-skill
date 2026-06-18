@@ -96,14 +96,31 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
 ```
 1. Wait for CI release workflow to complete successfully
 2. Review the commits included in the release (git log prev_tag..new_tag)
-3. Write a narrative release description covering:
+3. Harvest contributors — scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>
+   emits a "Contributors" section crediting BOTH merged-PR authors and the
+   reporters of the issues those PRs closed (bots filtered, humans only)
+4. Write a narrative release description covering:
    - What changed and why it matters
    - Context for skipped versions or notable decisions
    - Grouped by theme (features, fixes, infrastructure), not by commit
-4. Update via: gh release edit vX.Y.Z --notes "..."
+   - A Contributors section (splice in the output of step 3)
+5. Update via: gh release edit vX.Y.Z --notes-file notes.md
+   (use --notes-file, not --notes "...", to avoid shell-quoting issues with multi-line Markdown)
 ```
 
 The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
+
+#### Crediting contributors, including reporters
+
+GitHub's auto-generated notes derive from commit subjects, so they credit only the people whose commits/PRs landed — **issue reporters are invisible**, even though a good bug report or feature request is a real contribution. `scripts/harvest-contributors.sh` closes that gap: for the commit range it collects every merged-PR author (the **Code** line) and every author of an issue those PRs closed via `closingIssuesReferences` (the **Reported** line).
+
+Policy baked into the script:
+
+- **Humans only.** Logins ending in `[bot]` and known automation (`dependabot`, `renovate`, `github-actions`, `gemini-code-assist`, `copilot*`) are dropped — this is the same no-bot-credit rule applied to CHANGELOG/release notes.
+- **Each person credited once.** The Reported line lists only reporters who are *not* already on the Code line, so it highlights the (usually community) people who reported but didn't author a PR — and it naturally drops a maintainer's own self-filed issues (they appear under Code).
+- **Deduped** issue numbers per reporter, sorted.
+
+Review the output before splicing it in (a reporter may have opted out of credit, or an issue's `closingIssuesReferences` link may be wrong). The compare API caps at 250 commits — for a wider range, run it in two halves and merge.
 
 #### Narrative over implementation details
 
