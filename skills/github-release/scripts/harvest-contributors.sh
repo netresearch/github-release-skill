@@ -37,13 +37,21 @@ command -v jq >/dev/null || { echo "jq required" >&2; exit 1; }
 
 owner="${REPO%/*}"; name="${REPO#*/}"
 
-# PR numbers from the compare range's commit messages (squash "(#N)" + merge refs),
-# sourced from the API so this works from any directory.
+# PR numbers from the compare range, taken ONLY from the SUBJECT (first line) of
+# each commit and ONLY from the place GitHub stamps the PR number: a squash-merge
+# "… (#N)" suffix or a "Merge pull request #N" subject. Sourced from the API so
+# this works from any directory.
 # Run gh api directly (not inside the process substitution) so a failure — auth,
 # rate limit, bad range — trips `set -e` instead of silently yielding an empty
 # list and a misleading "No PRs found".
-commit_messages="$(gh api --paginate "repos/${REPO}/compare/${FROM}...${TO}" --jq '.commits[].commit.message')"
-mapfile -t PRS < <(grep -oE '#[0-9]+' <<<"$commit_messages" | tr -d '#' | sort -un || true)
+#
+# Do NOT grep the full multi-line message for "#N": commit BODIES cross-reference
+# unrelated issues/PRs ("follow-up to #114"), and dependency-bump commits
+# (Renovate/Dependabot) embed upstream changelogs full of foreign "#123" refs and
+# "&#8203;" HTML entities — all of which would be looked up against THIS repo's
+# numbering and falsely credit whoever happens to own that number.
+subjects="$(gh api --paginate "repos/${REPO}/compare/${FROM}...${TO}" --jq '.commits[].commit.message | split("\n")[0]')"
+mapfile -t PRS < <(grep -oE '\(#[0-9]+\)$|^Merge pull request #[0-9]+' <<<"$subjects" | grep -oE '[0-9]+' | sort -un || true)
 [ "${#PRS[@]}" -gt 0 ] || { echo "No PRs found in ${REPO} ${FROM}...${TO}." >&2; exit 0; }
 
 # GitHub bot logins end in "[bot]"; also drop known automation by bare name.
