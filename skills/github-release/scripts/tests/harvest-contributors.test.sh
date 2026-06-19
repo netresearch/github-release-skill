@@ -28,6 +28,8 @@ ex() { printf '%s\n' "$@" | extract_pr_numbers | paste -sd, -; }
 check "squash suffix"                 "842" "$(ex 'docs(readme): restructure (#842)')"
 check "two refs -> trailing PR only"  "847" "$(ex 'fix: aspect ratio (#846) (#847)')"
 check "merge-commit subject"          "853" "$(ex 'Merge pull request #853 from netresearch/x')"
+check "trailing space after (#N)"     "843" "$(ex 'feat: y (#843) ')"
+check "trailing tab after (#N)"       "844" "$(printf 'feat: z (#844)\t' | extract_pr_numbers | paste -sd, -)"
 
 # Regression: body / changelog-excerpt / entity lines must yield NOTHING.
 check "changelog '&#8203;' + foreign #refs -> none" "" \

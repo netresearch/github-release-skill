@@ -30,7 +30,7 @@ set -euo pipefail
 # the "&#8203;" HTML entity (grepped as "#8203") — all of which would be looked up
 # against THIS repo's numbering and falsely credit whoever owns that number.
 extract_pr_numbers() {
-  grep -oE '\(#[0-9]+\)$|^Merge pull request #[0-9]+' | grep -oE '[0-9]+' | sort -un || true
+  grep -oE '\(#[0-9]+\)[[:space:]]*$|^Merge pull request #[0-9]+' | grep -oE '[0-9]+' | sort -un || true
 }
 
 # GitHub bot logins end in "[bot]"; also drop known automation by bare name.
