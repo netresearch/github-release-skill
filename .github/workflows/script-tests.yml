@@ -1,0 +1,33 @@
+name: Script Tests
+
+# Runs shell self-tests for scripts/ that ship one (currently the
+# harvest-contributors PR-number extraction guard). Standalone job: the
+# skill-repo-skill reusables validate skill *structure*, not script *behavior*.
+# Third-party actions are SHA-pinned (githubactions:S7637); permissions are
+# minimal and declared at the call site.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  shell-tests:
+    name: Shell self-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: harvest-contributors self-test
+        run: bash skills/github-release/scripts/tests/harvest-contributors.test.sh
