@@ -235,6 +235,16 @@ For dispatch-only publishes (no tag-push trigger), drop the `push:` block; the c
 
 For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make_latest` input (keep the name underscored to match GitHub's own action parameter; hyphenated names would force bracket-expression access, which is easy to get wrong) rather than forking per-repo.
 
+## Multi-Repo / Bulk Releases
+
+When releasing many repositories that share one reusable release workflow (e.g. a fleet of skill or library repos), coordinate rather than firing all at once:
+
+1. **Pilot one repo end-to-end first.** Take a single known-clean repo all the way through bump → PR → merge → tag → CI-publish before touching the rest. The pilot proves the shared reusable workflow is healthy and pins down the exact per-repo recipe. Fix any workflow breakage on the pilot, not across N repos.
+2. **Survey scope from the remote, not local checkouts.** Decide which repos actually need a release with `gh api repos/OWNER/REPO/compare/$LATEST_TAG...$DEFAULT_BRANCH --jq '.ahead_by'` and inspect the commit subjects — release only repos with user-facing `feat:`/`fix:`/`docs:` changes; skip those whose only commits are `ci:`/`chore(deps):`. Local worktrees can be stale (they may still show removed workflow inputs or an old default branch); always re-survey against `origin`.
+3. **Fan out in small batches.** Process ~5–7 repos per batch, not one mega-pass. Small batches keep an agent's context from being exhausted mid-fleet and avoid tripping server-side rate limits on rapid PR/clone bursts.
+4. **Run the notes overhaul as a separate pass.** The Phase 5 description overhaul is the step most likely to run out of context in a combined loop — do the bump→merge→tag→publish pipeline for the whole batch first, then a second pass for narrative notes via `gh release edit --notes-file`.
+5. **Handle "drift" repos.** If a repo's version file was already bumped ahead of its latest tag, the next tag is `max(natural_bump, current_version_in_file)` — use the pre-bumped value (unless that version was already published/burned, in which case bump higher).
+
 ## When CI Fails
 
 If the release workflow fails:
