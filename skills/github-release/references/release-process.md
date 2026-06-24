@@ -110,6 +110,15 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
 
 The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
 
+#### The overhaul is part of the release, not an optional follow-up
+
+Two starting points are equally unacceptable as a final release body:
+
+- a flat auto-generated `## Changes` / `## What's Changed` list of PR titles (often padded with chore noise — dependency digest bumps, lint-fix PRs); and
+- a CI-generated **stub** — some release workflows auto-create the release on tag push with a placeholder body like `Release vX.Y.Z — see CHANGELOG.md for details`.
+
+In both cases the release is not finished until the body is a hand-written `## Highlights` narrative. Do this **proactively, every time** — do not wait to be asked, and do not report the release as "done" while the body is still a PR-title list or a stub. The stub appears only once the tag pipeline finishes (the workflow creates the release), so the overhaul step has to wait for that completion before it can edit the body. For repos that append boilerplate sections (Installation, verification/Sigstore, SBOM), preserve those verbatim and replace only the change summary.
+
 #### Crediting contributors, including reporters
 
 GitHub's auto-generated notes derive from commit subjects, so they credit only the people whose commits/PRs landed — **issue reporters are invisible**, even though a good bug report or feature request is a real contribution. `scripts/harvest-contributors.sh` closes that gap: for the commit range it collects every merged-PR author (the **Code** line) and every author of an issue those PRs closed via `closingIssuesReferences` (the **Reported** line).
@@ -121,6 +130,16 @@ Policy baked into the script:
 - **Deduped** issue numbers per reporter, sorted.
 
 Review the output before splicing it in (a reporter may have opted out of credit, or an issue's `closingIssuesReferences` link may be wrong). The compare API caps at 250 commits — for a wider range, run it in two halves and merge.
+
+**Always review the harvest output for over-credit before splicing.** Older versions of the script grepped `#N` references out of full commit messages and could false-credit the author of a PR number merely *mentioned* in a dependency-bump changelog (or in an HTML entity like `&#8203;`) rather than actually closed in the range. Cross-check the **Code** line against the commit authors GitHub itself reports for the range before trusting it:
+
+```bash
+gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | sort -u
+```
+
+A name on the Code line that does not appear in that list is a false credit — drop it.
+
+**Use bare `@username` mentions in the Contributors section — never `[@username](url)` markdown links.** GitHub renders the contributor **avatar** chip only for a bare `@mention`; wrapping it in a markdown link degrades it to a plain hyperlink with no avatar. This is the one place the general "format references as clickable links" habit is wrong — a bare `@mention` is already clickable *and* shows the avatar. Add a `**Full Changelog**: <compare-url>` line below the credits to match GitHub's own release format.
 
 #### Narrative over implementation details
 
