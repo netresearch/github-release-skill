@@ -87,7 +87,11 @@ Note: Update `Cargo.lock` by running `cargo check` after bumping `Cargo.toml`, n
 | File | Field/Pattern | Example |
 |------|--------------|---------|
 | `.claude-plugin/plugin.json` | `"version": "X.Y.Z"` | `"version": "0.1.0"` |
-| `skills/*/SKILL.md` | `version: "X.Y.Z"` (in frontmatter) | `version: "0.1.0"` |
+| `skills/*/SKILL.md` | `version: "X.Y.Z"` (in frontmatter `metadata`) | `version: "0.1.0"` |
+
+Note: `skills/*/SKILL.md` is a glob — a repo may ship **multiple** skills (e.g. `jira-communication` + `jira-syntax`). Bump the `metadata.version` in **every** SKILL.md so each equals `plugin.json`.
+
+Note: On GitHub this match is a **required CI check** — `Skill Validation` runs a step *"Validate SKILL.md metadata.version matches plugin.json"*, so a bump PR that touches only `plugin.json` is BLOCKED until every SKILL.md is bumped too. On GitLab the `ci-components/claude-code-skill` pipeline's `validate:version` only checks `plugin.json` (v-stripped) against the tag, not SKILL.md — bump SKILL.md anyway for consistency.
 
 ### Generic (Always Check)
 
