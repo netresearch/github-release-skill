@@ -134,7 +134,7 @@ Review the output before splicing it in (a reporter may have opted out of credit
 **Always review the harvest output for over-credit before splicing.** Older versions of the script grepped `#N` references out of full commit messages and could false-credit the author of a PR number merely *mentioned* in a dependency-bump changelog (or in an HTML entity like `&#8203;`) rather than actually closed in the range. Cross-check the **Code** line against the commit authors GitHub itself reports for the range before trusting it:
 
 ```bash
-gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login' | sort -u
+gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | sort -u
 ```
 
 A name on the Code line that does not appear in that list is a false credit — drop it.
