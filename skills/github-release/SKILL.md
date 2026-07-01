@@ -20,6 +20,8 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 
 **`gh release edit` is allowed ONLY for `--notes` / `--notes-file`** to overhaul the release description after CI publishes. All other `gh release edit` flags are blocked.
 
+**No editorializing** in release notes, PR/commit text and docs — state what a release does, not how good the work is; no self-praise or narrating the expected. See `references/no-editorializing.md`.
+
 ## Release Flow
 
 1. **Detect ecosystem** — identify version files for the project type (see `references/ecosystem-detection.md`)
@@ -27,11 +29,11 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 3. **Bump version files** — update all ecosystem-specific version files consistently
 4. **Update CHANGELOG.md** — add release section with date and changes
 5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always use a PR — branch protection typically blocks direct pushes)
-6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the fetched remote tip (stale-worktree guard; abort on mismatch), then tag `main`'s HEAD, never the `release/vX.Y.Z` branch tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
+6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD (never the `release/vX.Y.Z` tip): `git tag -s vX.Y.Z` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
 8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
 9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; add a **Contributors** section crediting code authors + issue reporters (bots filtered) via `scripts/harvest-contributors.sh`; apply with `gh release edit vX.Y.Z --notes-file notes.md`
-10. **Do NOT re-run the release workflow after step 9** — many workflows (e.g. `softprops/action-gh-release`) regenerate the body each run and will overwrite the overhaul. For downstream retries (TER publish, artifact upload), use a dedicated dispatcher workflow — see `references/ter-republish.md`.
+10. **Do NOT re-run the release workflow after step 9** — many workflows regenerate the body each run and overwrite the overhaul. For downstream retries, use a dedicated dispatcher — see `references/ter-republish.md`.
 
 ## Commands
 
@@ -46,11 +48,12 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 
 ## References
 
-- `references/release-process.md` — complete flow documentation
-- `references/ecosystem-detection.md` — version file patterns per ecosystem
-- `references/immutable-releases.md` — GitHub immutable releases and tag burning
-- `references/supply-chain-security.md` — SLSA, Sigstore, SBOMs, attestations
-- `references/recovery-procedures.md` — burned tags, stuck drafts, version drift, release-body clobbering, branch-protection gotchas
-- `references/ter-republish.md` — TYPO3 TER re-publish patterns
-- `references/typo3-ter-publishing.md` — TYPO3 initial-publish gotchas (tag/`ext_emconf.php` version match, `v`-prefix handling)
-- `references/ci-workflow-templates.md` — CI workflow structure and templates
+- `references/release-process.md`
+- `references/ecosystem-detection.md` — version-file patterns
+- `references/immutable-releases.md` — immutable releases, tag burning
+- `references/supply-chain-security.md` — SLSA, Sigstore, SBOMs
+- `references/recovery-procedures.md` — burned tags, stuck drafts, drift, body clobbering
+- `references/ter-republish.md` — TER re-publish
+- `references/typo3-ter-publishing.md` — TYPO3 initial-publish gotchas
+- `references/ci-workflow-templates.md` — CI workflow templates
+- `references/no-editorializing.md` — no self-praise / narrating the expected
