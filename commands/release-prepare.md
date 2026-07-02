@@ -43,9 +43,41 @@ include files like `composer.json`, `package.json`, `ext_emconf.php`,
 
 ### 6. Update CHANGELOG.md
 
-If a CHANGELOG.md exists:
-- Rename the `[Unreleased]` section to `[X.Y.Z] - YYYY-MM-DD` (using today's date)
-- Add a new empty `[Unreleased]` section above it with standard subsection headers
+If a CHANGELOG.md exists, it must gain a **populated** entry for this version —
+never emit an empty section. Do not just rename `[Unreleased]`: when changes
+are merged PR-by-PR without touching the changelog, `[Unreleased]` is empty and
+a rename yields a hollow version heading.
+
+1. **Derive the entries from the commit log.** List merged work since the last
+   release tag and group the user-facing changes under standard headers (Added
+   / Changed / Fixed / Documentation / Removed), dropping chore/ci/release-bump
+   noise. Match the file's existing entry style — heading format, and whether
+   entries cite PR/MR numbers (map commits to PRs with
+   `gh api repos/OWNER/REPO/commits/<sha>/pulls` when they do).
+
+   ```bash
+   # --first-parent yields one line per merged PR in both merge-commit and
+   # squash/rebase repos; the fallback covers a first release with no tag yet.
+   git log --oneline --first-parent "$(git describe --tags --abbrev=0 2>/dev/null)"..HEAD 2>/dev/null \
+     || git log --oneline --first-parent HEAD
+   ```
+
+2. **Backfill missing versions.** If tags exist between the newest CHANGELOG
+   entry and the last release (a prior version shipped without an entry), add a
+   section for each, scoped to its own `<prev-tag>..<tag>` range. Some repos
+   require this explicitly (e.g. jira-skill `AGENTS.md`: "Backfill any missing
+   CHANGELOG entries").
+
+3. **Add the new section.** For Keep a Changelog files, move the derived
+   entries into a new `[X.Y.Z] - YYYY-MM-DD` heading (today's date) and leave an
+   empty `[Unreleased]` above it. If the file keeps link-reference definitions
+   at the bottom (`[Unreleased]: …/compare/vX…HEAD`, `[X.Y.Z]: …`), add the new
+   version's definition and repoint `[Unreleased]` — `check-changelog-links.py`
+   fails otherwise. For other formats, insert the version heading at the top in
+   the file's own style (e.g. `## X.Y.Z (YYYY-MM-DD)`).
+
+Keep entries plain and factual — no editorializing (see
+`skills/github-release/references/no-editorializing.md`).
 
 ### 7. TYPO3-specific: scan documentation
 
