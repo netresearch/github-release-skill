@@ -27,7 +27,13 @@ The hooks in this repository block `gh release create` and `gh release delete` t
 3. Create release branch:
    git checkout -b release/vX.Y.Z
 4. Bump all version files for the detected ecosystem
-5. Update CHANGELOG.md with new section
+5. Update CHANGELOG.md: add the new [X.Y.Z] section AND bump the footer
+   link-references (Keep a Changelog) — repoint the [Unreleased]: line to
+   compare/vX.Y.Z...HEAD and add a [X.Y.Z]: .../compare/vPREVIOUS...vX.Y.Z line.
+   The footer LABEL is the plain version ([X.Y.Z]:), while the compare URL uses
+   the v-prefixed git tags (vPREVIOUS...vX.Y.Z). The footer drifts silently if
+   only the heading is changed (a prior release's compare link may even be
+   missing); a reviewer bot will flag the dangling [Unreleased]: ref.
 6. Commit: "chore: prepare release vX.Y.Z"
 7. Push branch and open PR
 ```
