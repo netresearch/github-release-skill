@@ -102,14 +102,17 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
 ```
 1. Wait for CI release workflow to complete successfully
 2. Review the commits included in the release (git log prev_tag..new_tag)
-3. Harvest contributors — scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>
-   emits a "Contributors" section crediting BOTH merged-PR authors and the
-   reporters of the issues those PRs closed (bots filtered, humans only)
+3. List who contributed to what — scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>
+   prints merged-PR authors and the reporters of the issues those PRs closed
+   (bots excluded) — a lookup for step 4, NOT a section to paste
 4. Write a narrative release description covering:
    - What changed and why it matters
    - Context for skipped versions or notable decisions
    - Grouped by theme (features, fixes, infrastructure), not by commit
-   - A Contributors section (splice in the output of step 3)
+   - Each contributor @mentioned INLINE at the change they touched, by role
+     (reporter / PR author / committer / reviewer / discussant). Do NOT add a
+     Contributors section — GitHub builds the Contributors avatar row itself from
+     these inline @mentions (mentions_count).
 5. Update via: gh release edit vX.Y.Z --notes-file notes.md
    (use --notes-file, not --notes "...", to avoid shell-quoting issues with multi-line Markdown)
 ```
@@ -125,27 +128,36 @@ Two starting points are equally unacceptable as a final release body:
 
 In both cases the release is not finished until the body is a hand-written `## Highlights` narrative. Do this **proactively, every time** — do not wait to be asked, and do not report the release as "done" while the body is still a PR-title list or a stub. The stub appears only once the tag pipeline finishes (the workflow creates the release), so the overhaul step has to wait for that completion before it can edit the body. For repos that append boilerplate sections (Installation, verification/Sigstore, SBOM), preserve those verbatim and replace only the change summary.
 
-#### Crediting contributors, including reporters
+#### Crediting contributors — inline, never a hand-written section
 
-GitHub's auto-generated notes derive from commit subjects, so they credit only the people whose commits/PRs landed — **issue reporters are invisible**, even though a good bug report or feature request is a real contribution. `scripts/harvest-contributors.sh` closes that gap: for the commit range it collects every merged-PR author (the **Code** line) and every author of an issue those PRs closed via `closingIssuesReferences` (the **Reported** line).
+**GitHub builds the "Contributors" row itself.** The avatar row above the release's Assets is generated from the `@mentions` in the body (the release object's `mentions_count`): every `@mention` anywhere in the body feeds it, and with none, `mentions_count` is `null` and the row does not render. So you **never hand-write a `## Contributors` section** — it would duplicate the row GitHub already draws and lump everyone together, losing who did what.
 
-Policy baked into the script:
+**Credit each contributor inline at the change they touched, by role** — reporter, PR author, committer / co-author, reviewer, discussant, whatever the contribution was. One change can name several:
 
-- **Humans only.** Logins ending in `[bot]` and known automation (`dependabot`, `renovate`, `github-actions`, `gemini-code-assist`, `copilot*`) are dropped — this is the same no-bot-credit rule applied to CHANGELOG/release notes.
-- **Each person credited once.** The Reported line lists only reporters who are *not* already on the Code line, so it highlights the (usually community) people who reported but didn't author a PR — and it naturally drops a maintainer's own self-filed issues (they appear under Code).
-- **Deduped** issue numbers per reporter, sorted.
+```markdown
+- Entry deletion now enforces ownership (IDOR) — reported by @alice, fixed in #560 by @bob, reviewed by @carol.
+```
 
-Review the output before splicing it in (a reporter may have opted out of credit, or an issue's `closingIssuesReferences` link may be wrong). The compare API caps at 250 commits — for a wider range, run it in two halves and merge.
+Use a bare `@username`, never `[@username](url)`: GitHub renders the avatar chip only for a bare mention; a markdown link degrades it to a plain hyperlink. (This is the one place the "format references as clickable links" habit is wrong — a bare `@mention` is already clickable *and* shows the avatar.) Add a `**Full Changelog**: <compare-url>` line at the end to match GitHub's own release format.
 
-**Always review the harvest output for over-credit before splicing.** Older versions of the script grepped `#N` references out of full commit messages and could false-credit the author of a PR number merely *mentioned* in a dependency-bump changelog (or in an HTML entity like `&#8203;`) rather than actually closed in the range. Cross-check the **Code** line against the commit authors GitHub itself reports for the range before trusting it:
+**Finding who to mention.** `scripts/harvest-contributors.sh --from <prev> --to <new>` lists merged-PR authors and the reporters of the issues those PRs closed (bots excluded, humans only) — a lookup so you know whom to place where; it does **not** emit a section. Reviewers and discussants are not in that list — pull them from the PR/issue when the contribution warrants credit.
+
+**Check the harvest against the range's real commit authors — in both directions:**
 
 ```bash
 gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | sort -u
 ```
 
-A name on the Code line that does not appear in that list is a false credit — drop it.
+- **Over-credit:** a harvested author *not* in that list is a false credit (older versions grepped `#N` out of a dependency-bump changelog or an HTML entity like `&#8203;`) — drop it.
+- **Under-credit:** the harvest sees only *merged-PR* authors. A **direct-push** human (no PR) appears in the compare list above under their own login — mention them if the harvest missed them. A commit **authored by a filtered bot but co-authored by a human** (e.g. the Copilot agent) shows the **bot** login in the compare list, not the human — never credit the bot; the human is the committer / `Co-authored-by`. List the real people in the range and credit anyone the harvest missed:
 
-**Use bare `@username` mentions in the Contributors section — never `[@username](url)` markdown links.** GitHub renders the contributor **avatar** chip only for a bare `@mention`; wrapping it in a markdown link degrades it to a plain hyperlink with no avatar. This is the one place the general "format references as clickable links" habit is wrong — a bare `@mention` is already clickable *and* shows the avatar. Add a `**Full Changelog**: <compare-url>` line below the credits to match GitHub's own release format.
+  ```bash
+  git log --format='%an <%ae>%n%cn <%ce>%n%(trailers:key=Co-authored-by,valueonly,separator=%n)' <from>..<to> | sort -u | grep .
+  ```
+
+  One person per line (the `%n` separator keeps multiple co-authors from colliding), deduped; the emails map names back to GitHub accounts.
+
+The compare API caps at 250 commits — for a wider range, run it in two halves.
 
 #### Narrative over implementation details
 
