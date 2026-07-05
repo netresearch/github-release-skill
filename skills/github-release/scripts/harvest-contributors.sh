@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# harvest-contributors.sh — emit a Markdown "Contributors" section for a release,
-# crediting BOTH code authors (merged-PR authors) and issue reporters (authors of
-# the issues those PRs closed). Bots are filtered out — humans only, matching the
-# no-bot-credit-in-release-notes policy. Reporters count as contributors: the
-# auto-generated GitHub notes derive from commit subjects and never list them.
+# harvest-contributors.sh — list who contributed WHAT in a release range, as a
+# LOOKUP for crediting contributors INLINE at each change. It reports code authors
+# (merged-PR authors) and issue reporters (authors of the issues those PRs closed).
+# Bots are filtered out — humans only, matching the no-bot-credit-in-release-notes
+# policy. Reporters count as contributors: the auto-generated GitHub notes derive
+# from commit subjects and never list them.
+#
+# This script does NOT emit a "## Contributors" section — do not paste its output
+# into the notes. GitHub builds the Contributors avatar row itself from the
+# `@mentions` you place inline at each change (the release object's mentions_count);
+# a hand-written section would duplicate that row and lose the per-change role.
+# Reviewers and discussants are not covered here — pull them from the PR/issue.
 #
 # Usage:
 #   harvest-contributors.sh --from <tag> --to <tag> [--repo owner/repo]
@@ -14,8 +21,7 @@
 # GitHub compare API returns at most 250 commits; for a wider range, split it
 # and run twice. Requires: gh (authenticated) and jq.
 #
-# Output is Markdown on stdout — review it, then splice it into the release notes
-# before applying with `gh release edit vX.Y.Z --notes-file notes.md`.
+# Output is a plain lookup on stdout — use it to decide whom to @mention where.
 set -euo pipefail
 
 # ---- pure helpers (sourced by scripts/tests/harvest-contributors.test.sh) ----
@@ -100,21 +106,19 @@ main() {
                     | "\(.number)\t\(.author.login // "")"' <<<"$json")
   done
 
-  echo "## 👥 Contributors"
-  echo
-  echo "Thanks to everyone who made this release — code and reports alike:"
-  echo
+  # Plain lookup — NOT a section to paste. @mention these people INLINE at the
+  # change they touched; GitHub renders the Contributors row from those mentions.
+  echo "# Contributors in ${FROM}..${TO} — @mention each INLINE at their change (do not paste as a section):"
   local k joined line any
   if [ "${#CODE[@]}" -gt 0 ]; then
     joined=""
-    for k in $(printf '%s\n' "${!CODE[@]}" | sort -f); do joined="${joined}@${k}, "; done
-    echo "- **Code:** ${joined%, }"
+    for k in $(printf '%s\n' "${!CODE[@]}" | sort -f); do joined="${joined}@${k} "; done
+    echo "code authors: ${joined% }"
   fi
-  # "Reported" credits humans who reported a fixed issue but are NOT already in
-  # Code — so each person is credited once and this line highlights the reporters
-  # (typically community members) who didn't also author a PR. This also drops a
-  # maintainer's self-reported issues, since maintainers appear under Code.
-  line="- **Reported issues fixed here:** "; any=0
+  # Reporters credited once: only those who reported a fixed issue and are NOT
+  # already among the authors — highlights the (usually community) people who
+  # reported but didn't author a PR, and drops a maintainer's self-reported issues.
+  line="issue reporters (issue → reporter): "; any=0
   for k in $(printf '%s\n' "${!REPORTERS[@]}" | sort -f); do
     [ -n "${CODE["$k"]:-}" ] && continue
     # paste -d takes the delimiter chars cyclically, so -d', ' would alternate

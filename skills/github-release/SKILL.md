@@ -32,7 +32,7 @@ These commands are blocked by hooks. GitHub immutable releases (GA Oct 2025) mak
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD (never the `release/vX.Y.Z` tip): `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI workflow
 8. **CI publishes release** — with artifacts, checksums, and auto-generated release notes
-9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; add a **Contributors** section crediting code authors + issue reporters (bots filtered) via `scripts/harvest-contributors.sh`; apply with `gh release edit vX.Y.Z --notes-file notes.md`
+9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; `@mention` each contributor **inline at their change** (bots excluded), never in a hand-written `## Contributors` section. Apply with `gh release edit vX.Y.Z --notes-file notes.md`
 10. **Do NOT re-run the release workflow after step 9** — many workflows regenerate the body each run and overwrite the overhaul. For downstream retries, use a dedicated dispatcher — see `references/ter-republish.md`.
 
 ## Commands
