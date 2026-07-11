@@ -20,6 +20,7 @@ The hooks in this repository block `gh release create` and `gh release delete` t
 ### Phase 1: Preparation
 
 ```
+0. Triage open issues from the current work stream (see "Issue gate" below)
 1. Detect ecosystem (see ecosystem-detection.md)
 2. Determine next version number:
    - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major)
@@ -37,6 +38,23 @@ The hooks in this repository block `gh release create` and `gh release delete` t
 6. Commit: "chore: prepare release vX.Y.Z"
 7. Push branch and open PR
 ```
+
+**Issue gate (step 0) — never tag over an untriaged known issue.** Before
+tagging, list open issues (`gh issue list --state open`), and for each issue
+**created or touched during the current work stream**, classify it:
+
+- *regression introduced by this release* → must be fixed before tagging;
+- *pre-existing latent* → usually not a blocker, but say so explicitly to the
+  user before tagging;
+- *test-only / infra* → not a blocker.
+
+Anything of **unclear severity** — including an issue you filed yourself whose
+text hypothesises "production bug" — is decided by the user, not silently
+shipped. A user's task order that includes "release" does **not** delegate that
+judgment away. Surface the open issues with a one-line severity read and get an
+explicit go, or fix first. Shipping a release with a known open bug from the
+same stream, then being asked "why did you release with known bugs?", is the
+failure this gate prevents.
 
 ### Phase 2: Review and Merge
 
