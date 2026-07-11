@@ -20,11 +20,28 @@ Identify which version files need updating based on the project's ecosystem. A p
 |------|--------------|---------|
 | `ext_emconf.php` | `'version' => 'X.Y.Z'` | `'version' => '13.8.1'` |
 | `composer.json` | `"version": "X.Y.Z"` | `"version": "13.8.1"` |
-| `Documentation/guides.xml` | `<guide version="X.Y.Z">` or `version` attribute | `version="13.8.1"` |
+| `composer.json` | `extra.typo3/cms.version` (separate from `"version"`) | `"extra": {"typo3/cms": {"version": "13.8.1"}}` |
+| `Documentation/guides.xml` | `version=` **and** `release=` attributes | `version="13.8.1" release="13.8.1"` |
+| `Documentation/Changelog.rst` | rendered changelog page — add a `Version X.Y.Z (date)` section | `Version 13.8.1 (2026-...)` |
+| `CHANGELOG.md` | stamp `[Unreleased]` → `[X.Y.Z] - date` **and** the footer compare links | `[13.8.1]: .../compare/v13.8.0...v13.8.1` |
 | `Documentation/**/*.rst` | `.. versionadded:: X.Y.Z` | `.. versionadded:: 13.8.0` |
 | `Documentation/**/*.rst` | `.. versionchanged:: X.Y.Z` | `.. versionchanged:: 13.8.1` |
 
-Note: RST `versionadded`/`versionchanged` directives should only be updated when they reference the **current release being prepared**, not historical entries.
+Notes:
+
+- **`composer.json` has TWO independent version surfaces.** Besides the
+  top-level `"version"`, TYPO3 14's deprecation #108345 (drop the `ext_emconf.php`
+  version in favour of composer metadata) means extensions also carry
+  `extra.typo3/cms.version` (+ `providesPackages`). It is a *different* field from
+  `"version"` and is easy to miss — a mismatch fails the extension's own
+  `VersionConsistencyTest` in CI. Bump both.
+- **`Documentation/guides.xml`** carries both `version` and `release` attributes;
+  update both. This file drifts silently (it renders docs.typo3.org) and is a
+  frequent miss.
+- **`CHANGELOG.md`** needs the footer compare-link block updated too, not just the
+  section stamp — the `[Unreleased]` link and a new `[X.Y.Z]` link.
+- **RST `versionadded`/`versionchanged` directives** should only be updated when they
+  reference the **current release being prepared**, not historical entries.
 
 ### PHP / Composer
 
