@@ -40,7 +40,7 @@ Notes:
   frequent miss.
 - **`CHANGELOG.md`** needs the footer compare-link block updated too, not just the
   section stamp — the `[Unreleased]` link and a new `[X.Y.Z]` link.
-- RST `versionadded`/`versionchanged` directives should only be updated when they
+- **RST `versionadded`/`versionchanged` directives** should only be updated when they
   reference the **current release being prepared**, not historical entries.
 
 ### PHP / Composer

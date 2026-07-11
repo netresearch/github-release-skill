@@ -39,7 +39,9 @@ The hooks in this repository block `gh release create` and `gh release delete` t
 7. Push branch and open PR
 ```
 
-**Issue gate (step 0) — never tag over an untriaged known issue.** Before
+#### Issue Gate (Step 0) — Never tag over an untriaged known issue
+
+Before
 tagging, list open issues (`gh issue list --state open`), and for each issue
 **created or touched during the current work stream**, classify it:
 
