@@ -47,6 +47,14 @@ if [[ -x "${SCRIPT_DIR}/detect-ecosystem.sh" ]]; then
                 file="${line#version-file:}"
                 path="${file%%:*}"
                 ver="${file#*:}"
+                # A "private": true package.json is local tooling, not a
+                # publishable release surface — its version never tracks the
+                # release and would fail the sync check on every run.
+                if [[ "$path" == package.json || "$path" == package-lock.json ]] \
+                    && [[ -f package.json ]] \
+                    && grep -qE '"private"[[:space:]]*:[[:space:]]*true' package.json; then
+                    continue
+                fi
                 if [[ -n "$ver" ]]; then
                     versions+=("$ver")
                     version_files+=("${path}=${ver}")
@@ -66,6 +74,28 @@ else
     else
         detail=$(printf '%s, ' "${version_files[@]}")
         check "FAIL" "Version files in sync" "mismatch: ${detail%, }"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 1b. Version files ahead of the latest tag (phantom / untagged release)
+# ---------------------------------------------------------------------------
+# A "chore: release X.Y.Z" commit that was merged but never tagged leaves the
+# version files ahead of the newest tag — the prepared release silently never
+# shipped (e.g. its tag-triggered workflow was cancelled). Surface it so the
+# releaser decides deliberately whether to tag it or roll it into the next
+# version.
+if ((${#versions[@]} > 0)); then
+    # Highest file version, semver-sorted — when files are out of sync the
+    # sync check above already FAILed; comparing the highest against the tag
+    # still yields the correct "a prepared release was never tagged" signal.
+    file_version=$(printf '%s\n' "${versions[@]}" | sort -uV | tail -1)
+    latest_tag=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)
+    if [[ -n "$latest_tag" && "v${file_version}" != "$latest_tag" ]]; then
+        if [[ "$(printf '%s\n' "${latest_tag#v}" "$file_version" | sort -V | tail -1)" == "$file_version" ]]; then
+            check "WARN" "Version files ahead of latest tag" \
+                "files say ${file_version}, newest tag is ${latest_tag} — a prepared release was never tagged"
+        fi
     fi
 fi
 
