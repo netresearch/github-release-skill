@@ -86,7 +86,10 @@ fi
 # releaser decides deliberately whether to tag it or roll it into the next
 # version.
 if ((${#versions[@]} > 0)); then
-    file_version=$(printf '%s\n' "${versions[@]}" | sort -u | head -1)
+    # Highest file version, semver-sorted — when files are out of sync the
+    # sync check above already FAILed; comparing the highest against the tag
+    # still yields the correct "a prepared release was never tagged" signal.
+    file_version=$(printf '%s\n' "${versions[@]}" | sort -uV | tail -1)
     latest_tag=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)
     if [[ -n "$latest_tag" && "v${file_version}" != "$latest_tag" ]]; then
         if [[ "$(printf '%s\n' "${latest_tag#v}" "$file_version" | sort -V | tail -1)" == "$file_version" ]]; then
