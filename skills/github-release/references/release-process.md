@@ -110,7 +110,8 @@ another author's fix — none of them in the `[X.Y.Z]` section you wrote at
 prep time. Tagging then ships them undocumented. Immediately before the tag:
 
 ```bash
-git log --first-parent --pretty='%s' vPREVIOUS..HEAD   # everything the tag will ship
+PREVIOUS_TAG=$(git describe --tags --abbrev=0)         # the last release tag
+git log --first-parent --pretty='%s' "$PREVIOUS_TAG"..HEAD   # everything the tag will ship
 ```
 
 Diff that list against the `[X.Y.Z]` CHANGELOG section and add every merged
