@@ -58,6 +58,20 @@ explicit go, or fix first. Shipping a release with a known open bug from the
 same stream, then being asked "why did you release with known bugs?", is the
 failure this gate prevents.
 
+#### Release authorization is per-release — momentum is not a mandate
+
+A release is outward-facing and (once published) immutable, so **cutting or
+even staging one requires an explicit, current instruction for *that* release**
+— not inference from a finished feature cycle. Authorization does not carry
+forward: "do the release" for version N does not authorize version N+1, and
+"fix these issues / finish this PR" never authorizes a release at all. The
+autonomous pipeline for feature work *ends* at merged PRs + green CI + closed
+issues; then stop and report "release-ready — say the word to cut X.Y.Z". Do
+not create `release/*` branches, bump versions, or arm a release PR to
+auto-merge without a per-release go. (Staging counts: a bumped, auto-merged
+release PR is a release the user did not ask for. "Did you release? I wasn't
+asking for a release." is the failure this prevents.)
+
 ### Phase 2: Review and Merge
 
 ```
@@ -86,6 +100,24 @@ still commits behind the remote tip, and the tag lands on pre-merge code.
 On mismatch, abort: do not tag, do not push. Cross-check against the API
 when in doubt: `gh api repos/{owner}/{repo}/commits/main --jq .sha` must
 equal `git rev-parse HEAD`.
+
+**Reconcile the CHANGELOG against the whole range before tagging — position
+is not content.** Step 2 proves you are tagging main's tip; it does *not*
+prove the CHANGELOG describes what that tip actually contains. Between the
+moment the release PR was prepared and the moment you tag, *other* PRs can
+merge onto main — features from a parallel work stream, dependency bumps,
+another author's fix — none of them in the `[X.Y.Z]` section you wrote at
+prep time. Tagging then ships them undocumented. Immediately before the tag:
+
+```bash
+git log --first-parent --pretty='%s' vPREVIOUS..HEAD   # everything the tag will ship
+```
+
+Diff that list against the `[X.Y.Z]` CHANGELOG section and add every merged
+feature/fix that is missing (read the PR/ADR to describe it accurately). Do
+not trust a CHANGELOG written when the release PR opened — main drifts past a
+staged release. If reconciling adds material, land it as a `docs(changelog)`
+PR and re-verify step 2 before tagging.
 
 The tag MUST be:
 - **Annotated** (`-a` or `-s`), never lightweight
