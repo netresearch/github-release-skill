@@ -66,7 +66,7 @@ reusables to `@main` makes releases silently hostage to upstream template drift.
 still exists on the pinned ref:
 
 ```bash
-# For every `uses: org/.github/.github/workflows/<wf>.yml@main` in release.yml:
+# For every uses: org/.github/.github/workflows/<wf>.yml@main in release.yml:
 gh api "repos/org/.github/contents/.github/workflows/<wf>.yml?ref=main" --jq '.name'
 # → "Not Found" (404) is the culprit. Then find its replacement:
 gh api "repos/org/.github/contents/.github/workflows?ref=main" --jq '.[].name' | grep -i release
