@@ -49,6 +49,48 @@
 
 **Important**: The tag is NOT burned while the release is in draft state. If the draft is fundamentally broken, you can delete it and recreate.
 
+## Release Workflow Startup-Failure (Deleted `@main` Reusable)
+
+**Symptom**: The tag push triggered the release workflow, but the run shows
+**`failure` with ZERO jobs** — `gh run view <id> --json jobs` returns
+`{"jobs":[],"total":0}` and the run page says *"This run likely failed because
+of a workflow file issue."* No release is created.
+
+**Cause**: `release.yml` calls a reusable workflow pinned to a moving ref
+(`uses: org/.github/.github/workflows/<name>.yml@main`), and that reusable was
+**renamed or removed upstream** since the last release. GitHub cannot resolve the
+`uses:` target, so the run fails at startup before any job begins. Pinning
+reusables to `@main` makes releases silently hostage to upstream template drift.
+
+**Diagnosis** — a startup-failure exposes no annotations, so check each reusable
+still exists on the pinned ref:
+
+```bash
+# For every uses: org/.github/.github/workflows/<wf>.yml@main in release.yml:
+gh api "repos/org/.github/contents/.github/workflows/<wf>.yml?ref=main" --jq '.name'
+# → "Not Found" (404) is the culprit. Then find its replacement:
+gh api "repos/org/.github/contents/.github/workflows?ref=main" --jq '.[].name' | grep -i release
+```
+
+**Recovery** — the tag is **NOT burned** (verify: `gh release view vX.Y.Z` →
+"release not found" means no Release object was created). Fix the workflow, then
+**backfill without re-tagging**:
+
+1. Sync `release.yml` to the current template (or repoint the `uses:` refs to the
+   renamed reusables), open a PR, merge it.
+2. Re-trigger the SAME tag via `workflow_dispatch` — this runs the fixed workflow
+   from the default branch while building the existing tag's commit:
+   ```bash
+   gh workflow run release.yml --ref main -f tag=vX.Y.Z
+   ```
+   (Requires `release.yml` to declare `workflow_dispatch` with a `tag` input — the
+   standard go-app/backfill pattern.)
+3. After it publishes, overhaul notes with `gh release edit vX.Y.Z --notes-file …`
+   and do **not** re-run the workflow (it regenerates the body).
+
+**Prevention**: prefer pinning org reusables to a tag/SHA over `@main`, or run a
+periodic template-drift check so a removed reusable surfaces before a release.
+
 ## Sigstore/Rekor 409 on Checksum Signing
 
 **Symptom**: The release workflow's signing/attestation step (cosign / sigstore) fails with:
