@@ -1,10 +1,10 @@
 name: Script Tests
 
 # Runs shell self-tests for scripts/ that ship one (currently the
-# harvest-contributors PR-number extraction guard). Standalone job: the
-# skill-repo-skill reusables validate skill *structure*, not script *behavior*.
-# Third-party actions are SHA-pinned (githubactions:S7637); permissions are
-# minimal and declared at the call site.
+# harvest-contributors PR-number extraction guard). Thin caller of the shared
+# script-check reusable, so the checkout pin and harden-runner are maintained
+# centrally; the skill-repo-skill reusables validate skill *structure*, this
+# checks script *behavior*.
 
 on:
   push:
@@ -15,19 +15,8 @@ permissions: {}
 
 jobs:
   shell-tests:
-    name: Shell self-tests
-    runs-on: ubuntu-latest
+    uses: netresearch/.github/.github/workflows/script-check.yml@main
     permissions:
       contents: read
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - name: harvest-contributors self-test
-        run: bash skills/github-release/scripts/tests/harvest-contributors.test.sh
+    with:
+      check-cmd: bash skills/github-release/scripts/tests/harvest-contributors.test.sh
