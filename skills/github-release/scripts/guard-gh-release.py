@@ -197,7 +197,7 @@ def check_command(command: str) -> None:
 def main() -> None:
     try:
         input_data = sys.stdin.read()
-    except Exception:
+    except Exception:  # noqa: BLE001 - hook must fail open on any stdin error, never block the tool call
         sys.exit(0)
 
     command = parse_command(input_data)

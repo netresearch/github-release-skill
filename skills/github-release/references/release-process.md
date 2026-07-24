@@ -181,6 +181,16 @@ Two starting points are equally unacceptable as a final release body:
 
 In both cases the release is not finished until the body is a hand-written `## Highlights` narrative. Do this **proactively, every time** — do not wait to be asked, and do not report the release as "done" while the body is still a PR-title list or a stub. The stub appears only once the tag pipeline finishes (the workflow creates the release), so the overhaul step has to wait for that completion before it can edit the body. For repos that append boilerplate sections (Installation, verification/Sigstore, SBOM), preserve those verbatim and replace only the change summary.
 
+#### Never hard-wrap the body — soft newlines render as line breaks
+
+A GitHub release body renders as **comment-context GitHub-Flavored Markdown**, where a single soft newline inside a paragraph becomes a hard `<br>`. So an 80-column hard-wrapped paragraph shows up as a column of ragged short lines, not a flowing paragraph. Write every paragraph and list item as **one long logical line** and let the viewport soft-wrap.
+
+This is the opposite of a `CHANGELOG.md` (or any rendered `.md` file in a repo), which follows CommonMark where soft newlines collapse to spaces — so hard-wrapping is fine *there*. **Do not copy hard-wrapped changelog prose verbatim into the release body:** join each wrapped paragraph back into a single line first. Fenced code blocks are exempt — their internal newlines are intentional and survive correctly in both contexts.
+
+#### Verify each publication claim before reporting the release done
+
+Tag-push is not the finish line. If the body (or a boilerplate section the workflow appends) asserts a package was published — TER, Packagist, docs, npm — **independently confirm each claim before reporting success**, rather than trusting the template's wording. Many release workflows publish AND verify these channels themselves; do not assume a channel is a separate manual step without reading the release workflow. Quick checks: Packagist `https://repo.packagist.org/p2/<vendor>/<pkg>.json` (note tags are `v`-prefixed), TER `https://extensions.typo3.org/api/v1/extension/<ext_key>/versions`, docs an `HTTP 200` on the versioned docs URL. Report what you verified, not what the template claimed.
+
 #### Crediting contributors — inline, never a hand-written section
 
 **GitHub builds the "Contributors" row itself.** The avatar row above the release's Assets is generated from the `@mentions` in the body (the release object's `mentions_count`): every `@mention` anywhere in the body feeds it, and with none, `mentions_count` is `null` and the row does not render. So you **never hand-write a `## Contributors` section** — it would duplicate the row GitHub already draws and lump everyone together, losing who did what.
