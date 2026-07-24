@@ -137,7 +137,7 @@ def main(argv: list[str]) -> int:
         print(f"  STALE   {warning}")
 
     if missing:
-        print("")
+        print()
         print(
             "Add the missing footer link(s) and update the "
             "`[Unreleased]: .../compare/vX.Y.Z...HEAD` range to the newest "
