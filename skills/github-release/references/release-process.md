@@ -187,10 +187,24 @@ A GitHub release body renders as **comment-context GitHub-Flavored Markdown**, w
 
 This is the opposite of a `CHANGELOG.md` (or any rendered `.md` file in a repo), which follows CommonMark where soft newlines collapse to spaces — so hard-wrapping is fine *there*. **Do not copy hard-wrapped changelog prose verbatim into the release body:** join each wrapped paragraph back into a single line first. Fenced code blocks are exempt — their internal newlines are intentional and survive correctly in both contexts.
 
+#### Preserve the CI-appended blocks mechanically — do not retype them
+
+The netresearch `release-go-app.yml` orchestrator appends `## Container image` and `## Verify your download` sections after `## Changes`. Replacing the whole body with your narrative destroys them (and the verify commands are non-trivial — see supply-chain-security.md on `--signer-workflow`). Capture the tail and re-append it:
+
+```bash
+gh release view vX.Y.Z --repo owner/repo --json body --jq .body > /tmp/orig.md
+awk '/^## Container image/{f=1} f' /tmp/orig.md > /tmp/tail.md   # everything from the first CI block on
+cat my-narrative.md /tmp/tail.md > /tmp/final.md                 # narrative replaces ONLY ## Changes
+gh release edit vX.Y.Z --repo owner/repo --notes-file /tmp/final.md
+```
+
+Then re-check the emitted verify commands are correct for a reusable-workflow build (`--signer-workflow`, not `--repo` alone).
+
+**Publish behaviour differs by orchestrator.** `release-go-app.yml` (go apps) publishes the release **directly** on tag push — not a draft — with all assets attached, so the overhaul edits a live release. `golib-create-release.yml` (go libraries) creates a **draft** that must be published manually with `gh release edit vX.Y.Z --draft=false` (a permitted flag) after CI finishes. Check `gh release view --json isDraft` to know which you have. Note: `gh release view --json isLatest` is NOT a valid field — query `gh api repos/OWNER/REPO/releases/latest` for the latest tag instead.
+
 #### Verify each publication claim before reporting the release done
 
 Tag-push is not the finish line. If the body (or a boilerplate section the workflow appends) asserts a package was published — TER, Packagist, docs, npm — **independently confirm each claim before reporting success**, rather than trusting the template's wording. Many release workflows publish AND verify these channels themselves; do not assume a channel is a separate manual step without reading the release workflow. Quick checks: Packagist `https://repo.packagist.org/p2/<vendor>/<pkg>.json` (note tags are `v`-prefixed), TER `https://extensions.typo3.org/api/v1/extension/<ext_key>/versions`, docs an `HTTP 200` on the versioned docs URL. Report what you verified, not what the template claimed.
-
 #### Crediting contributors — inline, never a hand-written section
 
 **GitHub builds the "Contributors" row itself.** The avatar row above the release's Assets is generated from the `@mentions` in the body (the release object's `mentions_count`): every `@mention` anywhere in the body feeds it, and with none, `mentions_count` is `null` and the row does not render. So you **never hand-write a `## Contributors` section** — it would duplicate the row GitHub already draws and lump everyone together, losing who did what.

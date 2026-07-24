@@ -83,6 +83,17 @@ cosign verify-blob \
   artifact.tar.gz
 ```
 
+### Verifying a release built by a reusable workflow — `--signer-workflow` is required
+
+When the release is built by a **reusable** workflow (`uses: org/.github/.github/workflows/release-*.yml@main`), keyless signing carries the *reusable workflow's* identity (its `job_workflow_ref`), NOT the calling repository's. The certificate SAN is `org/.github/.github/workflows/release-go-app.yml@refs/heads/main`, not the consumer repo.
+
+Consequences:
+
+- `gh attestation verify <artifact> --repo <consumer>` **fails** with a terse `Error: verifying with issuer "sigstore.dev"`. `--repo` names the artifact's repository, not the signer. You must add `--signer-workflow <org>/.github/.github/workflows/release-go-app.yml` (or `--signer-repo <org>/.github`). Same for `oci://` container attestations.
+- `cosign verify-blob` must pin `--certificate-identity-regexp` to the reusable workflow, e.g. `^https://github\.com/org/\.github/\.github/workflows/release-go-app\.yml@` — a loose `https://github.com/org/.*` accepts a signature from any workflow in any repo of that org.
+
+The instructions a CI-appended "Verify your download" block emits must reflect this. If the block hands out `gh attestation verify --repo <consumer>` without `--signer-workflow`, every user who follows it gets a verification failure on a perfectly valid artifact (and may conclude it is compromised). Fix the emitting workflow at the source (`golib-create-release.yml` already documents the pitfall in its "Verify Cosign signature" step; the go-app orchestrator needed the same fix). Correct any already-published release bodies with `gh release edit --notes-file` — the tag is not affected.
+
 ## GitHub Artifact Attestations
 
 GitHub's native attestation system using `actions/attest@v4`:
