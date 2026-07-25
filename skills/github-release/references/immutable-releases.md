@@ -158,6 +158,76 @@ required shipping a fix-forward patch release, then restoring the
 original tag to the registry-served ref under the workflow-disabled
 procedure above.
 
+### After a blocked retag: what the state actually is
+
+The maintainer mail ("attempted update to version vX.Y.Z blocked, because a
+published stable version's source/dist reference changed") describes a
+*version-scoped* refusal, not a frozen package. Before planning anything,
+establish these four facts.
+
+**The block is per version — the next version still publishes.** Packagist
+keeps serving the old reference for the affected version and continues to
+crawl everything else, so the fix-forward release is not itself blocked.
+Confirm it on the package: a tag pushed *after* the retag appears normally
+(observed in `netresearch/t3x-nr-image-optimize`: `v2.4.0` stayed pinned to
+the pre-retag ref while `v1.3.0`, tagged 40 minutes later, published as
+usual). Do not delay the remedy waiting for the block to "clear" — it does
+not clear.
+
+**Read `repo.packagist.org/p2/`, not `packagist.org/packages/`.** The p2
+endpoint is what Composer resolves against; the `packagist.org/packages/
+<vendor>/<package>.json` endpoint is the UI/legacy one and lags noticeably
+behind. A freshly published version can be present in p2 and simultaneously
+absent from the legacy endpoint — reading the legacy one first leads
+straight to a false "the fix was not picked up".
+
+```bash
+# authoritative: version → the reference Composer will install
+curl -s https://repo.packagist.org/p2/vendor/package.json \
+  | jq -r '.packages["vendor/package"][] | "\(.version) \(.source.reference)"' | head -5
+```
+
+**The affected version carries a permanent badge.** Its entry on the package
+page renders a `retag-blocked-alert` — *"Upstream re-tag blocked — Packagist
+may no longer match the VCS repo for this version"* — linking to
+<https://packagist.org/about/version-immutability>. That badge is the record
+of the incident; it does not go away and nothing you publish later removes
+it.
+
+**Withdrawal is a soft-delete, and it is rarely the right move.** Per the
+page above, *"Maintainers can soft-delete a version they own from the package
+page. Such versions are hidden from Composer metadata but still listed on the
+page (grayed out), and can be recovered by the maintainer at any time."* So a
+bad version can be pulled — but when the only defect is wrong metadata and
+the code is identical, hiding it removes a working, installable version and
+breaks every exact-version pin on it. Reserve soft-delete for versions that
+ship broken or unsafe *code*; for a metadata defect, ship the next patch and
+leave the old version in place. (TER has no equivalent per-version lever at
+all — see `ter-republish.md`.)
+
+### Verify the remedy the way a consumer would
+
+Registry metadata agreeing with the tag is necessary, not sufficient — the
+question is what a `composer require` actually resolves and unpacks. After
+the fix-forward release, prove both ends:
+
+```bash
+# 1. resolution: does the constraint land on the new version?
+mkdir -p /tmp/verify && cd /tmp/verify
+printf '{"require":{},"minimum-stability":"stable"}' > composer.json
+composer require --dry-run --no-interaction --ignore-platform-reqs \
+  "vendor/package:^2.4"          # => "Installing vendor/package (v2.4.1)"
+
+# 2. payload: does the artifact the registry serves carry the right metadata?
+curl -sL "$(curl -s https://repo.packagist.org/p2/vendor/package.json \
+  | jq -r '.packages["vendor/package"][] | select(.version=="v2.4.1") | .dist.url')" -o pkg.zip
+unzip -q pkg.zip && grep -rn "'version'" */ext_emconf.php
+```
+
+Step 2 is the one that catches this class of bug: the whole incident is a
+release whose *metadata inside the archive* disagreed with the version it was
+published under, and only unpacking what the registry hands out shows that.
+
 ### Safe move flow
 
 Apply this flow only when BOTH the tag name is unburned on GitHub (no
