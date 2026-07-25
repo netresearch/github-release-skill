@@ -185,6 +185,36 @@ logic, apply the same pattern. See the
 `netresearch/typo3-ci-workflows/.github/workflows/publish-to-ter.yml`
 reference implementation.
 
+## TER Has No Per-Version Withdrawal
+
+When a release goes out wrong, "can we pull it back off TER?" comes up
+immediately. For a single version the answer is no, and `tailor` has no
+command for it. Its full command set is:
+
+`set-version`, `ter:delete`, `ter:details`, `ter:find`, `ter:publish`,
+`create-artefact`, `ter:register`, `ter:token:create`, `ter:token:refresh`,
+`ter:token:revoke`, `ter:transfer`, `ter:update`, `ter:version`,
+`ter:versions`.
+
+`ter:delete` operates on the **extension key**, not on a version — per the
+tailor documentation it *"either removes the extension entirely or just
+abandons it if the extension still has public versions"*. There is no
+version argument, so it cannot be aimed at one bad release.
+
+The only route that withdraws individual TER versions runs through the
+TYPO3 Security Team: affected versions get marked insecure and, when no fix
+arrives in time, removed from TER together with a security bulletin (see
+`Security/SecurityTeam` in TYPO3 Explained). That is a coordinated
+vulnerability process, not a self-service correction channel — do not open it
+for a metadata mistake.
+
+What TER *does* allow, and Packagist does not, is re-publishing the same
+version: a second `tailor ter:publish` for an existing version overwrites the
+upload (this is what the `workflow_dispatch` caller above is for). So the two
+registries fail in opposite directions after a bad release — TER can be
+corrected in place, Packagist cannot but can soft-delete a version
+(`immutable-releases.md`). Neither situation is improved by touching the tag.
+
 ## Related
 
 - `typo3-ter-publishing.md` — initial-publish gotchas (tag/`ext_emconf.php`
