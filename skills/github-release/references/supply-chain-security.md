@@ -159,6 +159,55 @@ permissions:
 
 **Security note**: These permissions should only be granted to the release workflow, not to all workflows. Use `permissions` at the job level, not the workflow level, to minimize exposure.
 
+## Signature Coverage: Follow the Chain, Do Not Count Files
+
+A release with eight artifacts and one signature is not under-signed. Two
+shapes are both correct, and they look very different in a file listing:
+
+| Shape | What is signed | Listing |
+|---|---|---|
+| Per-asset | every artifact individually | `n` artifacts, `n` bundles |
+| Manifest | the checksum file only | `n` artifacts, **1** bundle |
+
+Under the manifest shape the signature covers `checksums.txt`, and
+`checksums.txt` covers every artifact by hash — so verifying the signature and
+then the checksums establishes the whole set. Signing each file as well would
+be redundant.
+
+**Counting `.sigstore.json` files is not an audit.** Reading a listing and
+concluding "the SBOMs are unsigned" from one bundle beside three artifacts is a
+false positive that costs real time — it invites you to "fix" a workflow that is
+already correct. Establish coverage by running the chain:
+
+```bash
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp "<signing workflow>" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  checksums.txt
+sha256sum -c checksums.txt     # every artifact must appear and match
+```
+
+What *is* worth checking: that the manifest lists **exactly** the shipped
+artifacts. An artifact missing from `checksums.txt` is genuinely uncovered, and
+that is invisible unless you compare the two sets rather than eyeball them.
+
+### The signing identity is the reusable workflow
+
+Keyless signing inside a called workflow carries **that workflow's**
+`job_workflow_ref`, not the calling repository's. Verifying against the
+consuming repo fails and looks like a broken signature:
+
+```bash
+# Wrong — never matches
+--certificate-identity-regexp "^https://github\.com/netresearch/my-app/"
+# Right — the workflow that did the signing
+--certificate-identity-regexp "^https://github\.com/netresearch/\.github/\.github/workflows/release-go-app\.yml@"
+```
+
+Document the exact regexp in the repo's `SECURITY.md`, and **run it** when you
+write it down: verification instructions rot silently, because nobody notices a
+command nobody executes.
+
 ## Verification Commands Reference
 
 | What to Verify | Command |

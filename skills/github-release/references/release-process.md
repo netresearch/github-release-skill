@@ -340,6 +340,43 @@ When releasing many repositories that share one reusable release workflow (e.g. 
 4. **Run the notes overhaul as a separate pass.** The Phase 5 description overhaul is the step most likely to run out of context in a combined loop — do the bump→merge→tag→publish pipeline for the whole batch first, then a second pass for narrative notes via `gh release edit --notes-file`.
 5. **Handle "drift" repos.** If a repo's version file was already bumped ahead of its latest tag, the next tag is `max(natural_bump, current_version_in_file)` — use the pre-bumped value (unless that version was already published/burned, in which case bump higher).
 
+## Prove an Unproven Pipeline With an `-rc` Tag First
+
+Before the first real tag on a pipeline that has not succeeded **in its current
+form**, cut a release-candidate tag and let it run end to end.
+
+Check the history rather than assuming, because "it released fine last year" and
+"it works today" are different claims:
+
+```bash
+WID=$(gh api "repos/$REPO/actions/workflows" --jq '.workflows[]|select(.path|test("release"))|.id')
+gh api "repos/$REPO/actions/workflows/$WID/runs?per_page=10" \
+  --jq '.workflow_runs[]|"\(.created_at[:10]) \(.head_branch) \(.conclusion)"'
+```
+
+A run of `0` jobs with *"this run likely failed because of a workflow file
+issue"* is a **startup failure** — the workflow never began. Common causes: a
+caller that does not grant every permission the reusable workflow declares, or
+an invalid workflow file.
+
+```bash
+git tag -s v1.1.0-rc.1 -m "v1.1.0-rc.1" && git push origin v1.1.0-rc.1
+```
+
+Most release workflows detect the `-rc` / `-alpha` / `-beta` suffix and mark the
+result a prerelease, so it does not take the *Latest* badge from the real
+version. If the run fails, only a candidate tag is spent — not the version you
+meant to publish, which cannot be reused once its release has been created and
+deleted.
+
+**The real payoff is diagnostic.** When the actual `v1.1.0` run then fails, a
+green RC tells you it is not the configuration. In one case the failure was
+`GCP AsymmetricSign: CANCELLED` from Sigstore, on one of eight architectures,
+with the other seven fine — transient upstream trouble. Without the RC that was
+indistinguishable from a broken pipeline. Re-running the failed jobs was enough,
+and because `Atomic publish` had been skipped, no release existed and the tag
+was still unspent.
+
 ## When CI Fails
 
 If the release workflow fails:
