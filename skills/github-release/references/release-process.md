@@ -340,6 +340,50 @@ When releasing many repositories that share one reusable release workflow (e.g. 
 4. **Run the notes overhaul as a separate pass.** The Phase 5 description overhaul is the step most likely to run out of context in a combined loop — do the bump→merge→tag→publish pipeline for the whole batch first, then a second pass for narrative notes via `gh release edit --notes-file`.
 5. **Handle "drift" repos.** If a repo's version file was already bumped ahead of its latest tag, the next tag is `max(natural_bump, current_version_in_file)` — use the pre-bumped value (unless that version was already published/burned, in which case bump higher).
 
+## Releasing a Dependency: the Consumer's CI Races the Registry
+
+When the repo you just released is a **dependency of another repo you are also working on**, the consumer's PR has a window in which its CI is guaranteed to fail for a reason that has nothing to do with its code.
+
+Sequence that causes it:
+
+1. You merge and tag the upstream release.
+2. You mark the dependent PR ready (or push to it) while the release workflow is still running.
+3. The consumer's dependency-install step resolves against registry metadata that does not yet list the new version.
+
+Every dependency-installing job fails at once, with a message that reads like a real constraint bug:
+
+```
+Root composer.json requires netresearch/nr-vault ^0.13.0,
+found netresearch/nr-vault[dev-main, v0.1.0, ..., v0.12.2]
+but it does not match the constraint.
+```
+
+Nothing is wrong with the PR. **Tell it apart from a genuine failure by comparing timestamps** before changing a single line:
+
+```bash
+gh run list --repo "$CONSUMER" --branch "$BRANCH" --limit 5 --json databaseId,createdAt,headSha
+gh release view "v$VERSION" --repo "$UPSTREAM" --json publishedAt --jq .publishedAt
+```
+
+A run created before `publishedAt` is the race. The fix is a replay:
+
+```bash
+gh run rerun "$RUN_ID" --repo "$CONSUMER" --failed
+```
+
+This is the one case where re-running an old run is correct — the usual caveat that a re-run replays the **old commit** does not bite, because the commit was never the problem; only external package availability changed.
+
+**Re-run every failed workflow, not just the main CI one.** Separate workflows each hold their own failure. After re-running only `ci.yml` a PR can still show several red checks from `Checks`, `E2E Tests`, or license/audit workflows. Some runs (`Copilot`) report "cannot be rerun" — harmless if the bot review itself landed.
+
+**Avoid it entirely** by ordering the work: merge upstream → tag → wait for the release workflow **and** the registry to serve the new version → only then touch the dependent PR.
+
+```bash
+# Composer/Packagist — poll until the version is actually resolvable
+composer show "netresearch/nr-vault" "$VERSION" >/dev/null 2>&1 && echo available
+```
+
+Observed 2026-07-30: 31 red checks on a consumer PR, zero real defects — CI created 16:13:27, release published 16:22:59.
+
 ## Prove an Unproven Pipeline With an `-rc` Tag First
 
 Before the first real tag on a pipeline that has not succeeded **in its current
