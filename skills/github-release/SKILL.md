@@ -24,16 +24,16 @@ Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — 
 
 ## Release Flow
 
-1. **Detect ecosystem** — identify version files for the project type (see `references/ecosystem-detection.md`)
-2. **Determine next version** — based on conventional commits or user input (major/minor/patch)
-3. **Bump version files** — update all ecosystem-specific version files consistently
-4. **Update CHANGELOG.md** — add release section with date and changes
-5. **Create release branch and PR** — `release/vX.Y.Z` branch, open PR for review (always use a PR — branch protection typically blocks direct pushes)
+1. **Detect ecosystem** — find the project type's version files (see `references/ecosystem-detection.md`)
+2. **Determine next version** — from conventional commits or user input (major/minor/patch)
+3. **Bump version files** — every ecosystem-specific one, consistently
+4. **Update CHANGELOG.md** — add a release section with date and changes
+5. **Create release branch and PR** — `release/vX.Y.Z`, always via PR (branch protection typically blocks direct pushes)
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD, never the `release/vX.Y.Z` tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI
 8. **CI publishes release** — artifacts, checksums, auto-generated notes
-9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; `@mention` each contributor **inline at their change** (bots excluded), never in a hand-written `## Contributors` section. Get it from `scripts/harvest-contributors.sh`, never `git log` — it also names the **issue reporters**, whom commit history does not. Apply with `gh release edit vX.Y.Z --notes-file notes.md`
-10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries use a dispatcher — see `references/ter-republish.md`.
+9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; `@mention` each contributor **inline at their change** (bots excluded), never in a hand-written `## Contributors` section. Get it from `scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>` (runs from any cwd), never `git log` — it also names the **issue reporters**, whom commit history does not. Apply with `gh release edit vX.Y.Z --notes-file notes.md`
+10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
 
 ## Commands
 
