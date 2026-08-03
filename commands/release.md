@@ -87,14 +87,14 @@ unreleased versions or version placeholders that need updating.
 
 ### 8. Commit changes
 
-Create a single commit with the message: `chore: release vX.Y.Z`
+Create a single commit with the message: `chore(release): vX.Y.Z`
 
 Stage only the files that were modified in steps 5-7.
 
 ### 9. Push branch and create PR
 
 Push the release branch to the remote and create a pull request targeting the main
-branch. The PR title should be `chore: release vX.Y.Z` and the body should
+branch. The PR title should be `chore(release): vX.Y.Z` and the body should
 summarize the version changes.
 
 ### 10. Tag after merge
