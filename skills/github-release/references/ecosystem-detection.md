@@ -103,8 +103,16 @@ Note: Update `Cargo.lock` by running `cargo check` after bumping `Cargo.toml`, n
 
 | File | Field/Pattern | Example |
 |------|--------------|---------|
+| `plugin.json` | `"version": "X.Y.Z"` | `"version": "0.1.0"` |
 | `.claude-plugin/plugin.json` | `"version": "X.Y.Z"` | `"version": "0.1.0"` |
 | `skills/*/SKILL.md` | `version: "X.Y.Z"` (in frontmatter `metadata`) | `version: "0.1.0"` |
+
+Note: repos carry **two** manifests. The root `plugin.json` is the
+[Agent Plugins 1.0.0](https://agent-plugins.org) manifest and the source of
+truth; `.claude-plugin/plugin.json` is Claude Code's and is generated from it by
+`skill-repo-skill`'s `sync-plugin-manifest.sh`. Bump the root file, run the sync,
+and both agree. Repos that have not adopted the portable manifest yet only have
+the `.claude-plugin` one — the detector reports whichever exist.
 
 Note: `skills/*/SKILL.md` is a glob — a repo may ship **multiple** skills (e.g. `jira-communication` + `jira-syntax`). Bump the `metadata.version` in **every** SKILL.md so each equals `plugin.json`.
 
