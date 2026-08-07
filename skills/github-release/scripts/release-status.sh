@@ -95,10 +95,16 @@ fi
 # --- phase 6: do the registries actually serve it? ---------------------------
 reg_missing=""
 if [ -n "$declared" ] && [ "$notes_next" = "ok" ]; then
+  # "Packagist does not know this package" is not the same as "this version has
+  # not landed yet": a skill repo (composer type ai-agent-skill) is never
+  # published there, and asserting it would fail every such repo forever.
   if [ -n "$pkg" ]; then
-    curl -sS "https://repo.packagist.org/p2/${pkg}.json" 2>/dev/null \
-      | jq -e --arg v "v$declared" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
-      || reg_missing="$reg_missing packagist"
+    pk=$(curl -sS -w '\n%{http_code}' "https://repo.packagist.org/p2/${pkg}.json" 2>/dev/null || true)
+    if [ "$(printf '%s' "$pk" | tail -1)" = "200" ]; then
+      printf '%s' "$pk" | sed '$d' \
+        | jq -e --arg v "v$declared" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
+        || reg_missing="$reg_missing packagist"
+    fi
   fi
   # Only assert TER when the release workflow actually publishes there --
   # an extension key in composer.json alone is not a claim that it does.
