@@ -22,30 +22,11 @@ Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — 
 
 **No editorializing** in release notes, PR/commit text and docs — state what a release does, not how good the work is; no self-praise or narrating the expected. See `references/no-editorializing.md`.
 
-## Start Here: `scripts/release-status.sh`
+## Start Here
 
-**Do not reason about which release phase you are in.** Ask:
-
-```bash
-./scripts/release-status.sh -R owner/repo         # human summary + NEXT
-./scripts/release-status.sh -R owner/repo --json  # for scripts
-```
-
-Output ends in a computed `NEXT` — `prepare-release`, `merge-release-pr`,
-`signed-tag`, `await-release-workflow`, `rewrite-release-notes`,
-`verify-publication` or `ok` — plus the command for that step. Exit code is 0
-only when the release is genuinely finished, so it works as a gate.
-
-`scripts/release-notes-status.sh` answers the narrower question the flow keeps
-losing: is the *published body* actually rewritten, and is every contributor
-credited? Step 9 happens minutes after the tag, when the release already looks
-done, which is exactly why it gets skipped — measured at 4 of 7 releases in one
-session before this check existed.
-
-```bash
-./scripts/release-notes-status.sh -R owner/repo v1.2.3
-./scripts/release-notes-status.sh -R owner/repo --last 5   # sweep the backlog
-```
+`scripts/release-status.sh -R owner/repo` reports the phase and a computed
+`NEXT`, exiting 0 only when finished. `scripts/release-notes-status.sh`
+checks the published body.
 
 ## Release Flow
 
@@ -57,7 +38,7 @@ session before this check existed.
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD, never the `release/vX.Y.Z` tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI
 8. **CI publishes release** — artifacts, checksums, auto-generated notes
-9. **Overhaul release description** (verify with `scripts/release-notes-status.sh`) — rewrite auto-generated notes into a narrative summary; `@mention` each contributor **inline at their change** (bots excluded), never in a hand-written `## Contributors` section. Get it from `scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>` (runs from any cwd), never `git log` — it also names the **issue reporters**, whom commit history does not. Apply with `gh release edit vX.Y.Z --notes-file notes.md`
+9. **Overhaul release description** — rewrite CI's notes into a narrative; `@mention` every contributor **and reporter** inline at their change, never as a `## Contributors` section. Source them from `scripts/harvest-contributors.sh`, never `git log`. Verify with `scripts/release-notes-status.sh`. See `references/release-process.md` Phase 5.
 10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
 
 ## Commands
