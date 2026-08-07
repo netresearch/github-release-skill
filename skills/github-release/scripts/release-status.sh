@@ -44,15 +44,18 @@ add_note() { note="${note}${note:+; }$1"; }
 
 # --- what is released, and what does the tree claim -------------------------
 latest=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null || echo "")
-latest_tag=$(gh api "repos/$REPO/tags?per_page=1" --jq '.[0].name' 2>/dev/null || echo "")
 
-# Version the working tree declares (TYPO3 ext_emconf, else composer extra).
+# Version the working tree declares: TYPO3 ext_emconf, else composer extra,
+# else a skill repo's plugin.json (the whole skill fleet declares it there and
+# nowhere else — without this the verdict is "prepare-release" for every one of
+# them, however cleanly they are released).
 declared=""
 if [ -f ext_emconf.php ]; then
   declared=$(grep -oE "'version'[[:space:]]*=>[[:space:]]*'[^']+'" ext_emconf.php 2>/dev/null \
              | grep -oE "'[0-9][^']*'$" | tr -d "'" || true)
 fi
 [ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
+[ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
 
 pkg=$(jq -r '.name // empty' composer.json 2>/dev/null || true)
 extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/dev/null || true)
@@ -120,7 +123,7 @@ if [ -n "$declared" ] && [ -n "$latest" ] && [ "$declared" != "${latest#v}" ]; t
 fi
 
 if [ -z "$declared" ]; then
-  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version)"
+  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json)"
 elif [ "$relpr" != "null" ] && [ -n "$relpr" ]; then
   next="merge-release-pr"; cmd="pr-status.sh -R $REPO $relpr   # then pr-merge.sh"
   add_note "release PR #$relpr is open for v$declared"
