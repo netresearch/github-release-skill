@@ -9,6 +9,17 @@ Inspect the current project's release infrastructure and report overall health.
 
 ## Steps
 
+### 0. Ask the script first
+
+```bash
+./skills/github-release/scripts/release-status.sh -R <owner/repo>
+```
+
+It answers the whole question in two API calls and ends in a computed `NEXT`.
+Run the manual inspection below only to explain a verdict it already gave, or
+when the script is unavailable — reasoning the phase out by hand is how a step
+gets skipped.
+
 ### 1. List recent releases
 
 Run:

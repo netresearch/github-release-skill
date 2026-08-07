@@ -22,6 +22,12 @@ Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — 
 
 **No editorializing** in release notes, PR/commit text and docs — state what a release does, not how good the work is; no self-praise or narrating the expected. See `references/no-editorializing.md`.
 
+## Start Here
+
+`scripts/release-status.sh -R owner/repo` reports the phase and a computed
+`NEXT`, exiting 0 only when finished. `scripts/release-notes-status.sh`
+checks the published body.
+
 ## Release Flow
 
 1. **Detect ecosystem** — find the project type's version files (see `references/ecosystem-detection.md`)
@@ -32,7 +38,7 @@ Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — 
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD, never the `release/vX.Y.Z` tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI
 8. **CI publishes release** — artifacts, checksums, auto-generated notes
-9. **Overhaul release description** — rewrite auto-generated notes into a narrative summary; `@mention` each contributor **inline at their change** (bots excluded), never in a hand-written `## Contributors` section. Get it from `scripts/harvest-contributors.sh --repo owner/repo --from <prev_tag> --to <new_tag>` (runs from any cwd), never `git log` — it also names the **issue reporters**, whom commit history does not. Apply with `gh release edit vX.Y.Z --notes-file notes.md`
+9. **Overhaul release description** — rewrite CI's notes into a narrative; `@mention` every contributor **and reporter** inline at their change, never as a `## Contributors` section. Source them from `scripts/harvest-contributors.sh`, never `git log`. Verify with `scripts/release-notes-status.sh`. See `references/release-process.md` Phase 5.
 10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
 
 ## Commands
