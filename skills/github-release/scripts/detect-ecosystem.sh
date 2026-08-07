@@ -94,10 +94,17 @@ if [[ -f ext_emconf.php ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Skill repo (.claude-plugin/plugin.json)
+# Skill repo (plugin.json + .claude-plugin/plugin.json)
 # ---------------------------------------------------------------------------
 if [[ -f .claude-plugin/plugin.json ]]; then
     echo "ecosystem:skill"
+    # Root plugin.json is the Agent Plugins 1.0.0 manifest and the source of
+    # truth for the version; .claude-plugin/plugin.json is generated from it.
+    # A repo that has not adopted the portable manifest only reports the latter.
+    if [[ -f plugin.json ]]; then
+        pver=$(json_field plugin.json version)
+        echo "version-file:plugin.json:${pver}"
+    fi
     sver=$(json_field .claude-plugin/plugin.json version)
     echo "version-file:.claude-plugin/plugin.json:${sver}"
 
