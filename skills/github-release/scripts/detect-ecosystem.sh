@@ -108,10 +108,28 @@ if [[ -f .claude-plugin/plugin.json ]]; then
     sver=$(json_field .claude-plugin/plugin.json version)
     echo "version-file:.claude-plugin/plugin.json:${sver}"
 
-    # skills/*/SKILL.md - extract version from YAML frontmatter or version: line
+    # skills/*/SKILL.md - version lives in the YAML frontmatter, and in the
+    # Netresearch layout it is nested under `metadata:`, so it is indented:
+    #
+    #   metadata:
+    #     version: "0.9.0"
+    #
+    # Match with optional leading whitespace and strip the surrounding quotes.
+    # Confined to the frontmatter block so a `version:` inside a description or
+    # a body code fence cannot be picked up instead.
     for skillmd in skills/*/SKILL.md; do
         [[ -f "$skillmd" ]] || continue
-        mdver=$(sed -n 's/^version:[[:space:]]*\([^[:space:]]\{1,\}\).*/\1/p' "$skillmd" 2>/dev/null | head -1 || true)
+        mdver=$(awk '
+            NR == 1 && $0 == "---" { fm = 1; next }
+            fm && $0 == "---" { exit }
+            fm && match($0, /^[[:space:]]*version:[[:space:]]*/) {
+                v = substr($0, RSTART + RLENGTH)
+                sub(/[[:space:]]+$/, "", v)
+                gsub(/^["'"'"']|["'"'"']$/, "", v)
+                print v
+                exit
+            }
+        ' "$skillmd" 2>/dev/null || true)
         echo "version-file:${skillmd}:${mdver}"
     done
 fi
