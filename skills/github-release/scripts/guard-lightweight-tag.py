@@ -26,14 +26,25 @@ import sys
 
 
 def parse_command(input_data: str) -> str:
-    """Extract the command string from hook input (JSON via stdin)."""
+    """Extract the command string from hook input (JSON via stdin).
+
+    Claude Code's PreToolUse payload nests the command under `tool_input`;
+    only reading a top-level `command` made this guard a silent no-op in the
+    harness it is installed into. The flat shape stays supported for direct
+    invocation and for the tests.
+    """
     if not input_data:
         return ""
     try:
         data = json.loads(input_data)
-        return data.get("command", "")
     except (json.JSONDecodeError, TypeError):
         return input_data
+    if not isinstance(data, dict):
+        return ""
+    tool_input = data.get("tool_input")
+    if isinstance(tool_input, dict) and tool_input.get("command"):
+        return tool_input["command"]
+    return data.get("command", "")
 
 
 def block(reason: str, suggestion: str) -> None:
