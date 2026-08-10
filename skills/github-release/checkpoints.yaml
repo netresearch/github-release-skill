@@ -127,6 +127,37 @@ mechanical:
       [X.Y.Z]: <URL> footer link. Add the link entry and update the
       [Unreleased]: compare/vX.Y.Z...HEAD range to the new version.
 
+  # Release-notes credit format (release-process.md, "Crediting contributors")
+  - id: GR-14
+    type: command
+    pattern: "test -z \"$(gh release view --json body -q .body 2>/dev/null | grep -E '^## (Contributors|Credits)')\""
+    severity: error
+    desc: >-
+      The latest release body must not hand-write a Contributors/Credits
+      section. GitHub draws that avatar row itself from the @mentions in the
+      body, so a written section duplicates the row and loses who did what.
+      Empty output (no release yet, or no such heading) exits 0.
+
+  - id: GR-15
+    type: command
+    pattern: "test -z \"$(gh release view --json body -q .body 2>/dev/null | grep -oE '\\[@[A-Za-z0-9_-]+\\]\\(')\""
+    severity: error
+    desc: >-
+      Mentions in a release body must be bare `@user`, never
+      `[@user](url)`. A markdown link renders as a plain hyperlink, leaves
+      mentions_count null and suppresses the Contributors row entirely — the
+      one place where the house rule "always link references" is wrong.
+
+  - id: GR-16
+    type: command
+    pattern: "test \"$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.mentions_count // 0' 2>/dev/null || echo 0)\" -ge 1"
+    severity: warning
+    desc: >-
+      The latest release should mention at least one contributor, which is
+      what makes GitHub render the Contributors row. A 0 usually means the
+      mentions were written as markdown links (see GR-15) rather than that
+      nobody contributed.
+
 llm_reviews:
   - id: GR-R1
     domain: release-safety
