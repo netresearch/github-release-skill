@@ -205,6 +205,19 @@ Then re-check the emitted verify commands are correct for a reusable-workflow bu
 #### Verify each publication claim before reporting the release done
 
 Tag-push is not the finish line. If the body (or a boilerplate section the workflow appends) asserts a package was published — TER, Packagist, docs, npm — **independently confirm each claim before reporting success**, rather than trusting the template's wording. Many release workflows publish AND verify these channels themselves; do not assume a channel is a separate manual step without reading the release workflow. Quick checks: Packagist `https://repo.packagist.org/p2/<vendor>/<pkg>.json` (note tags are `v`-prefixed), TER `https://extensions.typo3.org/api/v1/extension/<ext_key>/versions`, docs an `HTTP 200` on the versioned docs URL. Report what you verified, not what the template claimed.
+
+**Parse the TER response before you believe its answer.** That endpoint returns a **nested** array — `[[{"number": "0.29.0", …}, …]]` — not a flat list, and TER numbers carry no `v` prefix while Packagist's do. The obvious one-liner therefore throws on the outer list, and a check written as "if this fails, the channel is not serving it" reports a publication failure that did not happen. That is the exact false negative this whole paragraph exists to prevent, so verify against the shape:
+
+```bash
+curl -sf "https://extensions.typo3.org/api/v1/extension/<ext_key>/versions" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+versions = [v["number"] for v in (d[0] if d and isinstance(d[0], list) else d)]
+print("<X.Y.Z>" in versions)'
+```
+
+An HTTP error and a parse error are different outcomes and deserve different words: say "TER answered, 0.29.0 is listed", or "TER answered and my parse was wrong", never "TER query failed" for the second.
+
 #### Crediting contributors — inline, never a hand-written section
 
 **GitHub builds the "Contributors" row itself.** The avatar row above the release's Assets is generated from the `@mentions` in the body (the release object's `mentions_count`): every `@mention` anywhere in the body feeds it, and with none, `mentions_count` is `null` and the row does not render. So you **never hand-write a `## Contributors` section** — it would duplicate the row GitHub already draws and lump everyone together, losing who did what.
