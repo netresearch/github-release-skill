@@ -105,9 +105,20 @@ check_one() {
   printf '%s' "$body" | grep -qiE '^#+ *Contributors' && section=1
 
   # 5. CI-appended blocks destroyed by an overhaul that replaced the whole body.
-  local lost="" sibling s
-  sibling=$(gh api "repos/$REPO/releases?per_page=6" --jq \
-    "[.[] | select(.tag_name!=\"$tag\") | .body] | join(\"\n\")" 2>/dev/null || true)
+  #
+  # The comparison set is the releases on the SAME line, for the same reason the
+  # credit range is. Taking the newest six of the whole repository asks a v12
+  # patch from May to carry blocks that a v13 release added in August, on a line
+  # whose CI never emitted them — netresearch/t3x-rte_ckeditor_image reported
+  # exactly that for v12.0.12, where the entire v12 line has zero release assets
+  # and no Installation or SBOM section anywhere. Writing those blocks would have
+  # described signed artifacts and an SBOM that do not exist.
+  local lost="" sibling s major_of_tag
+  major_of_tag=$(printf '%s\n' "$tag" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\).*/\1/p')
+  sibling=$(gh api "repos/$REPO/releases?per_page=100" --paginate --jq \
+    "[.[] | select(.draft==false) | select(.tag_name!=\"$tag\") | {t: .tag_name, b: .body}]
+     | map(select(.t | ltrimstr(\"v\") | split(\".\")[0] == \"$major_of_tag\"))
+     | map(.b) | join(\"\n\")" 2>/dev/null || true)
   for s in Installation "Verify your download" "Software Bill of Materials"; do
     if printf '%s' "$sibling" | grep -qF "## $s" && ! printf '%s' "$body" | grep -qF "## $s"; then
       lost="$lost \"$s\""
