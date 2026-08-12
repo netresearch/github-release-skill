@@ -217,6 +217,7 @@ print("<X.Y.Z>" in versions)'
 ```
 
 An HTTP error and a parse error are different outcomes and deserve different words: say "TER answered, 0.29.0 is listed", or "TER answered and my parse was wrong", never "TER query failed" for the second.
+
 #### Crediting contributors — inline, never a hand-written section
 
 **GitHub builds the "Contributors" row itself.** The avatar row above the release's Assets is generated from the `@mentions` in the body (the release object's `mentions_count`): every `@mention` anywhere in the body feeds it, and with none, `mentions_count` is `null` and the row does not render. So you **never hand-write a `## Contributors` section** — it would duplicate the row GitHub already draws and lump everyone together, losing who did what.
