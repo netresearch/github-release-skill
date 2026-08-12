@@ -107,4 +107,47 @@ check "single-line repo is unaffected"   v1.2.0 "$(previous_release_on_line v1.2
 v1.2.0
 v1.1.0')"
 
+# --- a match must survive the size of the text --------------------------------
+# `printf '%s' "$big" | grep -q PAT` under `set -o pipefail` reports a FOUND
+# match as a failed command whenever grep exits before printf has finished
+# writing: printf takes SIGPIPE, and 141 is what pipefail propagates. It fails
+# silently and in the direction that hides defects — the release whose CI
+# blocks were gone read "ok — CI blocks all present", because the check found
+# a block in the comparison set and the find is what broke it.
+#
+# Whether the writer actually dies depends on how much of the text fits in the
+# 64 KB pipe buffer before grep quits, so the failure is size-dependent and the
+# real case sits in the fuzzy part of that curve. Measured here, match at the
+# top: 50 KB fails 2 of 20 runs, 70 KB fails 8, 100 KB fails 20 of 20. The live
+# blob was 52,989 bytes with the match at byte 2,474 and flipped the verdict
+# roughly one run in eight.
+#
+# So the probe uses 100 KB, where the pre-fix pipeline fails every single time
+# and the test cannot pass by luck. It pins the construct, not the size — the
+# assertion further down keeps every call site off that construct regardless of
+# how large the texts happen to be.
+haystack="intro line
+## Software Bill of Materials
+$(head -c 100000 /dev/zero | tr '\0' 'x')"
+
+hits=0
+for _ in $(seq 1 20); do
+  body_has "$haystack" -F '## Software Bill of Materials' && hits=$((hits + 1))
+done
+check "early match in a 100 KB text is found every time" 20 "$hits"
+
+misses=0
+for _ in $(seq 1 20); do
+  body_has "$haystack" -F '## Verify your download' || misses=$((misses + 1))
+done
+check "absent pattern reports absent every time"        20 "$misses"
+
+# Size-independent: no call site may reintroduce the pipeline. The behavioural
+# probe above only fires above the pipe buffer, and the texts this script hands
+# around are smaller than that — a reintroduced `| grep -q` on a 30 KB body
+# would slip past it while still flipping verdicts in the field.
+pipelines=$(grep -v '^[[:space:]]*#' "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh" \
+            | grep -c '| *grep -q' || true)
+check "no pattern test goes through a pipe"            0 "$pipelines"
+
 exit $fail

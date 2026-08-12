@@ -35,9 +35,29 @@ previous_release_on_line() { # <tag> <newline-separated tags, newest first>
   local tag="$1" list="$2" major
   major=$(printf '%s\n' "$tag" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\).*/\1/p')
   [ -n "$major" ] || return 0
-  printf '%s\n' "$list" | awk -v t="$tag" -v m="$major" '
+  awk -v t="$tag" -v m="$major" '
     seen { v = $0; sub(/^v/, "", v); split(v, p, "."); if (p[1] == m) { print; exit } ; next }
-    $0 == t { seen = 1 }'
+    $0 == t { seen = 1 }' <<<"$list"
+}
+
+# Does <text> match? Never `printf '%s' "$text" | grep -q PATTERN`.
+#
+# That pipeline is a race under `set -o pipefail`, and it fails in the
+# direction that hides defects: grep exits at the first match, printf then
+# dies on the closed pipe with 141, and pipefail turns the *successful* match
+# into a failed command. Measured against this script's own sibling blob
+# (52,989 bytes, first match at byte 2,474): 25 of 40 runs returned 141. So
+# netresearch/t3x-rte_ckeditor_image v13.10.0, whose body really had lost the
+# SBOM block, reported `ok — narrative, credits and CI blocks all present` in
+# roughly seven runs out of eight — the check answered "nothing missing"
+# BECAUSE it had found something. The same race sits under the credit test,
+# where it invents missing contributors, and under the auto-generated-body
+# test, where it passes an untouched CI body.
+#
+# A herestring is not a pipeline: grep may stop reading whenever it likes.
+body_has() { # <text> <grep-flag>... <pattern>
+  local text="$1"; shift
+  grep -q "$@" <<<"$text"
 }
 
 # Sourced by the test to exercise the helpers above; everything below needs gh.
@@ -71,7 +91,7 @@ check_one() {
   # 1. Auto-generated shape still in place. The CI body is a "## Changes" (or
   #    "## What's Changed") list of PR titles; a narrative replaces it.
   local raw=0
-  if printf '%s' "$body" | grep -qE '^## (Changes|What'"'"'s Changed)$'; then
+  if body_has "$body" -E '^## (Changes|What'"'"'s Changed)$'; then
     # A handful of "- ... (#123)" lines directly under it is the giveaway.
     local n; n=$(printf '%s' "$body" | sed -n '/^## \(Changes\|What'"'"'s Changed\)$/,/^## /p' \
                  | grep -cE '^- .*\(#[0-9]+\)$' || true)
@@ -80,7 +100,7 @@ check_one() {
 
   # 2. A CI stub body ("see CHANGELOG.md for details") counts as not-overhauled.
   local stub=0
-  printf '%s' "$body" | grep -qiE 'see CHANGELOG\.md for details' && stub=1
+  body_has "$body" -iE 'see CHANGELOG\.md for details' && stub=1
 
   # 3. Contributors named in the range but never @mentioned in the body.
   local missing=""
@@ -94,7 +114,7 @@ check_one() {
         | grep -v '^#' | grep -oE '@[A-Za-z0-9-]+' | sort -u || true)
       local p
       for p in $people; do
-        printf '%s' "$body" | grep -qF "$p" || missing="$missing $p"
+        body_has "$body" -F "$p" || missing="$missing $p"
       done
     fi
   fi
@@ -102,7 +122,7 @@ check_one() {
   # 4. A hand-written Contributors section duplicates the avatar row GitHub
   #    builds from inline mentions -- the rule is inline credit, never a section.
   local section=0
-  printf '%s' "$body" | grep -qiE '^#+ *Contributors' && section=1
+  body_has "$body" -iE '^#+ *Contributors' && section=1
 
   # 5. CI-appended blocks destroyed by an overhaul that replaced the whole body.
   #
@@ -120,7 +140,7 @@ check_one() {
      | map(select(.t | ltrimstr(\"v\") | split(\".\")[0] == \"$major_of_tag\"))
      | map(.b) | join(\"\n\")" 2>/dev/null || true)
   for s in Installation "Verify your download" "Software Bill of Materials"; do
-    if printf '%s' "$sibling" | grep -qF "## $s" && ! printf '%s' "$body" | grep -qF "## $s"; then
+    if body_has "$sibling" -F "## $s" && ! body_has "$body" -F "## $s"; then
       lost="$lost \"$s\""
     fi
   done
