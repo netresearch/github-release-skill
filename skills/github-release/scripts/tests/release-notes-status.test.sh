@@ -73,4 +73,38 @@ check "hand-written Contributors section flagged" 1 "$(has_section '## Contribut
 - @alice')"
 check "inline credit is not a section"            0 "$(has_section "$narrative")"
 
+# --- which release the range starts from --------------------------------------
+# This one calls the real function rather than mirroring it, because the defect
+# it pins was in the selection itself and a mirror would have agreed with the
+# bug. GitHub lists releases newest-first across every branch, so on a
+# repository maintaining two majors the neighbour of a v12 patch is a v13
+# release — and harvesting that range reports everyone who worked on v13 as an
+# uncredited contributor to the v12 patch. Observed on
+# netresearch/t3x-rte_ckeditor_image: v12.0.12 was compared against v13.9.0 and
+# demanded credit for two people who had not touched it.
+# The path is computed at runtime, so shellcheck cannot follow it without -x;
+# the script guards its own main body and exits early when sourced.
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh"
+
+interleaved='v13.10.2
+v13.10.1
+v12.0.14
+v13.10.0
+v13.9.1
+v12.0.13
+v12.0.12
+v13.9.0
+v13.8.3
+v12.0.11'
+
+check "v12 patch follows the v12 line"   v12.0.11 "$(previous_release_on_line v12.0.12 "$interleaved")"
+check "v12 minor skips the v13 releases" v12.0.13 "$(previous_release_on_line v12.0.14 "$interleaved")"
+check "v13 patch follows the v13 line"   v13.10.1 "$(previous_release_on_line v13.10.2 "$interleaved")"
+check "v13 minor skips the v12 releases" v13.9.1  "$(previous_release_on_line v13.10.0 "$interleaved")"
+check "oldest on its line has no predecessor" "" "$(previous_release_on_line v12.0.11 "$interleaved")"
+check "single-line repo is unaffected"   v1.2.0 "$(previous_release_on_line v1.2.1 'v1.2.1
+v1.2.0
+v1.1.0')"
+
 exit $fail

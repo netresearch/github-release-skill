@@ -17,6 +17,32 @@
 # Exit: 0 = ok, 1 = needs work, 2 = usage/lookup error.
 set -euo pipefail
 
+# --- pure helpers (sourced by scripts/tests/release-notes-status.test.sh) -----
+
+# The previous release ON THE SAME LINE, not simply the previous published one.
+#
+# GitHub returns releases newest-first across every branch, so on a repository
+# that maintains several majors in parallel the neighbour of v12.0.12 is a v13
+# release. Harvesting v13.9.0..v12.0.12 then reports everyone who worked on v13
+# in between as an uncredited contributor to a v12 patch — and the operator,
+# following the verdict, @mentions people who had nothing to do with it.
+# Attributing someone else's work to a release they did not touch is worse than
+# the missing credit this check exists to find.
+#
+# No same-major predecessor (the first release of a new major) yields nothing,
+# and the caller then skips the credit check rather than reaching across lines.
+previous_release_on_line() { # <tag> <newline-separated tags, newest first>
+  local tag="$1" list="$2" major
+  major=$(printf '%s\n' "$tag" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\).*/\1/p')
+  [ -n "$major" ] || return 0
+  printf '%s\n' "$list" | awk -v t="$tag" -v m="$major" '
+    seen { v = $0; sub(/^v/, "", v); split(v, p, "."); if (p[1] == m) { print; exit } ; next }
+    $0 == t { seen = 1 }'
+}
+
+# Sourced by the test to exercise the helpers above; everything below needs gh.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then return 0; fi
+
 REPO=""; TAG=""; JSON=0; LAST=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -59,8 +85,10 @@ check_one() {
   # 3. Contributors named in the range but never @mentioned in the body.
   local missing=""
   if [ -x "$HARVEST" ]; then
-    prev=$(gh api "repos/$REPO/releases" --jq \
-      "[.[] | select(.draft==false) | .tag_name] | index(\"$tag\") as \$i | if \$i==null then empty else .[\$i+1] end" 2>/dev/null || true)
+    local tags
+    tags=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
+             --jq '.[] | select(.draft==false) | .tag_name' 2>/dev/null || true)
+    prev=$(previous_release_on_line "$tag" "$tags")
     if [ -n "$prev" ] && [ "$prev" != "null" ]; then
       local people; people=$("$HARVEST" --repo "$REPO" --from "$prev" --to "$tag" 2>/dev/null \
         | grep -v '^#' | grep -oE '@[A-Za-z0-9-]+' | sort -u || true)
