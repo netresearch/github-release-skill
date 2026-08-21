@@ -87,6 +87,56 @@ This gotcha only bites if you write your own per-project publish
 workflow that bypasses the shared reusable workflow. If you do, mirror
 the three-variable pattern.
 
+## A 500 From the Publish Is Not a Failed Publish
+
+TER can apply the upload and still answer with an error. `tailor` reports
+what it received, so the job goes red:
+
+```
+Publishing version 5.0.2 of extension contexts
+==============================================
+
+ [WARNING] Could not publish version 5.0.2 of extension contexts.
+           Reason: Unknown (Status 500)
+
+##[error]Process completed with exit code 1.
+```
+
+The version was on TER anyway. Ask the API before concluding anything —
+never re-cut a version off the exit code alone:
+
+```bash
+curl -s -H 'Accept: application/json' \
+  https://extensions.typo3.org/api/v1/extension/<key>/versions \
+  | jq -r '[.[0][].number] | sort_by(split(".")|map(tonumber? // 0)) | reverse | .[0:5]'
+```
+
+(That response is a nested array and its numbers carry no `v` prefix —
+see `release-process.md`, which covers the parsing trap separately.)
+
+**The expensive part is the second-order damage.** In
+`netresearch/typo3-ci-workflows`'s `release-typo3-extension.yml`,
+`create-release` has `needs: publish-to-ter` and requires it to be
+`success` or `skipped`. A red TER job therefore **skips the GitHub
+release**, and anyone checking GitHub sees no release and reads the
+whole thing as failed — while TER and Packagist are both serving the
+version.
+
+Recovery is a re-run of the failed jobs, not a new tag: the
+`Check if version is already on TER` step now finds the version, the
+publish step is skipped, and `create-release` runs.
+
+```bash
+gh run rerun <run-id> --repo <owner/repo> --failed
+```
+
+Before declaring a release broken, check all four targets separately —
+Packagist, TER, the rendered docs, and the GitHub release object. They
+fail independently, and one red job in the run does not tell you which.
+
+*Observed 2026-08-21 on `netresearch/t3x-contexts` v5.0.2, run
+32534659449.*
+
 ## Related
 
 - `ter-republish.md` — re-publishing without re-tagging; tag-format
