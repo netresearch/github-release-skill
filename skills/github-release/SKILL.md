@@ -60,6 +60,6 @@ checks the published body.
 - `references/supply-chain-security.md` — SLSA, Sigstore
 - `references/recovery-procedures.md` — burned tags, stuck drafts, drift, body clobbering
 - `references/ter-republish.md` — TER re-publish
-- `references/typo3-ter-publishing.md` — TYPO3 initial-publish gotchas
+- `references/typo3-ter-publishing.md` — TYPO3 TER publish gotchas
 - `references/ci-workflow-templates.md` — CI workflow templates
 - `references/no-editorializing.md` — no self-praise
