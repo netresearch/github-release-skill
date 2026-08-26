@@ -49,6 +49,25 @@
 
 **Important**: The tag is NOT burned while the release is in draft state. If the draft is fundamentally broken, you can delete it and recreate.
 
+## Draft Is Expected (Netresearch Go Libraries) — Publishing Is Human-Gated
+
+**Symptom**: A Go-library release workflow ran to `success`, all artifacts (SBOMs, signed `checksums.txt`, provenance) are attached, but `gh release view vX.Y.Z --json isDraft` reports `draft=true`. Older tags (e.g. the previous minor) sit as drafts too.
+
+**Cause — this is by design, not a failure.** The `netresearch/.github` reusable `golib-create-release.yml` exposes a `draft` input that **defaults to `true`** ("recommended"). A repo whose `release.yml` calls it with no `with:` block inherits that default, so every release is created as a draft for a human to review and publish. (Contrast: the **application** reusable `release-go-app.yml` publishes directly — those releases come out `draft=false`.)
+
+**You cannot publish it from the CLI.** The release guard blocks every mutating path, so do not burn turns trying:
+
+```bash
+gh release edit vX.Y.Z --draft=false           # blocked: only --notes/--notes-file allowed
+gh api --method PATCH repos/OWNER/REPO/releases/ID -F draft=false   # blocked: mutating release ops must go through CI
+```
+
+**Resolution**:
+
+1. Everything up to the publish gate is your job and is finishable: signed tag, artifacts, and an overhauled narrative body (editing `--notes` **is** allowed — do it while the release is still a draft).
+2. **The user publishes** the reviewed draft via the GitHub UI (Releases → edit the draft → *Publish release*). Hand them the releases URL; do not present the draft as an incomplete deliverable.
+3. To make **future** releases auto-publish instead of drafting, change the repo's `release.yml` to pass `draft: false` to the reusable (a normal PR) — this is a deliberate policy change, so confirm with the maintainer rather than doing it unprompted.
+
 ## Release Workflow Startup-Failure (Deleted `@main` Reusable)
 
 **Symptom**: The tag push triggered the release workflow, but the run shows
