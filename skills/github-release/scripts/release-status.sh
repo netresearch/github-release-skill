@@ -33,17 +33,52 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-command -v gh >/dev/null || { echo "gh (authenticated) required" >&2; exit 2; }
 command -v jq >/dev/null || { echo "jq required" >&2; exit 2; }
-[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
-[ -n "$REPO" ] || { echo "no repo: pass -R owner/repo" >&2; exit 2; }
+
+# `gh` is not a precondition, it is a capability. Six of six recorded agent
+# trials in a sandbox without it got `exit 2` and one unusable fact, when the
+# local half of this verdict -- which version the files declare, whether they
+# agree, what to prepare next -- needed no forge at all. Half a verdict, clearly
+# labelled, beats an error that says only "not here".
+HAVE_GH=0
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then HAVE_GH=1; fi
+
+if [ "$HAVE_GH" = 1 ] && [ -z "$REPO" ]; then
+  REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+fi
+if [ -z "$REPO" ]; then
+  # A remote is enough to name the repository; being logged in is not needed
+  # for that, and neither is being inside the checkout when -R was passed.
+  origin=$(git config --get remote.origin.url 2>/dev/null || true)
+  case "$origin" in
+    *github.com[:/]*) REPO=$(printf '%s' "$origin" | sed -E 's#.*github\.com[:/]##; s#\.git$##') ;;
+  esac
+fi
+LOCAL_ONLY=0
+if [ "$HAVE_GH" = 0 ]; then
+  LOCAL_ONLY=1
+  add_note_pending="no gh (or not authenticated): local phase only, nothing about tags, workflow, release body or registries"
+fi
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 note=""; next=""; cmd=""
 add_note() { note="${note}${note:+; }$1"; }
+[ -n "${add_note_pending:-}" ] && add_note "$add_note_pending"
 
 # --- what is released, and what does the tree claim -------------------------
-latest=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+# `gh api --jq` prints the ERROR body when the call fails, so a 404 lands a
+# blob of JSON in $latest and every comparison below then reads as a version
+# mismatch. Take the value only when the call succeeded, and only when it looks
+# like a tag.
+latest=""
+if [ "$LOCAL_ONLY" = 0 ]; then
+  if latest_raw=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null); then
+    case "$latest_raw" in
+      *[!A-Za-z0-9._-]* | "" | null) latest="" ;;
+      *) latest="$latest_raw" ;;
+    esac
+  fi
+fi
 
 # Version the working tree declares: TYPO3 ext_emconf, else composer extra,
 # else a skill repo's plugin.json (the whole skill fleet declares it there and
@@ -61,12 +96,13 @@ pkg=$(jq -r '.name // empty' composer.json 2>/dev/null || true)
 extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/dev/null || true)
 
 # --- phase 2: an open release PR --------------------------------------------
-relpr=$(gh pr list --repo "$REPO" --state open --json number,headRefName \
+relpr="null"
+[ "$LOCAL_ONLY" = 0 ] && relpr=$(gh pr list --repo "$REPO" --state open --json number,headRefName \
         --jq '[.[] | select(.headRefName|test("^release/"))] | .[0].number' 2>/dev/null || echo "null")
 
 # --- phase 3: tag exists, and is annotated + signed --------------------------
 tag_state=""
-if [ -n "$declared" ]; then
+if [ -n "$declared" ] && [ "$LOCAL_ONLY" = 0 ]; then
   want="v$declared"
   if gh api "repos/$REPO/git/ref/tags/$want" >/dev/null 2>&1; then
     obj=$(gh api "repos/$REPO/git/ref/tags/$want" --jq .object.type 2>/dev/null || echo "")
@@ -128,7 +164,11 @@ if [ -n "$declared" ] && [ -n "$latest" ] && [ "$declared" != "${latest#v}" ]; t
   fi
 fi
 
-if [ -z "$declared" ]; then
+if [ "$LOCAL_ONLY" = 1 ] && [ -n "$declared" ]; then
+  next="prepare-release"
+  add_note "version files declare v$declared; whether that is released cannot be checked without gh"
+  cmd="release-status.sh -R ${REPO:-owner/repo}   # re-run once gh is available"
+elif [ -z "$declared" ]; then
   next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json)"
 elif [ "$relpr" != "null" ] && [ -n "$relpr" ]; then
   next="merge-release-pr"; cmd="pr-status.sh -R $REPO $relpr   # then pr-merge.sh"
@@ -169,7 +209,7 @@ if [ "$JSON" = 1 ]; then
        workflow:$wf, notes:$notes, registries_missing:$reg, next:$next,
        note:$note, cmd:$cmd}'
 else
-  echo "$REPO"
+  echo "${REPO:-<repository not identified>}"
   printf '  declared    : %s\n' "${declared:-<none>}"
   printf '  latest rel  : %s\n' "${latest:-<none>}"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
