@@ -140,9 +140,11 @@ fail independently, and one red job in the run does not tell you which.
 ## `release: published` Never Fires When CI Created the Release
 
 A workflow action performed with the default `GITHUB_TOKEN` does not
-trigger any further workflow run. `workflow_dispatch` and
-`repository_dispatch` are the only exempt events
-([docs](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow)).
+create a new workflow run. Only `workflow_dispatch` and
+`repository_dispatch` are exempt unconditionally; a `pull_request`
+opened, synchronized or reopened this way does create a run, but in an
+approval-required state. `release: published` has no exemption at all
+([docs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)).
 
 So a release-creation workflow calling `gh release create` with
 `GH_TOKEN: ${{ github.token }}` does publish a real, non-draft Release
@@ -174,9 +176,13 @@ on:
     types: [published]
 ```
 
-Keep `release: published` as a secondary trigger — the idempotency
-precheck skips a version already on TER, and it still covers a Release
-created by hand in the UI.
+Keep `release: published` as a secondary trigger: it still covers a
+Release created by hand in the UI for a tag whose push never published.
+Two triggers mean the same version can be attempted twice, so make the
+workflow idempotent first — `curl -I` the version's TER download URL and
+skip the upload on `200`. Do not assume that guard exists; the reusable
+`publish-to-ter.yml` has it in a precheck step, a copied standalone
+workflow may not.
 
 Mind the pattern grammar: branch and tag filters support `*`, `**`,
 `?`, `+`, `[]` and `!` — there is **no** `{n,m}` quantifier
