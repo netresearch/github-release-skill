@@ -137,6 +137,60 @@ fail independently, and one red job in the run does not tell you which.
 *Observed 2026-08-21 on `netresearch/t3x-contexts` v5.0.2, run
 32534659449.*
 
+## `release: published` Never Fires When CI Created the Release
+
+A workflow action performed with the default `GITHUB_TOKEN` does not
+create a new workflow run. Only `workflow_dispatch` and
+`repository_dispatch` are exempt unconditionally; a `pull_request`
+opened, synchronized or reopened this way does create a run, but in an
+approval-required state. `release: published` has no exemption at all
+([docs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)).
+
+So a release-creation workflow calling `gh release create` with
+`GH_TOKEN: ${{ github.token }}` does publish a real, non-draft Release
+— and a separate publish workflow listening on `release: published`
+never sees it. The failure is quiet in an unhelpful way: every manual
+`workflow_dispatch` test of the publish workflow keeps succeeding,
+because that trigger was never subject to the restriction, so the
+pipeline looks healthy while its advertised automatic path has never
+run once.
+
+**Our pipelines avoid this by construction, not by configuration.**
+`netresearch/typo3-ci-workflows/.github/workflows/release-typo3-extension.yml`
+calls `publish-to-ter.yml` as a `needs:` job inside the same run and
+creates the GitHub Release afterwards. There is no event hop, so there
+is nothing to fail. The gotcha only applies to a hand-rolled workflow
+that chains two runs together — a repository outside the org, or one
+that copied a standalone publish workflow instead of calling the
+reusable one.
+
+If you are maintaining such a workflow, trigger it on the tag push
+itself rather than on the Release:
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  release:
+    types: [published]
+```
+
+Keep `release: published` as a secondary trigger: it still covers a
+Release created by hand in the UI for a tag whose push never published.
+Two triggers mean the same version can be attempted twice, so make the
+workflow idempotent first — `curl -I` the version's TER download URL and
+skip the upload on `200`. Do not assume that guard exists; the reusable
+`publish-to-ter.yml` has it in a precheck step, a copied standalone
+workflow may not.
+
+Mind the pattern grammar: branch and tag filters support `*`, `**`,
+`?`, `+`, `[]` and `!` — there is **no** `{n,m}` quantifier
+([filter pattern cheat sheet](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet)).
+A pattern like `v[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}` matches `{1,3}`
+literally and therefore matches no real tag at all, which reproduces
+the exact silence this section is about.
+
 ## Related
 
 - `ter-republish.md` — re-publishing without re-tagging; tag-format
@@ -145,3 +199,5 @@ fail independently, and one red job in the run does not tell you which.
   through Phase 3) that prevents the version-match failure
 - `templates/release-typo3.yml` — tag-triggered TYPO3 release caller
 - `templates/ter-publish.yml` — `workflow_dispatch` re-publish caller
+- `typo3-conformance` skill, `references/ter-publishing.md` — the audit
+  side: what a conformance check looks for in a publish setup
