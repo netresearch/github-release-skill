@@ -51,7 +51,7 @@ if [ -z "$REPO" ]; then
   # for that, and neither is being inside the checkout when -R was passed.
   origin=$(git config --get remote.origin.url 2>/dev/null || true)
   case "$origin" in
-    *github.com[:/]*) REPO=$(printf '%s' "$origin" | sed -E 's#.*github\.com[:/]##; s#\.git$##') ;;
+    *github.com[:/]*) REPO=$(printf '%s' "$origin" | sed -E 's#.*github\.com[:/]##; s#/+$##; s#\.git$##') ;;
   esac
 fi
 LOCAL_ONLY=0
@@ -63,7 +63,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 note=""; next=""; cmd=""
 add_note() { note="${note}${note:+; }$1"; }
-[ -n "${add_note_pending:-}" ] && add_note "$add_note_pending"
+if [ -n "${add_note_pending:-}" ]; then add_note "$add_note_pending"; fi
 
 # --- what is released, and what does the tree claim -------------------------
 # `gh api --jq` prints the ERROR body when the call fails, so a 404 lands a
@@ -97,8 +97,10 @@ extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/
 
 # --- phase 2: an open release PR --------------------------------------------
 relpr="null"
-[ "$LOCAL_ONLY" = 0 ] && relpr=$(gh pr list --repo "$REPO" --state open --json number,headRefName \
-        --jq '[.[] | select(.headRefName|test("^release/"))] | .[0].number' 2>/dev/null || echo "null")
+if [ "$LOCAL_ONLY" = 0 ]; then
+  relpr=$(gh pr list --repo "$REPO" --state open --json number,headRefName \
+          --jq '[.[] | select(.headRefName|test("^release/"))] | .[0].number' 2>/dev/null || echo "null")
+fi
 
 # --- phase 3: tag exists, and is annotated + signed --------------------------
 tag_state=""
