@@ -22,7 +22,7 @@ Identify which version files need updating based on the project's ecosystem. A p
 | `composer.json` | `"version": "X.Y.Z"` | `"version": "13.8.1"` |
 | `composer.json` | `extra.typo3/cms.version` (separate from `"version"`) | `"extra": {"typo3/cms": {"version": "13.8.1"}}` |
 | `Documentation/guides.xml` | `version=` **and** `release=` attributes | `version="13.8.1" release="13.8.1"` |
-| `Documentation/Changelog.rst` | rendered changelog page — add a `Version X.Y.Z (date)` section | `Version 13.8.1 (2026-...)` |
+| `Documentation/Changelog.rst` **or** `Documentation/Changelog/Index.rst` | rendered changelog page — add a `Version X.Y.Z (date)` section | `Version 13.8.1 (2026-...)` |
 | `CHANGELOG.md` | stamp `[Unreleased]` → `[X.Y.Z] - date` **and** the footer compare links | `[13.8.1]: .../compare/v13.8.0...v13.8.1` |
 | `Documentation/**/*.rst` | `.. versionadded:: X.Y.Z` | `.. versionadded:: 13.8.0` |
 | `Documentation/**/*.rst` | `.. versionchanged:: X.Y.Z` | `.. versionchanged:: 13.8.1` |
@@ -42,6 +42,17 @@ Notes:
   section stamp — the `[Unreleased]` link and a new `[X.Y.Z]` link.
 - **RST `versionadded`/`versionchanged` directives** should only be updated when they
   reference the **current release being prepared**, not historical entries.
+- **The docs changelog is the most-missed file in this table, and it has two
+  layouts.** `Documentation/Changelog.rst` is the single-file form; extensions
+  with more than a handful of releases split it into a `Documentation/Changelog/`
+  directory whose entry point is `Index.rst`. A checklist naming only the first
+  finds nothing in a repository using the second, and nothing else fails: TER
+  accepts the release, CI stays green, and the wrong version is served on
+  docs.typo3.org until a human notices. Measured over twelve agent trials
+  preparing the same release, this file was updated in **zero** of them, with
+  and without this skill; `ext_emconf.php` and `CHANGELOG.md` were updated in
+  every unaided trial. Check both paths, and check the release-prep step touched
+  one of them before calling the version bump done.
 
 ### PHP / Composer
 

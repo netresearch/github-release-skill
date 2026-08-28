@@ -35,8 +35,15 @@ The hooks in this repository block `gh release create` and `gh release delete` t
    the v-prefixed git tags (vPREVIOUS...vX.Y.Z). The footer drifts silently if
    only the heading is changed (a prior release's compare link may even be
    missing); a reviewer bot will flag the dangling [Unreleased]: ref.
-6. Commit: "chore: prepare release vX.Y.Z"
-7. Push branch and open PR
+6. For TYPO3 extensions, also update the rendered docs changelog:
+   Documentation/Changelog.rst, or Documentation/Changelog/Index.rst where the
+   extension keeps it as a directory. Measured over twelve agent trials
+   preparing one release, this was the one file none of them touched — while
+   ext_emconf.php and CHANGELOG.md were updated in every unaided trial. Nothing
+   downstream catches it: TER publishes, CI stays green, and docs.typo3.org
+   serves the old version.
+7. Commit: "chore: prepare release vX.Y.Z"
+8. Push branch and open PR
 ```
 
 #### Issue Gate (Step 0) — Never tag over an untriaged known issue

@@ -1,10 +1,13 @@
 name: Script Tests
 
-# Runs shell self-tests for scripts/ that ship one (currently the
-# harvest-contributors PR-number extraction guard). Thin caller of the shared
-# script-check reusable, so the checkout pin and harden-runner are maintained
-# centrally; the skill-repo-skill reusables validate skill *structure*, this
-# checks script *behavior*.
+# Runs every shell self-test under skills/github-release/scripts/tests/. Thin
+# caller of the shared script-check reusable, so the checkout pin and
+# harden-runner are maintained centrally; the skill-repo-skill reusables
+# validate skill *structure*, this checks script *behavior*.
+#
+# It used to name one test file. Four existed, so three of them had never gated
+# anything — a suite that is not invoked is documentation. The loop fails on the
+# first non-zero and prints which file it was.
 
 on:
   push:
@@ -19,4 +22,7 @@ jobs:
     permissions:
       contents: read
     with:
-      check-cmd: bash skills/github-release/scripts/tests/harvest-contributors.test.sh
+      check-cmd: >-
+        for t in skills/github-release/scripts/tests/*.test.sh; do
+          echo "== $t"; bash "$t" || exit 1;
+        done
