@@ -13,7 +13,7 @@
 # Reviewers and discussants are not covered here — pull them from the PR/issue.
 #
 # Usage:
-#   harvest-contributors.sh --from <tag> --to <tag> [--repo owner/repo]
+#   harvest-contributors.sh --from <tag> --to <tag> [-R|--repo owner/repo]
 #
 # --from/--to are git refs that exist on the remote (e.g. v0.25.1 / v0.26.0).
 # --repo defaults to `gh repo view` (run inside the checkout, or pass it). PR
@@ -52,7 +52,7 @@ main() {
   local REPO="" FROM="" TO=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --repo) REPO="$2"; shift 2 ;;
+      -R | --repo) REPO="$2"; shift 2 ;;
       --from) FROM="$2"; shift 2 ;;
       --to) TO="$2"; shift 2 ;;
       -h | --help) sed -n '2,18p' "$0"; exit 0 ;;

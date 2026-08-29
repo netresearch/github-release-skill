@@ -8,7 +8,9 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../harvest-contributors.sh
+# The path is computed at runtime, so shellcheck cannot follow it without -x,
+# and the pre-commit hook does not pass it.
+# shellcheck source=../harvest-contributors.sh disable=SC1091
 source "$HERE/../harvest-contributors.sh"
 set +e # drive assertions ourselves; sourcing turned on `set -e`
 
@@ -52,6 +54,17 @@ done
 for h in 'marekskopal' 'CybotTM' 'dkochc'; do
   is_bot "$h"; check "human: $h" "1" "$?"
 done
+
+# --- argument parsing ---
+# `-R` is what release-status.sh takes, and reaching for it here used to exit 2
+# with `unknown arg: -R`. Both spellings must reach the same variable. Driven
+# through a subshell with --from/--to missing, so the run stops at the argument
+# check without touching the network: an accepted flag reports the missing
+# --from/--to, a rejected one reports the flag itself.
+argerr() { bash "$HERE/../harvest-contributors.sh" "$@" 2>&1 >/dev/null | head -1; }
+check "-R is accepted" "" "$(argerr -R o/r --from v1 --to v2 | grep -o 'unknown arg: -R')"
+check "--repo still accepted" "" "$(argerr --repo o/r --from v1 --to v2 | grep -o 'unknown arg')"
+check "an unknown flag is still rejected" "unknown arg: --nope" "$(argerr --nope x)"
 
 if [ "$fail" -eq 0 ]; then
   echo "All harvest-contributors self-tests passed."
