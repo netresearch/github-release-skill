@@ -57,13 +57,16 @@ done
 
 # --- argument parsing ---
 # `-R` is what release-status.sh takes, and reaching for it here used to exit 2
-# with `unknown arg: -R`. Both spellings must reach the same variable. Driven
-# through a subshell with --from/--to missing, so the run stops at the argument
-# check without touching the network: an accepted flag reports the missing
-# --from/--to, a rejected one reports the flag itself.
+# with `unknown arg: -R`. Both spellings must reach the same variable.
+#
+# --from/--to are deliberately omitted: an accepted repo flag then stops at the
+# "both --from and --to are required" check, which sits before the first gh
+# call, so the case stays offline. Supplying them would run the harvest against
+# a repository that does not exist — passing for the wrong reason, over the
+# network. A rejected flag names itself and never gets that far.
 argerr() { bash "$HERE/../harvest-contributors.sh" "$@" 2>&1 >/dev/null | head -1; }
-check "-R is accepted" "" "$(argerr -R o/r --from v1 --to v2 | grep -o 'unknown arg: -R')"
-check "--repo still accepted" "" "$(argerr --repo o/r --from v1 --to v2 | grep -o 'unknown arg')"
+check "-R is accepted"                    "" "$(argerr -R o/r | grep -o 'unknown arg: -R')"
+check "--repo still accepted"             "" "$(argerr --repo o/r | grep -o 'unknown arg')"
 check "an unknown flag is still rejected" "unknown arg: --nope" "$(argerr --nope x)"
 
 if [ "$fail" -eq 0 ]; then
