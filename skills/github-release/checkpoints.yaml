@@ -99,19 +99,28 @@ mechanical:
     desc: >-
       Latest published release should carry cosign signature artefacts.
       Accepted (in priority order): `.sigstore.json` (preferred — on the
-      OSSF Scorecard Signed-Releases allowlist), `.sigstore` (also on the
-      Scorecard allowlist), `.bundle` (legacy cosign default — bytes are
-      identical to `.sigstore.json`, only the filename differs), or BOTH
-      a detached `.sig` and matching `.pem` certificate (used by
-      netresearch/skill-repo-skill release workflow). A lone `.sig` or
-      lone `.pem` is incomplete and fails. `gh release view` is not available
-      to a checkpoint — the allowlist permits read-only `gh api` only — so the
-      asset list is read from `releases/latest`. A failing API call exits 0,
-      for the reason spelled out on GR-9.
+      OSSF Scorecard Signed-Releases allowlist, and what the
+      netresearch/skill-repo-skill release workflow emits via
+      `cosign sign-blob --bundle`), `.sigstore` (also on the Scorecard
+      allowlist), `.bundle` (legacy cosign default — bytes are identical to
+      `.sigstore.json`, only the filename differs), or a detached `.sig` plus
+      the `.pem` certificate for the same artefact (cosign's two-file
+      `--output-signature`/`--output-certificate` form). That pair is matched
+      on basename: `X.sig` counts only when `X.pem` is present too, so an
+      unrelated `app.sig` alongside `other.pem` fails — neither artefact is
+      verifiable. A lone `.sig` or lone `.pem` fails likewise.
+      `gh release view` is not available to a checkpoint — the allowlist permits
+      read-only `gh api` only — so the asset list is read from `releases/latest`.
+      A failing API call exits 0, for the reason spelled out on GR-9.
     command: |
       names=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.assets[].name' 2>/dev/null) || exit 0
       printf '%s\n' "$names" | grep -qE '\.(sigstore\.json|sigstore|bundle)$' && exit 0
-      printf '%s\n' "$names" | grep -q '\.sig$' && printf '%s\n' "$names" | grep -q '\.pem$'
+      while IFS= read -r asset; do
+        case "$asset" in
+          *.sig) printf '%s\n' "$names" | grep -qxF "${asset%.sig}.pem" && exit 0 ;;
+        esac
+      done <<<"$names"
+      exit 1
 
   - id: GR-11
     type: command
