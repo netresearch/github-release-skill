@@ -48,14 +48,16 @@ mechanical:
   # Tag integrity checks
   - id: GR-6
     type: command
-    pattern: "test -z \"$(git for-each-ref refs/tags/v* --format='%(objecttype) %(refname:short)' | grep -v '^tag ')\""
+    pattern: "! git for-each-ref 'refs/tags/v*' --format='%(objecttype)' | grep -qvx tag"
     severity: error
     desc: >-
-      All version tags must be annotated (not lightweight). The `grep -v`
-      pipeline emits any tag whose objecttype is NOT `tag` (i.e. lightweight
-      commit-tags). Wrapping in `test -z "$(...)"` makes the command exit 0
-      only when the pipeline is empty — i.e. all tags are annotated, or no
-      tags exist at all.
+      All version tags must be annotated (not lightweight). `for-each-ref`
+      prints one object type per `v*` tag: `tag` for an annotated tag, `commit`
+      for a lightweight one. `grep -qvx tag` succeeds as soon as one line is
+      not exactly `tag`, and the leading `!` inverts that — so the check exits
+      0 only when every version tag is annotated, or no version tag exists yet.
+      Spelled without command substitution because the runner's allowlist
+      refuses `$(...)` in a single-line pattern and would block the check.
 
   # Version sync checks
   - id: GR-7
@@ -77,29 +79,39 @@ mechanical:
 
   # Supply chain security checks
   - id: GR-9
-    type: command
-    pattern: "gh release view --json assets --jq -e 'any(.assets[].name; test(\"sbom\"))' >/dev/null 2>&1"
+    type: script
     severity: warning
     desc: >-
-      Latest published release should have SBOM assets. `jq -e` exits with
-      code 1 when no asset name matches, so the runner sees a real failure
-      instead of a literal "false" stdout that would otherwise count as a
-      successful zero-exit.
+      Latest published release should carry an SBOM asset. The asset list comes
+      from `gh api` on `releases/latest`: the runner's allowlist permits only
+      read-only `gh api`, and refuses `gh release view` outright. When that API
+      call fails — no release published yet, `gh` missing or unauthenticated,
+      origin not on GitHub — the body exits 0. A script body cannot tell those
+      cases apart and has no way to report `skip`, so failing would invent a
+      finding where there is no evidence in either direction.
+    command: |
+      assets=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.assets[].name' 2>/dev/null) || exit 0
+      printf '%s\n' "$assets" | grep -qi sbom
 
   - id: GR-10
-    type: command
-    pattern: "gh release view --json assets --jq -e '[.assets[].name] as $n | ($n|any(test(\"\\\\.sigstore\\\\.json$\"))) or ($n|any(test(\"\\\\.sigstore$\"))) or ($n|any(test(\"\\\\.bundle$\"))) or ($n|any(test(\"\\\\.sig$\")) and ($n|any(test(\"\\\\.pem$\"))))' >/dev/null 2>&1"
+    type: script
     severity: warning
     desc: >-
-      Latest published release should have cosign signature artefacts.
+      Latest published release should carry cosign signature artefacts.
       Accepted (in priority order): `.sigstore.json` (preferred — on the
       OSSF Scorecard Signed-Releases allowlist), `.sigstore` (also on the
       Scorecard allowlist), `.bundle` (legacy cosign default — bytes are
       identical to `.sigstore.json`, only the filename differs), or BOTH
       a detached `.sig` and matching `.pem` certificate (used by
       netresearch/skill-repo-skill release workflow). A lone `.sig` or
-      lone `.pem` is incomplete and fails. `jq -e` ensures the boolean
-      is reflected in the exit code.
+      lone `.pem` is incomplete and fails. `gh release view` is not available
+      to a checkpoint — the allowlist permits read-only `gh api` only — so the
+      asset list is read from `releases/latest`. A failing API call exits 0,
+      for the reason spelled out on GR-9.
+    command: |
+      names=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.assets[].name' 2>/dev/null) || exit 0
+      printf '%s\n' "$names" | grep -qE '\.(sigstore\.json|sigstore|bundle)$' && exit 0
+      printf '%s\n' "$names" | grep -q '\.sig$' && printf '%s\n' "$names" | grep -q '\.pem$'
 
   - id: GR-11
     type: command
@@ -129,34 +141,47 @@ mechanical:
 
   # Release-notes credit format (release-process.md, "Crediting contributors")
   - id: GR-14
-    type: command
-    pattern: "test -z \"$(gh release view --json body -q .body 2>/dev/null | grep -E '^## (Contributors|Credits)')\""
+    type: script
     severity: error
     desc: >-
       The latest release body must not hand-write a Contributors/Credits
       section. GitHub draws that avatar row itself from the @mentions in the
       body, so a written section duplicates the row and loses who did what.
-      Empty output (no release yet, or no such heading) exits 0.
+      The body is read with `gh api` — the allowlist refuses `gh release view`.
+      No release yet, or an unreachable API, exits 0 (see GR-9).
+    command: |
+      body=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.body // ""' 2>/dev/null) || exit 0
+      printf '%s\n' "$body" | grep -qE '^## (Contributors|Credits)' && exit 1
+      exit 0
 
   - id: GR-15
-    type: command
-    pattern: "test -z \"$(gh release view --json body -q .body 2>/dev/null | grep -oE '\\[@[A-Za-z0-9_-]+\\]\\(')\""
+    type: script
     severity: error
     desc: >-
       Mentions in a release body must be bare `@user`, never
       `[@user](url)`. A markdown link renders as a plain hyperlink, leaves
       mentions_count null and suppresses the Contributors row entirely — the
       one place where the house rule "always link references" is wrong.
+      The body is read with `gh api` — the allowlist refuses `gh release view`.
+      No release yet, or an unreachable API, exits 0 (see GR-9).
+    command: |
+      body=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.body // ""' 2>/dev/null) || exit 0
+      printf '%s\n' "$body" | grep -qE '\[@[A-Za-z0-9_-]+\]\(' && exit 1
+      exit 0
 
   - id: GR-16
-    type: command
-    pattern: "test \"$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.mentions_count // 0' 2>/dev/null || echo 0)\" -ge 1"
+    type: script
     severity: warning
     desc: >-
       The latest release should mention at least one contributor, which is
       what makes GitHub render the Contributors row. A 0 usually means the
       mentions were written as markdown links (see GR-15) rather than that
-      nobody contributed.
+      nobody contributed. The comparison lives in a script body because the
+      allowlist refuses the `test "$(...)"` spelling this check needs.
+      No release yet, or an unreachable API, exits 0 (see GR-9).
+    command: |
+      mentions=$(gh api 'repos/{owner}/{repo}/releases/latest' --jq '.mentions_count // 0' 2>/dev/null) || exit 0
+      test "${mentions:-0}" -ge 1
 
 llm_reviews:
   - id: GR-R1
