@@ -102,7 +102,6 @@ fi
 # validate-pre-release.sh's job.
 if [ -z "$declared" ]; then
   while IFS= read -r toc; do
-    case "$toc" in ./.git/*) continue ;; esac
     # The trailing [[:space:]]*$ takes a CRLF manifest's carriage return off the
     # value; [:space:] includes \r.
     declared=$(sed -n 's/^##[[:space:]]*Version:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' \

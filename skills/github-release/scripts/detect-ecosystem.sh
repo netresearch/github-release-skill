@@ -226,7 +226,6 @@ fi
 # check instead of shipping a mismatch to the other flavours.
 toc_manifests=()
 while IFS= read -r toc; do
-    case "$toc" in ./.git/*) continue ;; esac
     if grep -qE '^##[[:space:]]*Interface:' "$toc" 2>/dev/null; then
         toc_manifests+=("${toc#./}")
     fi
