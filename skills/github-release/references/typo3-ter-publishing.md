@@ -272,8 +272,8 @@ matters to you.
 - `files` — `preg_match('/' . $entry . '$/i', $filename)` against the
   **basename** only. A **suffix** match, which is why the defaults omit
   leading dots (`gitignore` matches `.gitignore`) and why a file rule
-  cannot be scoped to the root: `AGENTS.md` also removes every scoped
-  copy under `Classes/`, `Tests/` and the rest.
+  cannot be scoped to the root: `AGENTS.md` also removes the scoped
+  copies under `Classes/`, `Documentation/` and `Resources/`.
 
 **Entries are interpolated into the pattern raw.** No released tailor
 runs them through `preg_quote()`: `quoteExcludePattern()` exists only on
