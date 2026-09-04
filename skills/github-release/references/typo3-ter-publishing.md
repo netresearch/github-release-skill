@@ -191,6 +191,122 @@ A pattern like `v[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}` matches `{1,3}`
 literally and therefore matches no real tag at all, which reproduces
 the exact silence this section is about.
 
+## `.gitattributes` Has No Effect on the TER Artifact
+
+`tailor ter:publish` packs the **working directory**, not the git tree.
+Given neither `--path` nor `--artefact`,
+`UploadExtensionVersionCommand` hands `getcwd()` to
+`VersionService::createZipArchiveFromPath()`; given `--path` it hands
+that directory. Either way the method walks the filesystem through
+`RecursiveDirectoryIterator` and never calls `git archive`, so
+`export-ignore` — honoured only by `git archive`, and therefore by the
+GitHub source tarball and the Composer dist built from it — does not
+reach the upload. The only filter tailor applies is its own
+`conf/ExcludeFromPackaging.php`. That asymmetry is the tell: a Composer
+install of the same tag can look right while the TER artifact does not.
+
+The overlap between the two lists is what hides this. Of the 26
+`export-ignore` entries in one extension's `.gitattributes`, 15 were in
+the published zip; of the 11 that were not, 9 sit in tailor's default
+list anyway (`Tests`, `Build`, `.github`, `.ddev`, `Makefile`,
+`composer.lock`, `.editorconfig`, `.gitignore`, and `.gitattributes`
+itself) and 2 did not exist in the checkout. So the setting looks like
+it works right up to the first path that only `.gitattributes` knows —
+which then ships: `AGENTS.md`, a DDEV landing page (`index.html`), a
+healthcheck stub (`phpstatus`), `renovate.json`, `crowdin.yml`,
+`DDEV_SETUP.md` and six analysis reports, in a 176-entry artifact.
+
+`crowdin.yml` is the instructive case. Tailor's default list carries
+the `crowdin.yaml` spelling and not the `.yml` one, so a project that
+configures nothing at all still inherits that gap.
+
+**The override replaces the default list; it merges nothing.** The
+exclude file is chosen by the `TYPO3_EXCLUDE_FROM_PACKAGING`
+environment variable and must return an array carrying both keys, even
+if one is empty:
+
+```php
+return [
+    'directories' => ['.build', 'vendor', 'tests'],
+    'files' => ['AGENTS.md', 'renovate.json'],
+];
+```
+
+`VersionService::getExcludeConfiguration()` returns that array
+verbatim. A path that does not exist raises `InvalidArgumentException`
+and a missing `directories` or `files` key raises
+`RequiredConfigurationMissing`, but an array that merely omits tailor's
+own entries raises nothing — and the zip then carries `vendor/`,
+`.git/` and the whole test suite. Compose the override onto the
+defaults instead of restating them:
+
+```php
+$tailorDefaults = require __DIR__ . '/TailorDefaults-1.7.0.php';
+
+return [
+    'directories' => array_merge($tailorDefaults['directories'], [
+        '.serena',
+    ]),
+    'files' => array_merge($tailorDefaults['files'], [
+        'AGENTS.md',
+        'crowdin.yml',
+    ]),
+];
+```
+
+The snapshot is a committed copy of the `conf/ExcludeFromPackaging.php`
+that `typo3/tailor:^1` installs, so every upstream entry exists in one
+place and refreshing the snapshot is the whole update. It also goes
+stale silently when tailor adds an entry — diff it against
+`vendor/typo3/tailor/conf/ExcludeFromPackaging.php` in a test if that
+matters to you.
+
+**The two keys match by different rules**, both case-insensitive, from
+`VersionService::createZipArchiveFromPath()`:
+
+- `directories` — `preg_match('/^' . $entry . '/i', $path)` against the
+  path relative to the extension root. A root-anchored **prefix** match,
+  and a `false` on a directory prunes the whole subtree. So `build` also
+  matches `buildkite`, and the `/i` is why the lowercase defaults
+  `build` and `tests` catch TYPO3's `Build/` and `Tests/`.
+- `files` — `preg_match('/' . $entry . '$/i', $filename)` against the
+  **basename** only. A **suffix** match, which is why the defaults omit
+  leading dots (`gitignore` matches `.gitignore`) and why a file rule
+  cannot be scoped to the root: `AGENTS.md` also removes the scoped
+  copies under `Classes/`, `Documentation/` and `Resources/`.
+
+**Entries are interpolated into the pattern raw.** No released tailor
+runs them through `preg_quote()`: `quoteExcludePattern()` exists only on
+`main` and is in no tag, `2.0.0` included — and `VersionService.php` is
+byte-identical between `1.7.0` and `2.0.0`, so everything above holds
+for both. Keep entries plain: `.` is a wildcard, a literal `/`
+terminates the delimiter, and a nested directory needs the escaped form
+`Resources\/Private\/Build`.
+
+**In CI, pass the file through the reusable workflow's input.**
+`netresearch/typo3-ci-workflows`'s `publish-to-ter.yml` takes an
+`exclude-from-packaging` input
+([#245](https://github.com/netresearch/typo3-ci-workflows/pull/245)),
+forwarded by `release-typo3-extension.yml` and `republish.yml`. It sets
+`TYPO3_EXCLUDE_FROM_PACKAGING` for the publish step, and rejects an
+absolute path, a `..` component and a file missing from the checkout
+before tailor runs.
+
+```yaml
+jobs:
+  release:
+    uses: netresearch/typo3-ci-workflows/.github/workflows/release-typo3-extension.yml@main
+    with:
+      exclude-from-packaging: Build/ExcludeFromPackaging.php
+```
+
+A republish has to pass the same value. The `workflow_dispatch` caller
+in `ter-republish.md` takes no inputs, and dispatching that one repacks
+the unfiltered set over a correct upload.
+
+*Observed 2026-09-03 on `netresearch/t3x-nr-temporal-cache` 0.9.0 — 176
+zip entries, 15 of the 26 `export-ignore`d paths among them.*
+
 ## Related
 
 - `ter-republish.md` — re-publishing without re-tagging; tag-format
