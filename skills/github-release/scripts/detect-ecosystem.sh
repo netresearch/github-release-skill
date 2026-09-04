@@ -59,6 +59,15 @@ guides_xml_version() {
         || true
 }
 
+# Extract version from a World of Warcraft addon .toc manifest.
+# Manifests are commonly CRLF. The trailing [[:space:]]*$ is what takes the
+# carriage return off the value — [:space:] includes \r — so nothing else has
+# to strip it; the CRLF case is pinned by a test.
+toc_version() {
+    sed -n 's/^##[[:space:]]*Version:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' "$1" 2>/dev/null \
+        | head -1 || true
+}
+
 # ---------------------------------------------------------------------------
 # TYPO3
 # ---------------------------------------------------------------------------
@@ -199,6 +208,35 @@ if [[ -f pom.xml ]]; then
     echo "ecosystem:java"
     jver=$(pom_version pom.xml)
     echo "version-file:pom.xml:${jver}"
+fi
+
+# ---------------------------------------------------------------------------
+# World of Warcraft addon
+# ---------------------------------------------------------------------------
+# The marker is the `## Interface:` line, not the file extension: `.toc` is a
+# generic suffix that also belongs to LaTeX tables of contents and to Delphi
+# type libraries, and matching on the extension alone would report those
+# repositories as addons.
+#
+# The manifest sits at <AddonName>/<AddonName>.toc, or at the repository root
+# for a single-folder layout. An addon that supports several game flavours ships
+# one manifest per flavour beside it — QuickRoute.toc, QuickRoute_Vanilla.toc,
+# QuickRoute_Cata.toc — each carrying its own `## Version:`. Every one is
+# reported, so a release that moves only some of them fails the version-sync
+# check instead of shipping a mismatch to the other flavours.
+toc_manifests=()
+while IFS= read -r toc; do
+    case "$toc" in ./.git/*) continue ;; esac
+    if grep -qE '^##[[:space:]]*Interface:' "$toc" 2>/dev/null; then
+        toc_manifests+=("${toc#./}")
+    fi
+done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
+
+if [[ ${#toc_manifests[@]} -gt 0 ]]; then
+    echo "ecosystem:wow-addon"
+    for toc in "${toc_manifests[@]}"; do
+        echo "version-file:${toc}:$(toc_version "$toc")"
+    done
 fi
 
 # ---------------------------------------------------------------------------
