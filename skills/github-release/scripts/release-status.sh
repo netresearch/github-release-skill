@@ -83,7 +83,8 @@ fi
 # Version the working tree declares: TYPO3 ext_emconf, else composer extra,
 # else a skill repo's plugin.json (the whole skill fleet declares it there and
 # nowhere else — without this the verdict is "prepare-release" for every one of
-# them, however cleanly they are released).
+# them, however cleanly they are released), else a WoW addon's .toc manifest,
+# which is the only place such an addon states its version.
 declared=""
 if [ -f ext_emconf.php ]; then
   declared=$(grep -oE "'version'[[:space:]]*=>[[:space:]]*'[^']+'" ext_emconf.php 2>/dev/null \
@@ -91,6 +92,23 @@ if [ -f ext_emconf.php ]; then
 fi
 [ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
 [ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
+
+# WoW addon: the version lives in a .toc manifest and nowhere else. Not every
+# .toc is one — the extension also belongs to LaTeX tables of contents — but the
+# `## Version:` line is itself the evidence, so a file without one is skipped and
+# the search continues rather than stopping on it. A multi-flavour addon ships a
+# manifest per game flavour beside the primary one; `sort` reaches the
+# flavourless name first, and keeping the set in step is
+# validate-pre-release.sh's job.
+if [ -z "$declared" ]; then
+  while IFS= read -r toc; do
+    # The trailing [[:space:]]*$ takes a CRLF manifest's carriage return off the
+    # value; [:space:] includes \r.
+    declared=$(sed -n 's/^##[[:space:]]*Version:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' \
+               "$toc" 2>/dev/null | head -1 || true)
+    [ -n "$declared" ] && break
+  done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
+fi
 
 pkg=$(jq -r '.name // empty' composer.json 2>/dev/null || true)
 extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/dev/null || true)

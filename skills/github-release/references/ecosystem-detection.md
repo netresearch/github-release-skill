@@ -129,6 +129,24 @@ Note: `skills/*/SKILL.md` is a glob — a repo may ship **multiple** skills (e.g
 
 Note: On GitHub this match is a **required CI check** — `Skill Validation` runs a step *"Validate SKILL.md metadata.version matches plugin.json"*, so a bump PR that touches only `plugin.json` is BLOCKED until every SKILL.md is bumped too. On GitLab the `ci-components/claude-code-skill` pipeline's `validate:version` only checks `plugin.json` (v-stripped) against the tag, not SKILL.md — bump SKILL.md anyway for consistency.
 
+### World of Warcraft Addons
+
+**Detection**: any `*.toc` at the repository root or one level down that carries a `## Interface:` line.
+
+| File | Field/Pattern | Example |
+|------|--------------|---------|
+| `<AddonName>/<AddonName>.toc` | `## Version: X.Y.Z` | `## Version: 1.16.0` |
+| `<AddonName>/<AddonName>_<Flavour>.toc` | `## Version: X.Y.Z` — one manifest per game flavour | `QuickRoute_Vanilla.toc`, `QuickRoute_Cata.toc` |
+
+The manifest is the addon's only version surface: what the game shows, and what `C_AddOns.GetAddOnMetadata(name, "Version")` returns, both come from it, so nothing else in the repository needs to move with it.
+
+Two things decide the detection rather than the file extension:
+
+- `.toc` is not exclusive to addons — LaTeX writes a table of contents under the same suffix — so the `## Interface:` line is what identifies a manifest. `release-status.sh` uses the `## Version:` line for the same purpose, since a file without one carries no version to read either way.
+- An addon that supports several game flavours ships a manifest per flavour beside the primary one, each with its own `## Version:`. All of them are reported, so a release that moves only some fails the version-sync check instead of shipping a mismatch to the other flavours.
+
+Manifests are commonly CRLF; the extracted version carries no carriage return.
+
 ### Generic (Always Check)
 
 These files are ecosystem-independent and should always be checked:
@@ -145,5 +163,6 @@ A single project may match multiple ecosystems. For example:
 - **TYPO3 extension**: TYPO3 + PHP/Composer + Generic
 - **Node.js library with Rust bindings**: Node.js + Rust + Generic
 - **Full-stack monorepo**: May have Node.js frontend + Python backend + Generic
+- **WoW addon**: WoW Addon + Generic — the `.toc` set is the whole version surface
 
 Update ALL matching version files. Report which files were updated in the PR description.

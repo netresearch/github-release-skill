@@ -58,6 +58,38 @@ else
 fi
 
 # --- the 404 trap, without calling anything ----------------------------------
+# ---------------------------------------------------------------------------
+# A WoW addon declares its version only in a .toc manifest
+# ---------------------------------------------------------------------------
+# Without this the verdict was "prepare-release — no version file found" for a
+# released addon, so the script could never reach exit 0 on such a repository.
+
+addon=$(mktemp -d)
+trap 'rm -rf "$work" "$addon"' EXIT
+mkdir -p "$addon/bin" "$addon/repo/QuickRoute"
+ln -sf "$jq_path" "$addon/bin/jq"
+printf '## Interface: 120100\r\n## Title: QuickRoute\r\n## Version: 1.16.0\r\n' \
+  >"$addon/repo/QuickRoute/QuickRoute.toc"
+
+addon_out=$(cd "$addon/repo" && env -i PATH="$addon/bin:/usr/bin:/bin" HOME="$addon" \
+            bash --noprofile --norc "$SCRIPT" 2>&1)
+
+check "reads the version from a .toc manifest" "1.16.0" "$addon_out"
+refute "does not report the addon as versionless" "no version file found" "$addon_out"
+# The fixture above is CRLF, as shipped manifests usually are. A carriage
+# return left on the value makes an equal version compare unequal against the
+# tag, so the released repo reads as drifted.
+refute "no carriage return survives into the version" "$(printf '1.16.0\r')" "$addon_out"
+
+# A .toc without a version line is not a manifest — the extension also belongs
+# to LaTeX tables of contents — and it sorts first here, so the search has to
+# step over it rather than stop on it and report the addon as versionless.
+printf '\\contentsline {section}{Intro}{1}\n' >"$addon/repo/AAA-paper.toc"
+skip_out=$(cd "$addon/repo" && env -i PATH="$addon/bin:/usr/bin:/bin" HOME="$addon" \
+           bash --noprofile --norc "$SCRIPT" 2>&1)
+check "steps over a .toc that carries no version" "1.16.0" "$skip_out"
+rm -f "$addon/repo/AAA-paper.toc"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
