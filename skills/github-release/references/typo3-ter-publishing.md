@@ -199,9 +199,11 @@ Given neither `--path` nor `--artefact`,
 `VersionService::createZipArchiveFromPath()`; given `--path` it hands
 that directory. Either way the method walks the filesystem through
 `RecursiveDirectoryIterator` and never calls `git archive`, so
-`export-ignore` — which shapes the GitHub source tarball and nothing
-else — does not reach the upload. The only filter tailor applies is its
-own `conf/ExcludeFromPackaging.php`.
+`export-ignore` — honoured only by `git archive`, and therefore by the
+GitHub source tarball and the Composer dist built from it — does not
+reach the upload. The only filter tailor applies is its own
+`conf/ExcludeFromPackaging.php`. That asymmetry is the tell: a Composer
+install of the same tag can look right while the TER artifact does not.
 
 The overlap between the two lists is what hides this. Of the 26
 `export-ignore` entries in one extension's `.gitattributes`, 15 were in
