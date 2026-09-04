@@ -35,3 +35,10 @@ jobs:
       # Existing release-typo3.yml callers may still forward the secret
       # for historic reasons; new callers should not.
       TYPO3_TER_ACCESS_TOKEN: ${{ secrets.TYPO3_TER_ACCESS_TOKEN }}
+    # Uncomment on a project that ships its own exclude list. tailor zips the
+    # WORKING DIRECTORY and never reads .gitattributes, so `export-ignore` does
+    # not reach the TER artifact — this input is the only way to keep files out
+    # of it. Leave it off otherwise: the shared workflow fails the job when the
+    # path does not exist in the checkout.
+    # with:
+    #   exclude-from-packaging: conf/ExcludeFromPackaging.php

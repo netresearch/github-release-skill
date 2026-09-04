@@ -23,8 +23,7 @@ will refuse a second publish attempt on the same tag name anyway.
 ## The `workflow_dispatch`-Only Caller Pattern
 
 Add a dedicated manual-trigger caller alongside the normal tag-triggered
-`release.yml`. Pattern used across netresearch TYPO3 extensions
-(t3x-nr-llm, t3x-nr-mcp-agent, t3x-nr-image-optimize):
+`release.yml`. Pattern used across several netresearch TYPO3 extensions:
 
 ```yaml
 # .github/workflows/ter-publish.yml
@@ -42,9 +41,17 @@ jobs:
       contents: read
     secrets:
       TYPO3_TER_ACCESS_TOKEN: ${{ secrets.TYPO3_TER_ACCESS_TOKEN }}
+    # Uncomment on a project that ships its own exclude list. tailor zips the
+    # WORKING DIRECTORY and never reads .gitattributes, so `export-ignore` does
+    # not reach the TER artifact — this input is the only way to keep files out
+    # of it. Leave it off otherwise: the shared workflow fails the job when the
+    # path does not exist in the checkout.
+    # with:
+    #   exclude-from-packaging: conf/ExcludeFromPackaging.php
 ```
 
-That is the whole file. No inputs, no outputs.
+That is the whole file, and on a project with no exclude list of its own it
+carries no inputs at all.
 
 **A note on `TYPO3_EXTENSION_KEY`.** Older caller workflows (including
 the `release-typo3.yml` template shipped alongside this reference) pass
