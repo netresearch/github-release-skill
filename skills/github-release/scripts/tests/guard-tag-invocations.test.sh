@@ -85,7 +85,22 @@ check 2 'tag force-push after a listing' 'git tag -l
 git push --force --tags'
 check 2 'refspec tag deletion after a listing' 'git tag -l && git push origin :refs/tags/v1.2.3'
 
+# --- a prefixed invocation is still an invocation (CodeRabbit, PR #111) -----
+check 2 'lightweight tag in a loop body' 'for r in a b; do git tag v1.2.3; done'
+check 2 'lightweight tag in a conditional body' 'if true; then git tag v1.2.3; fi'
+check 2 'lightweight tag behind an env assignment' 'TZ=UTC git tag v1.2.3'
+check 2 'lightweight tag behind sudo' 'sudo git tag v1.2.3'
+check 2 'tag force-push behind sudo' 'sudo git push --force --tags'
+# ... but the words have to be running git, not sitting inside an argument.
+check 0 'the command name inside an echo' 'echo "run git tag v1.2.3 to tag it"'
+check 0 'the command name inside a commit message' 'git commit -m "git tag v1.2.3"'
+
 # --- creation forms that stay allowed ---------------------------------------
+# -m and -F imply -a when -a/-s/-u are absent, so these are annotated tags.
+check 0 'tag with -m only' 'git tag -m "Release v1.2.3" v1.2.3'
+check 0 'tag with --message only' 'git tag --message="Release" v1.2.3'
+check 0 'tag with -F only' 'git tag -F notes.txt v1.2.3'
+check 0 'tag with --file only' 'git tag --file=notes.txt v1.2.3'
 check 0 'signed tag' 'git tag -s v1.2.3 -m "Release v1.2.3"'
 check 0 'annotated tag' 'git tag -a v1.2.3 -m "Release v1.2.3"'
 check 0 'signed tag with stderr redirected' 'git tag -s v1.2.3 -m release 2>&1'

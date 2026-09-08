@@ -10,7 +10,7 @@ Blocks:
 
 Allows:
   - Signed tags: git tag -s v*
-  - Annotated tags: git tag -a v*
+  - Annotated tags: git tag -a v*, and the -m/-F forms that imply -a
   - Listing and inspecting tags: git tag -l, --list, -n, --contains,
     --points-at, --merged, --sort, --format, --column, --ignore-case
   - Verifying tags: git tag -v v*
@@ -79,6 +79,19 @@ READ_ONLY_TAG_FLAG = re.compile(
 )
 
 
+# What may stand between the start of an invocation and the "git" that runs it:
+# shell keywords opening a loop or a conditional, an env assignment, and the
+# usual command wrappers. Matching these keeps a guarded invocation guarded when
+# it sits in a loop body ("do git tag v1.2.3") or carries a prefix
+# ("TZ=UTC …", "sudo …"). It stays a prefix match on purpose: searching for
+# "git tag" anywhere in the segment would also fire on the word inside an
+# unrelated argument, e.g. echo "run git tag v1.2.3 to tag".
+INVOCATION_PREFIX = (
+    r"(?:(?:then|else|elif|do|if|while|until|sudo|command|time|exec|env|nohup)\s+"
+    r"|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+)
+
+
 def split_invocations(command: str) -> list:
     """Split a shell command into its individual invocations.
 
@@ -96,7 +109,7 @@ def split_invocations(command: str) -> list:
 
 def check_tag_invocation(segment: str) -> None:
     """Block dangerous "git tag" forms in a single invocation."""
-    tag_match = re.match(r"git\s+tag\b(.*)", segment)
+    tag_match = re.match(INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment)
     if not tag_match:
         return
 
@@ -135,6 +148,10 @@ def check_tag_invocation(segment: str) -> None:
         # Combined short flags like -sa, -as are also fine.
         if re.search(r"(?:^|\s)-[a-z]*[sa][a-z]*\b", tag_args):
             return
+        # -m/-F imply -a when -a/-s/-u are absent, so these are annotated too
+        # (verified: "git tag -m msg vX" yields a tag object, not a commit).
+        if re.search(r"(?:^|\s)(-m|-F|--message|--file)(?:=|\s)", tag_args):
+            return
 
         # This is a lightweight version tag -- block it.
         block(
@@ -150,7 +167,7 @@ def check_tag_invocation(segment: str) -> None:
 
 def check_push_invocation(segment: str) -> None:
     """Block tag deletion and tag force-push in a single "git push"."""
-    push_match = re.match(r"git\s+push\b(.*)", segment)
+    push_match = re.match(INVOCATION_PREFIX + r"git\s+push\b(.*)", segment)
     if push_match:
         push_args = push_match.group(1).strip()
 
