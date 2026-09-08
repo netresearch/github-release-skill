@@ -10,8 +10,9 @@ Blocks:
 
 Allows:
   - Signed tags: git tag -s v*
-  - Annotated tags: git tag -a v*
-  - Listing tags: git tag -l, git tag --list
+  - Annotated tags: git tag -a v*, and the -m/-F forms that imply -a
+  - Listing and inspecting tags: git tag -l, --list, -n, --contains,
+    --points-at, --merged, --sort, --format, --column, --ignore-case
   - Verifying tags: git tag -v v*
   - Non-version tags (tags not matching v* pattern)
 
@@ -68,74 +69,101 @@ def has_version_tag_arg(args: str) -> bool:
     return bool(re.search(r"(?:^|\s|/)v\d", args))
 
 
-def check_command(command: str) -> None:
-    """Check the command and block dangerous tag operations."""
-    # Normalise whitespace.
-    cmd = " ".join(command.split())
+# Flags that make "git tag" a read-only query. git treats any of them as
+# implying --list, so they can carry a version argument (a shell pattern, or a
+# ref to compare against) without being a tag creation.
+READ_ONLY_TAG_FLAG = re.compile(
+    r"(?:^|\s)(?:-l|--list|-n\d*|--contains|--no-contains|--points-at"
+    r"|--merged|--no-merged|--sort|--format|--column|--no-column"
+    r"|-i|--ignore-case|--omit-empty)(?:=|\s|$)"
+)
 
-    # ---------------------------------------------------------------
-    # 1. Check "git tag" commands
-    # ---------------------------------------------------------------
-    # Match "git tag ..." anywhere in the command (after separators).
-    tag_match = re.search(
-        r"(?:^|[;&|]\s*|&&\s*|\|\|\s*)git\s+tag\b(.*)",
-        cmd,
-    )
-    if tag_match:
-        tag_args = tag_match.group(1).strip()
 
-        # Allow listing: -l, --list, or bare "git tag" with no args.
-        if not tag_args or re.match(r"^(-l|--list)\b", tag_args):
-            return
+# What may stand between the start of an invocation and the "git" that runs it:
+# shell keywords opening a loop or a conditional, an env assignment, and the
+# usual command wrappers. Matching these keeps a guarded invocation guarded when
+# it sits in a loop body ("do git tag v1.2.3") or carries a prefix
+# ("TZ=UTC …", "sudo …"). It stays a prefix match on purpose: searching for
+# "git tag" anywhere in the segment would also fire on the word inside an
+# unrelated argument, e.g. echo "run git tag v1.2.3 to tag".
+INVOCATION_PREFIX = (
+    r"(?:(?:then|else|elif|do|if|while|until|sudo|command|time|exec|env|nohup)\s+"
+    r"|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+)
 
-        # Allow verification: -v (but not -v as part of a version like v1.0).
-        if re.match(r"^-v\s", tag_args) or tag_args == "-v":
-            return
 
-        # Check for tag deletion: git tag -d <tag>
-        if re.search(r"(?:^|\s)-d\b", tag_args):
-            if has_version_tag_arg(tag_args):
-                block(
-                    "Deleting a version tag is dangerous. Tags are immutable "
-                    "references that downstream consumers and CI pipelines depend on.",
-                    "If the tag points to a bad commit, create a new patch "
-                    "release (vX.Y.Z+1) instead of deleting the existing tag.",
-                )
-            # Non-version tag deletion is allowed.
-            return
+def split_invocations(command: str) -> list:
+    """Split a shell command into its individual invocations.
 
-        # If we get here, it is a tag creation command.
-        # Only process if it targets a version tag.
-        if has_version_tag_arg(tag_args):
-            # Allow signed tags (-s or --sign).
-            if re.search(r"(?:^|\s)(-s|--sign)\b", tag_args):
-                return
-            # Allow annotated tags (-a or --annotate).
-            if re.search(r"(?:^|\s)(-a|--annotate)\b", tag_args):
-                return
-            # Combined short flags like -sa, -as are also fine.
-            if re.search(r"(?:^|\s)-[a-z]*[sa][a-z]*\b", tag_args):
-                return
+    Bounds every later check to a single invocation. Without this, a capture
+    that starts at "git tag" runs to the end of the whole command, so an
+    unrelated token further along the script decides the verdict (issue #105).
+    Line continuations are folded first so that a wrapped invocation stays one
+    segment instead of splitting at the newline.
+    """
+    folded = command.replace("\\\n", " ")
+    return [
+        segment.strip() for segment in re.split(r"[;&|\n]+", folded) if segment.strip()
+    ]
 
-            # This is a lightweight version tag -- block it.
-            block(
-                "Lightweight version tags lack metadata (author, date, message) "
-                "and cannot be signed. Version tags MUST be annotated (-a) or "
-                "signed (-s) to ensure traceability and integrity.",
-                "Use 'git tag -s vX.Y.Z -m \"Release vX.Y.Z\"' for a signed tag, "
-                "or 'git tag -a vX.Y.Z -m \"Release vX.Y.Z\"' for an annotated tag.",
-            )
 
-        # Non-version tag -- allow.
+def creates_annotated_tag(tag_args: str) -> bool:
+    """Whether these "git tag" arguments produce an annotated or signed tag."""
+    # -s/--sign, -a/--annotate, and combined short flags like -sa or -as.
+    if re.search(r"(?:^|\s)(?:-[a-z]*[sa][a-z]*|--sign|--annotate)\b", tag_args):
+        return True
+    # -m/-F imply -a when -a/-s/-u are absent, so these are annotated too
+    # (verified: "git tag -m msg vX" yields a tag object, not a commit).
+    return bool(re.search(r"(?:^|\s)(?:-m|-F|--message|--file)[=\s]", tag_args))
+
+
+def check_tag_invocation(segment: str) -> None:
+    """Block dangerous "git tag" forms in a single invocation."""
+    tag_match = re.match(INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment)
+    if not tag_match:
         return
 
-    # ---------------------------------------------------------------
-    # 2. Check "git push" commands for tag deletion / force-push
-    # ---------------------------------------------------------------
-    push_match = re.search(
-        r"(?:^|[;&|]\s*|&&\s*|\|\|\s*)git\s+push\b(.*)",
-        cmd,
-    )
+    tag_args = tag_match.group(1).strip()
+
+    # Allow bare "git tag" and every read-only listing/inspection form.
+    if not tag_args or READ_ONLY_TAG_FLAG.search(tag_args):
+        return
+
+    # Allow verification: -v (but not -v as part of a version like v1.0,
+    # nor the -v inside a value such as --sort=-v:refname).
+    if re.search(r"(?:^|\s)(-v|--verify)(?:\s|$)", tag_args):
+        return
+
+    # Check for tag deletion: git tag -d <tag> / git tag --delete <tag>
+    if re.search(r"(?:^|\s)(-d|--delete)\b", tag_args):
+        if has_version_tag_arg(tag_args):
+            block(
+                "Deleting a version tag is dangerous. Tags are immutable "
+                "references that downstream consumers and CI pipelines depend on.",
+                "If the tag points to a bad commit, create a new patch "
+                "release (vX.Y.Z+1) instead of deleting the existing tag.",
+            )
+        # Non-version tag deletion is allowed.
+        return
+
+    # If we get here, it is a tag creation command.
+    # Only process if it targets a version tag.
+    if has_version_tag_arg(tag_args) and not creates_annotated_tag(tag_args):
+        # This is a lightweight version tag -- block it.
+        block(
+            "Lightweight version tags lack metadata (author, date, message) "
+            "and cannot be signed. Version tags MUST be annotated (-a) or "
+            "signed (-s) to ensure traceability and integrity.",
+            "Use 'git tag -s vX.Y.Z -m \"Release vX.Y.Z\"' for a signed tag, "
+            "or 'git tag -a vX.Y.Z -m \"Release vX.Y.Z\"' for an annotated tag.",
+        )
+
+    # Non-version tag -- allow.
+
+
+def check_push_invocation(segment: str) -> None:
+    """Block tag deletion and tag force-push in a single "git push"."""
+    push_match = re.match(INVOCATION_PREFIX + r"git\s+push\b(.*)", segment)
     if push_match:
         push_args = push_match.group(1).strip()
 
@@ -184,6 +212,19 @@ def check_command(command: str) -> None:
                     "Push tags individually without --force, or create new version "
                     "tags for corrections.",
                 )
+
+
+def check_command(command: str) -> None:
+    """Check every invocation in the command and block dangerous tag operations.
+
+    Each invocation is judged on its own arguments. Checking only the first
+    "git tag" occurrence let everything after it through: an opening
+    "git tag -l" returned early and a later creation, deletion or tag
+    force-push in the same command was never seen.
+    """
+    for segment in split_invocations(command):
+        check_tag_invocation(segment)
+        check_push_invocation(segment)
 
 
 def main() -> None:
