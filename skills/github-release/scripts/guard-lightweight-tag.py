@@ -107,6 +107,16 @@ def split_invocations(command: str) -> list:
     ]
 
 
+def creates_annotated_tag(tag_args: str) -> bool:
+    """Whether these "git tag" arguments produce an annotated or signed tag."""
+    # -s/--sign, -a/--annotate, and combined short flags like -sa or -as.
+    if re.search(r"(?:^|\s)(?:-[a-z]*[sa][a-z]*|--sign|--annotate)\b", tag_args):
+        return True
+    # -m/-F imply -a when -a/-s/-u are absent, so these are annotated too
+    # (verified: "git tag -m msg vX" yields a tag object, not a commit).
+    return bool(re.search(r"(?:^|\s)(?:-m|-F|--message|--file)[=\s]", tag_args))
+
+
 def check_tag_invocation(segment: str) -> None:
     """Block dangerous "git tag" forms in a single invocation."""
     tag_match = re.match(INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment)
@@ -138,21 +148,7 @@ def check_tag_invocation(segment: str) -> None:
 
     # If we get here, it is a tag creation command.
     # Only process if it targets a version tag.
-    if has_version_tag_arg(tag_args):
-        # Allow signed tags (-s or --sign).
-        if re.search(r"(?:^|\s)(-s|--sign)\b", tag_args):
-            return
-        # Allow annotated tags (-a or --annotate).
-        if re.search(r"(?:^|\s)(-a|--annotate)\b", tag_args):
-            return
-        # Combined short flags like -sa, -as are also fine.
-        if re.search(r"(?:^|\s)-[a-z]*[sa][a-z]*\b", tag_args):
-            return
-        # -m/-F imply -a when -a/-s/-u are absent, so these are annotated too
-        # (verified: "git tag -m msg vX" yields a tag object, not a commit).
-        if re.search(r"(?:^|\s)(-m|-F|--message|--file)(?:=|\s)", tag_args):
-            return
-
+    if has_version_tag_arg(tag_args) and not creates_annotated_tag(tag_args):
         # This is a lightweight version tag -- block it.
         block(
             "Lightweight version tags lack metadata (author, date, message) "
