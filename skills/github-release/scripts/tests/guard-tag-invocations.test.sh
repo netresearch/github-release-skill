@@ -95,6 +95,27 @@ check 2 'tag force-push behind sudo' 'sudo git push --force --tags'
 check 0 'the command name inside an echo' 'echo "run git tag v1.2.3 to tag it"'
 check 0 'the command name inside a commit message' 'git commit -m "git tag v1.2.3"'
 
+# --- grouping constructs are still invocations (issue #112) -----------------
+check 2 'lightweight tag in a subshell' '(git tag v1.2.3)'
+check 2 'lightweight tag in a subshell after a listing' 'git tag -l && (git tag v1.2.3)'
+check 2 'lightweight tag in a brace group' '{ git tag v1.2.3; }'
+# The single quotes are the point: the guard has to receive the substitution
+# as literal text, exactly as the harness would hand it over.
+# shellcheck disable=SC2016
+check 2 'lightweight tag in a command substitution' 'echo $(git tag v1.2.3)'
+check 2 'tag force-push in a subshell' '(git push --force --tags)'
+
+# --- a separator inside quotes is text, not a separator (issue #112) --------
+check 0 'semicolon inside a commit message' 'git commit -m "fix; git tag v1.2.3"'
+check 0 'and-and inside an echo' 'echo "a && git tag v1.2.3"'
+check 0 'a parenthesised command inside an echo' 'echo "(git tag v1.2.3)"'
+check 0 'a separator inside a tag message' 'git tag -s v1.2.3 -m "release; the good one"'
+
+# --- a quoted tag name creates the same tag as a bare one (issue #112) ------
+check 2 'double-quoted lightweight tag' 'git tag "v1.2.3"'
+check 2 'single-quoted lightweight tag' "git tag 'v1.2.3'"
+check 0 'double-quoted signed tag' 'git tag -s "v1.2.3" -m "release"'
+
 # --- creation forms that stay allowed ---------------------------------------
 # -m and -F imply -a when -a/-s/-u are absent, so these are annotated tags.
 check 0 'tag with -m only' 'git tag -m "Release v1.2.3" v1.2.3'

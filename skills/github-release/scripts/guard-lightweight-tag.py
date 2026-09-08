@@ -16,6 +16,11 @@ Allows:
   - Verifying tags: git tag -v v*
   - Non-version tags (tags not matching v* pattern)
 
+Does not see (known limit):
+  - A tag name that never appears as an argument of the guarded command,
+    because a pipeline supplies it: echo vX.Y.Z | xargs git tag. Reading that
+    would mean predicting what the left-hand side produces.
+
 Exit codes:
   0 = allow the command
   2 = block the command
@@ -65,8 +70,10 @@ suggestion: |
 
 def has_version_tag_arg(args: str) -> bool:
     """Check if any argument looks like a version tag (v*)."""
-    # Match v followed by a digit, with optional prefix like refs/tags/
-    return bool(re.search(r"(?:^|\s|/)v\d", args))
+    # Match v followed by a digit at the start of an argument: after whitespace,
+    # after a path separator (refs/tags/vX.Y.Z), or just inside a quote, because
+    # a quoted tag name creates exactly the same tag as the bare form.
+    return bool(re.search(r"""(?:^|[\s/"'])v\d""", args))
 
 
 # Flags that make "git tag" a read-only query. git treats any of them as
@@ -77,6 +84,15 @@ READ_ONLY_TAG_FLAG = re.compile(
     r"|--merged|--no-merged|--sort|--format|--column|--no-column"
     r"|-i|--ignore-case|--omit-empty)(?:=|\s|$)"
 )
+
+
+# A quoted argument, or a run of separators between invocations. The quoted
+# alternatives come first so that a separator inside quotes is consumed as part
+# of the argument rather than splitting it: a commit message holding a ";" is
+# one invocation, not two. The separator set carries the grouping constructs,
+# so an invocation inside a subshell, a brace group or a command substitution
+# is still seen (issue #112).
+QUOTED_SPAN_OR_SEPARATOR = re.compile(r"""\"[^\"]*\"|'[^']*'|(?P<sep>[;&|\n(){}]+)""")
 
 
 # What may stand between the start of an invocation and the "git" that runs it:
@@ -102,9 +118,14 @@ def split_invocations(command: str) -> list:
     segment instead of splitting at the newline.
     """
     folded = command.replace("\\\n", " ")
-    return [
-        segment.strip() for segment in re.split(r"[;&|\n]+", folded) if segment.strip()
-    ]
+    segments, start = [], 0
+    for match in QUOTED_SPAN_OR_SEPARATOR.finditer(folded):
+        if match.group("sep") is None:
+            continue  # a quoted argument: separators inside it are literal text
+        segments.append(folded[start : match.start()])
+        start = match.end()
+    segments.append(folded[start:])
+    return [segment.strip() for segment in segments if segment.strip()]
 
 
 def creates_annotated_tag(tag_args: str) -> bool:
