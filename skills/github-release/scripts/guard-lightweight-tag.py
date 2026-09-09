@@ -86,13 +86,21 @@ READ_ONLY_TAG_FLAG = re.compile(
 )
 
 
-# A quoted argument, or a run of separators between invocations. The quoted
-# alternatives come first so that a separator inside quotes is consumed as part
-# of the argument rather than splitting it: a commit message holding a ";" is
-# one invocation, not two. The separator set carries the grouping constructs,
-# so an invocation inside a subshell, a brace group or a command substitution
-# is still seen (issue #112).
-QUOTED_SPAN_OR_SEPARATOR = re.compile(r"""\"[^\"]*\"|'[^']*'|(?P<sep>[;&|\n(){}]+)""")
+# A quoted argument, an escaped character, or a run of separators between
+# invocations. The quoted and escape alternatives come first so that a
+# separator inside quotes is consumed as part of the argument rather than
+# splitting it: a commit message holding a ";" is one invocation, not two. The
+# separator set carries the grouping constructs, so an invocation inside a
+# subshell, a brace group or a command substitution is still seen (issue #112).
+#
+# The escapes are not decoration. A double-quoted argument may contain \", and
+# reading that as the closing quote shifts every quote after it by one, which
+# swallows the separators around the next invocation and hides it. An escaped
+# separator outside quotes is likewise literal text, not a separator: the shell
+# passes it to the command rather than ending it.
+QUOTED_SPAN_OR_SEPARATOR = re.compile(
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<sep>[;&|\n(){}]+)"""
+)
 
 
 # What may stand between the start of an invocation and the "git" that runs it:

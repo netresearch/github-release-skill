@@ -111,6 +111,16 @@ check 0 'and-and inside an echo' 'echo "a && git tag v1.2.3"'
 check 0 'a parenthesised command inside an echo' 'echo "(git tag v1.2.3)"'
 check 0 'a separator inside a tag message' 'git tag -s v1.2.3 -m "release; the good one"'
 
+# --- an escape does not end a quote, and does not separate ------------------
+# Reading \" as the closing quote shifts every quote after it by one, which
+# swallows the separators around the next invocation and hides it.
+check 2 'escaped quote before a lightweight tag' 'echo "foo\""; git tag v1.2.3; echo "bar"'
+check 2 'escaped quote, single trailing invocation' 'echo "a\"" ; git tag v1.2.3'
+check 2 'escaped backslash ends the quote normally' 'echo "a\\"; git tag v1.2.3'
+# An escaped separator outside quotes is an argument, not a separator: measured,
+# `echo a\; git tag v1.2.3` prints "a; git tag v1.2.3" and creates no tag.
+check 0 'escaped separator outside quotes' 'echo a\; git tag v1.2.3'
+
 # --- a quoted tag name creates the same tag as a bare one (issue #112) ------
 check 2 'double-quoted lightweight tag' 'git tag "v1.2.3"'
 check 2 'single-quoted lightweight tag' "git tag 'v1.2.3'"
