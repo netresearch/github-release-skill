@@ -15,7 +15,26 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ### Changed
 
+- The two PreToolUse guards now share one invocation splitter,
+  `scripts/_invocations.py`. It was developed in the tag guard (issue #105, plus
+  the heredoc handling in 0.12.2) while the release guard kept a simpler copy,
+  and the copies drifted apart until one was blind to what the other handled.
+  The tag guard's behaviour is unchanged: its 67 cases pass before and after.
+
 ### Fixed
+
+- `guard-gh-release.py` judged a whole Bash call as one string and required
+  `gh` to sit directly after a separator, so ten dangerous shapes walked past
+  it. A newline is a command separator exactly as `;` is, but the call was
+  flattened with `" ".join(command.split())` and the separator set held only
+  `[;&|]` — so `gh release create` on its own line was never seen. Nor was one
+  behind a prefix: `sudo gh release create`, `GH_TOKEN=x gh release delete`,
+  one inside a loop body or a subshell, and `gh api …/releases -X DELETE` on
+  its own line. Under immutable releases a `gh release create` burns that tag
+  name permanently, so this was the wrong direction to be wrong in. The guard
+  now splits the call into invocations and judges each on its own, anchored at
+  the start of the invocation — so the words inside `echo "never run gh release
+  create v1.2.3"` or inside a heredoc body stay words.
 
 ## [0.12.2] - 2026-09-11
 

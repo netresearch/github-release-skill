@@ -23,6 +23,10 @@ import json
 import re
 import sys
 
+# Both guards share one invocation parser; sys.path[0] is this directory when
+# the hook is run as a script, so the sibling module resolves.
+from _invocations import INVOCATION_PREFIX, split_invocations
+
 
 def parse_command(input_data: str) -> str:
     """Extract the command string from hook input (JSON via stdin).
@@ -61,15 +65,11 @@ suggestion: |
     sys.exit(2)
 
 
-# Regex that matches "gh release <subcommand>" with flexible whitespace.
-# We capture the subcommand to decide allow vs block.
-GH_RELEASE_RE = re.compile(
-    r"""
-    (?:^|[;&|]\s*|&&\s*|\|\|\s*)   # start of string or command separator
-    gh\s+release\s+(\S+)            # gh release <subcommand>
-    """,
-    re.VERBOSE,
-)
+# "gh release <subcommand>" at the START of one invocation. The invocation is
+# produced by split_invocations, so a separator -- a newline included -- has
+# already ended the previous command, and INVOCATION_PREFIX absorbs sudo, an env
+# assignment or a loop keyword standing in front of "gh".
+GH_RELEASE_RE = re.compile(INVOCATION_PREFIX + r"gh\s+release\s+(\S+)")
 
 # Read-only subcommands that are safe.
 ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
@@ -80,8 +80,8 @@ ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 #   gh api /repos/owner/repo/releases --method DELETE
 #   gh api repos/owner/repo/releases/123 -X PATCH
 GH_API_RELEASE_RE = re.compile(
-    r"""
-    (?:^|[;&|]\s*|&&\s*|\|\|\s*)    # start or separator
+    INVOCATION_PREFIX
+    + r"""
     gh\s+api\s+                      # gh api
     (?:(?:-\w+|--\w[\w-]*)(?:\s+(?:"[^"]*"|'[^']*'|\S+))?\s+)*  # optional flags (e.g. -X POST, -H "...")
     /?repos/[^\s]+/releases          # release endpoint path
@@ -135,15 +135,29 @@ def _is_notes_only_edit(args: str) -> bool:
 
 
 def check_command(command: str) -> None:
-    """Check the command and block if it is a dangerous release operation."""
-    # Normalise for easier matching (collapse multiple spaces).
-    cmd = " ".join(command.split())
+    """Check every invocation in the command for a dangerous release operation.
 
+    Each invocation is judged on its own. The whole call used to be flattened
+    with `" ".join(command.split())` and scanned as one string, which turned a
+    newline into a space -- and a space is not a separator, so anything on its
+    own line was never seen. `gh release create` burns a tag name permanently
+    under immutable releases, so that was the wrong direction to be wrong in.
+    """
+    for segment in split_invocations(command):
+        _check_invocation(segment)
+
+
+def _check_invocation(cmd: str) -> None:
+    """Block dangerous release operations in a single invocation."""
     # --- Check gh release <subcommand> ---
-    for match in GH_RELEASE_RE.finditer(cmd):
+    # match, not search: the segment is one invocation, and "gh release create"
+    # inside an unrelated argument -- echo "never run gh release create v1.2.3"
+    # -- is words, not a command.
+    match = GH_RELEASE_RE.match(cmd)
+    if match:
         subcommand = match.group(1).lower()
         if subcommand in ALLOWED_RELEASE_SUBCOMMANDS:
-            continue
+            return
         if subcommand == "create":
             block(
                 "Direct 'gh release create' bypasses the CI release pipeline. "
@@ -167,7 +181,7 @@ def check_command(command: str) -> None:
             # Extract the portion of the command after "gh release edit".
             edit_args = cmd[match.end() :]
             if _is_notes_only_edit(edit_args):
-                continue
+                return
             block(
                 "Editing a GitHub release outside of notes overhaul bypasses audit "
                 "controls. Only --notes and --notes-file are permitted.",
@@ -185,7 +199,7 @@ def check_command(command: str) -> None:
             )
 
     # --- Check gh api calls to release endpoints ---
-    if GH_API_RELEASE_RE.search(cmd):
+    if GH_API_RELEASE_RE.match(cmd):
         # If no explicit method flag, gh api defaults to GET for bare calls,
         # but POST when -f/--field or --input is present. We block if a
         # mutating method is specified OR if data-sending flags are present.
