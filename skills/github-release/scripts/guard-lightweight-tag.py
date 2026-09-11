@@ -116,16 +116,70 @@ INVOCATION_PREFIX = (
 )
 
 
+# The line that opens a heredoc: "<<WORD", "<< WORD", "<<-WORD", with the
+# delimiter optionally quoted. Only the delimiter is captured; the terminator is
+# that same word alone on a line (indented, for the "<<-" form).
+#
+# "(?<!<)" and "(?!<)" keep a here-STRING out: "cat <<< hello" feeds one word on
+# stdin and opens no body, but without the guards the second and third "<" read
+# as "<<" and "hello" becomes a delimiter.
+HEREDOC_OPENER = re.compile(
+    r"(?<!<)<<-?(?!<)\s*(?:'([^']+)'|\"([^\"]+)\"|([A-Za-z_][A-Za-z0-9_]*))"
+)
+
+
+def strip_heredoc_bodies(command: str) -> str:
+    """Drop heredoc bodies, keeping the opener line and everything after the
+    terminator.
+
+    A heredoc body is DATA the command writes, not commands it runs. Writing a
+    file that documents "git tag -d v1.2.3" is not deleting a tag, but the body
+    reached split_invocations as if it were script: its separators split it into
+    invocations, and a quoted example was then judged as a real one.
+
+    This is not a cosmetic warning. A denied call runs NONE of its parts, so the
+    file is never written and re-running the same call is denied identically --
+    the guard blocks the commit messages, tests and docs that quote its own
+    examples, including this repository's own test file.
+
+    Nothing is dropped unless the terminator is actually there. Stripping is how
+    an invocation becomes invisible to the rest of the guard, so it may only
+    happen where a body provably ends: "<<" also appears as an arithmetic left
+    shift, and "$(( FLAG << SHIFT ))" looks exactly like an opener whose
+    delimiter is SHIFT. Stripping on sight would then swallow the remainder of
+    the command -- a real "git tag -d vX.Y.Z" on a later line included.
+    """
+    lines, out, index = command.split("\n"), [], 0
+    while index < len(lines):
+        line = lines[index]
+        out.append(line)
+        index += 1
+        opener = HEREDOC_OPENER.search(line)
+        if not opener:
+            continue
+        delimiter = next(group for group in opener.groups() if group)
+        # ".strip()" also covers the indented terminator of the "<<-" form.
+        end = index
+        while end < len(lines) and lines[end].strip() != delimiter:
+            end += 1
+        if end >= len(lines):
+            continue  # no terminator: not a heredoc, keep every line as script
+        out.append(lines[end])
+        index = end + 1
+    return "\n".join(out)
+
+
 def split_invocations(command: str) -> list:
     """Split a shell command into its individual invocations.
 
     Bounds every later check to a single invocation. Without this, a capture
     that starts at "git tag" runs to the end of the whole command, so an
     unrelated token further along the script decides the verdict (issue #105).
-    Line continuations are folded first so that a wrapped invocation stays one
-    segment instead of splitting at the newline.
+    Heredoc bodies are removed first -- they are data, not invocations. Line
+    continuations are folded next so that a wrapped invocation stays one segment
+    instead of splitting at the newline.
     """
-    folded = command.replace("\\\n", " ")
+    folded = strip_heredoc_bodies(command).replace("\\\n", " ")
     segments, start = [], 0
     for match in QUOTED_SPAN_OR_SEPARATOR.finditer(folded):
         if match.group("sep") is None:

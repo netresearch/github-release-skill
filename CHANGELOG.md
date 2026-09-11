@@ -17,6 +17,23 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ### Fixed
 
+- The tag guard read heredoc bodies as script. A heredoc body is data the
+  command writes, not commands it runs, so a file documenting
+  `git tag -d vX.Y.Z` was judged as a deletion of that tag. The body reached
+  `split_invocations` intact, its separators split it into segments, and a
+  quoted example was then checked as a real invocation. Because a denied call
+  runs none of its parts, the file was never written and re-running the same
+  call was denied identically -- so the guard blocked the commit messages,
+  docs and tests that quote its own examples, this repository's included.
+  Bodies are now dropped before splitting; the opener line, the terminator
+  and everything around them are still inspected, including the `<<-`
+  indented and unquoted-delimiter forms. Dropping only happens where a body
+  provably ends: `<<` is also an arithmetic left shift, so `$(( FLAG <<
+  SHIFT ))` looks exactly like an opener whose delimiter is `SHIFT`, and a
+  here-string (`<<<`) looks like one whose delimiter is its word. Neither is
+  ever terminated, and stripping on sight would have swallowed the rest of
+  the command -- a real tag deletion on a later line included.
+
 ## [0.12.1] - 2026-09-09
 
 ### Fixed

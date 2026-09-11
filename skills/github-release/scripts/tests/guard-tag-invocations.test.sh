@@ -59,6 +59,67 @@ check 0 'listing, then a version echoed after ;' \
 check 0 'listing a version glob' \
   "git tag -l 'v1.*'"
 
+# --- heredoc bodies are data the command writes, not commands it runs -------
+# A file that documents a dangerous command is not that command. This matters
+# more than a stray warning: a denied call runs NONE of its parts, so the write
+# never happens and re-running is denied identically. Found while writing a
+# commit message that quoted the guard's own examples.
+check 0 'heredoc body quoting a deletion' \
+  "cat > msg.txt <<'EOF'
+Blocked example: git tag -l; git tag -d v9.9.9
+EOF"
+check 0 'heredoc body quoting a lightweight tag' \
+  "cat > note.md <<'EOF'
+git tag v9.9.9 creates a lightweight tag
+EOF"
+check 0 'heredoc body quoting a tag force-push after a separator' \
+  "cat > note.md <<'EOF'
+never run this: cd /tmp; git push -f origin refs/tags/v9.9.9
+EOF"
+check 0 'indented <<- heredoc body' \
+  "cat > note.md <<-EOF
+	git tag -d v9.9.9 is refused
+	EOF
+echo done"
+check 0 'unquoted heredoc delimiter' \
+  "cat > note.md <<EOF
+git tag -d v9.9.9 is refused
+EOF"
+# Stripping the body must not blind the guard to real commands around it.
+check 2 'a real deletion AFTER the heredoc terminator' \
+  "cat > note.md <<'EOF'
+harmless text
+EOF
+git tag -d v9.9.9"
+check 2 'a real deletion BEFORE the heredoc opener' \
+  "git tag -d v9.9.9
+cat > note.md <<'EOF'
+harmless text
+EOF"
+check 2 'a real creation on the heredoc opener line itself' \
+  "git tag v9.9.9 && cat > note.md <<'EOF'
+harmless text
+EOF"
+
+# --- "<<" that opens no heredoc must not hide the rest of the command -------
+# Stripping is how an invocation becomes invisible, so it may only happen where
+# a body provably ends. An arithmetic left shift looks exactly like an opener
+# whose delimiter is the right-hand operand, and a here-string looks like one
+# whose delimiter is its word - neither is ever terminated, so stripping on
+# sight would swallow everything after it.
+check 2 'arithmetic left shift does not hide a later deletion' \
+  "mask=\$(( FLAG << SHIFT ))
+git tag -d v9.9.9"
+check 2 'here-string does not hide a later deletion' \
+  "cat <<< hello
+git tag -d v9.9.9"
+check 2 'an unterminated opener does not hide a later creation' \
+  "cat > note.md <<'NEVERCLOSED'
+git tag v9.9.9"
+check 2 '"<<" inside a quoted argument does not hide a later deletion' \
+  "echo \"shift value << WIDTH here\"
+git tag -d v9.9.9"
+
 # --- read-only inspection flags carrying a version argument -----------------
 check 0 'inspect: -n with a version' 'git tag -n5 v1.2.3'
 check 0 'inspect: --contains' 'git tag --contains v1.2.3'
