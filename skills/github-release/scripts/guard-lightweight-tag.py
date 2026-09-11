@@ -119,8 +119,12 @@ INVOCATION_PREFIX = (
 # The line that opens a heredoc: "<<WORD", "<< WORD", "<<-WORD", with the
 # delimiter optionally quoted. Only the delimiter is captured; the terminator is
 # that same word alone on a line (indented, for the "<<-" form).
+#
+# "(?<!<)" and "(?!<)" keep a here-STRING out: "cat <<< hello" feeds one word on
+# stdin and opens no body, but without the guards the second and third "<" read
+# as "<<" and "hello" becomes a delimiter.
 HEREDOC_OPENER = re.compile(
-    r"<<-?\s*(?:'([^']+)'|\"([^\"]+)\"|([A-Za-z_][A-Za-z0-9_]*))"
+    r"(?<!<)<<-?(?!<)\s*(?:'([^']+)'|\"([^\"]+)\"|([A-Za-z_][A-Za-z0-9_]*))"
 )
 
 
@@ -137,6 +141,13 @@ def strip_heredoc_bodies(command: str) -> str:
     file is never written and re-running the same call is denied identically --
     the guard blocks the commit messages, tests and docs that quote its own
     examples, including this repository's own test file.
+
+    Nothing is dropped unless the terminator is actually there. Stripping is how
+    an invocation becomes invisible to the rest of the guard, so it may only
+    happen where a body provably ends: "<<" also appears as an arithmetic left
+    shift, and "$(( FLAG << SHIFT ))" looks exactly like an opener whose
+    delimiter is SHIFT. Stripping on sight would then swallow the remainder of
+    the command -- a real "git tag -d vX.Y.Z" on a later line included.
     """
     lines, out, index = command.split("\n"), [], 0
     while index < len(lines):
@@ -147,12 +158,14 @@ def strip_heredoc_bodies(command: str) -> str:
         if not opener:
             continue
         delimiter = next(group for group in opener.groups() if group)
-        # Skip the body; ".strip()" also covers the indented "<<-" terminator.
-        while index < len(lines) and lines[index].strip() != delimiter:
-            index += 1
-        if index < len(lines):
-            out.append(lines[index])
-            index += 1
+        # ".strip()" also covers the indented terminator of the "<<-" form.
+        end = index
+        while end < len(lines) and lines[end].strip() != delimiter:
+            end += 1
+        if end >= len(lines):
+            continue  # no terminator: not a heredoc, keep every line as script
+        out.append(lines[end])
+        index = end + 1
     return "\n".join(out)
 
 

@@ -101,6 +101,25 @@ check 2 'a real creation on the heredoc opener line itself' \
 harmless text
 EOF"
 
+# --- "<<" that opens no heredoc must not hide the rest of the command -------
+# Stripping is how an invocation becomes invisible, so it may only happen where
+# a body provably ends. An arithmetic left shift looks exactly like an opener
+# whose delimiter is the right-hand operand, and a here-string looks like one
+# whose delimiter is its word - neither is ever terminated, so stripping on
+# sight would swallow everything after it.
+check 2 'arithmetic left shift does not hide a later deletion' \
+  "mask=\$(( FLAG << SHIFT ))
+git tag -d v9.9.9"
+check 2 'here-string does not hide a later deletion' \
+  "cat <<< hello
+git tag -d v9.9.9"
+check 2 'an unterminated opener does not hide a later creation' \
+  "cat > note.md <<'NEVERCLOSED'
+git tag v9.9.9"
+check 2 '"<<" inside a quoted argument does not hide a later deletion' \
+  "echo \"shift value << WIDTH here\"
+git tag -d v9.9.9"
+
 # --- read-only inspection flags carrying a version argument -----------------
 check 0 'inspect: -n with a version' 'git tag -n5 v1.2.3'
 check 0 'inspect: --contains' 'git tag --contains v1.2.3'

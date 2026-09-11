@@ -27,7 +27,12 @@ their notes were not backfilled here rather than reconstructed after the fact.
   docs and tests that quote its own examples, this repository's included.
   Bodies are now dropped before splitting; the opener line, the terminator
   and everything around them are still inspected, including the `<<-`
-  indented and unquoted-delimiter forms.
+  indented and unquoted-delimiter forms. Dropping only happens where a body
+  provably ends: `<<` is also an arithmetic left shift, so `$(( FLAG <<
+  SHIFT ))` looks exactly like an opener whose delimiter is `SHIFT`, and a
+  here-string (`<<<`) looks like one whose delimiter is its word. Neither is
+  ever terminated, and stripping on sight would have swallowed the rest of
+  the command -- a real tag deletion on a later line included.
 
 ## [0.12.1] - 2026-09-09
 
