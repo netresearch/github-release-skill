@@ -23,6 +23,10 @@ import json
 import re
 import sys
 
+# Both guards share one invocation parser; sys.path[0] is this directory when
+# the hook is run as a script, so the sibling module resolves.
+from _invocations import INVOCATION_PREFIX, split_invocations
+
 
 def parse_command(input_data: str) -> str:
     """Extract the command string from hook input (JSON via stdin).
@@ -60,10 +64,6 @@ suggestion: |
     )
     sys.exit(2)
 
-
-# The invocation splitter lives in _invocations.py so both guards share one
-# parser; sys.path[0] is this directory when the hook is run as a script.
-from _invocations import INVOCATION_PREFIX, split_invocations
 
 # "gh release <subcommand>" at the START of one invocation. The invocation is
 # produced by split_invocations, so a separator -- a newline included -- has

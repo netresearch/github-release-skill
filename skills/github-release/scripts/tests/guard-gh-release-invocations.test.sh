@@ -61,6 +61,21 @@ check 2 'prefixed with an env assignment' 'GH_TOKEN=x gh release delete v1.2.3'
 check 2 'inside a loop body' 'for v in v1.2.3; do gh release create "$v"; done'
 check 2 'inside a subshell' '(gh release delete v1.2.3)'
 
+# --- the separators that already worked, pinned so they cannot regress ------
+# These pass against the guard before this change too. They are here because the
+# change replaced the whole matching strategy, and a rewrite must not quietly
+# drop what the old one got right.
+check 2 'create after ;' 'ls; gh release create v1.2.3'
+check 2 'create after &&' 'ls && gh release create v1.2.3'
+check 2 'delete after ||' 'ls || gh release delete v1.2.3'
+check 2 'create after a pipe then &&' 'ls | grep x && gh release create v1.2.3'
+check 2 'create after an allowed view' \
+  'gh release view v1.2.3; gh release create v1.2.3'
+check 2 'a bad edit after a list' \
+  'gh release list && gh release edit v1.2.3 --title x'
+check 0 'two allowed subcommands in a row' \
+  'gh release view v1.2.3; gh release list'
+
 # --- read-only and notes-only stay allowed ---------------------------------
 check 0 'view' 'gh release view v1.2.3'
 check 0 'list' 'gh release list'
