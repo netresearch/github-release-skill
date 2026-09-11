@@ -15,6 +15,12 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ### Changed
 
+### Fixed
+
+## [0.12.3] - 2026-09-11
+
+### Changed
+
 - The two PreToolUse guards now share one invocation splitter,
   `scripts/_invocations.py`. It was developed in the tag guard (issue #105, plus
   the heredoc handling in 0.12.2) while the release guard kept a simpler copy,
