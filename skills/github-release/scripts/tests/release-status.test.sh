@@ -90,6 +90,34 @@ skip_out=$(cd "$addon/repo" && env -i PATH="$addon/bin:/usr/bin:/bin" HOME="$add
 check "steps over a .toc that carries no version" "1.16.0" "$skip_out"
 rm -f "$addon/repo/AAA-paper.toc"
 
+# ---------------------------------------------------------------------------
+# A herdr plugin declares its version only in herdr-plugin.toml
+# ---------------------------------------------------------------------------
+# netresearch/herdr-bg-activity, released as v0.1.0, got "prepare-release — no
+# version file found" (issue #121).
+
+herdr=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr"' EXIT
+mkdir -p "$herdr/bin" "$herdr/repo"
+ln -sf "$jq_path" "$herdr/bin/jq"
+printf '%s\n' 'id = "netresearch.bg-activity"' 'name = "Background Activity"' \
+  'version = "0.1.0"' 'min_herdr_version = "0.9.0"' 'platforms = ["linux", "macos"]' \
+  '' '[[startup]]' 'command = ["python3", "herdr_bg_activity.py"]' \
+  >"$herdr/repo/herdr-plugin.toml"
+
+herdr_out=$(cd "$herdr/repo" && env -i PATH="$herdr/bin:/usr/bin:/bin" HOME="$herdr" \
+            bash --noprofile --norc "$SCRIPT" 2>&1)
+check "reads the version from herdr-plugin.toml" "declared    : 0.1.0" "$herdr_out"
+refute "does not report the herdr plugin as versionless" "no version file found" "$herdr_out"
+
+# A version under a table is not the plugin's; with none at the top level the
+# verdict stays versionless, and the hint names the manifest it looked for.
+printf '%s\n' 'id = "x"' '[[startup]]' 'version = "9.9.9"' >"$herdr/repo/herdr-plugin.toml"
+table_out=$(cd "$herdr/repo" && env -i PATH="$herdr/bin:/usr/bin:/bin" HOME="$herdr" \
+            bash --noprofile --norc "$SCRIPT" 2>&1)
+refute "ignores a version inside a table" "9.9.9" "$table_out"
+check "the hint lists herdr-plugin.toml" "herdr-plugin.toml" "$table_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
