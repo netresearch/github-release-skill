@@ -60,7 +60,12 @@ jobs:
       subject-path: 'dist/*'  # same value as release-files
 ```
 
-Provenance is a separate reusable, `attest-release-files.yml`, rather than an input on `python-release.yml`: it needs `attestations: write`, and a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. Verify a downloaded file with `gh attestation verify <file> --repo <owner>/<repo>`.
+Provenance is a separate reusable, `attest-release-files.yml`, rather than an input on `python-release.yml`: it needs `attestations: write`, and a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. The reusable workflow is the signer, so verification has to name it; `--repo` alone checks the signer against the caller repository and fails:
+
+```bash
+gh attestation verify <file> --repo <owner>/<repo> \
+  --signer-workflow netresearch/.github/.github/workflows/attest-release-files.yml
+```
 
 ## Generic Release Workflow Structure
 
