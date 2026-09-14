@@ -49,30 +49,18 @@ jobs:
         (cd dist && sha256sum -- *.tar.gz > SHA256SUMS.txt)
       release-files: 'dist/*'
 
-  # The reusable uploads dist/ as the `dist` artifact but attests nothing.
+  # python-release.yml uploads dist/ as the `dist` artifact but attests nothing.
   attest:
     needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    uses: netresearch/.github/.github/workflows/attest-release-files.yml@main
     permissions:
       id-token: write
       attestations: write
-    steps:
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dist
-          path: dist/
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/SHA256SUMS.txt
+    with:
+      subject-path: 'dist/*'  # same value as release-files
 ```
 
-The separate `attest` job exists because `python-release.yml` has no provenance input. [netresearch/.github#417](https://github.com/netresearch/.github/issues/417) proposes an `attest` input; once it is available, the job can be replaced by that input.
+Provenance is a separate reusable, `attest-release-files.yml`, rather than an input on `python-release.yml`: it needs `attestations: write`, and a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. Verify a downloaded file with `gh attestation verify <file> --repo <owner>/<repo>`.
 
 ## Generic Release Workflow Structure
 
