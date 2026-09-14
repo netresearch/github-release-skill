@@ -16,6 +16,64 @@ Netresearch maintains org-level reusable workflows:
 - Contains shared release, CI, and quality workflows
 - Projects should prefer org workflows over per-repo copies to reduce maintenance
 
+## GitHub Release Only (No Package Registry)
+
+A project installed straight from its repository (a herdr plugin, for example) publishes nothing to PyPI, npm, Packagist or TER; the release carries the tagged source tree as an archive plus a checksum file. The org `python-release.yml` covers this with `publish-pypi: false`. Pattern from [netresearch/herdr-bg-activity](https://github.com/netresearch/herdr-bg-activity/blob/main/.github/workflows/release.yml):
+
+```yaml
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+jobs:
+  release:
+    uses: netresearch/.github/.github/workflows/python-release.yml@main
+    permissions:
+      contents: write
+      id-token: write
+    with:
+      publish-pypi: false
+      package-manager: pip
+      # Fail before building when the tag and the manifest disagree.
+      check-cmd: >-
+        python -c 'import os, tomllib;
+        v = tomllib.load(open("herdr-plugin.toml", "rb"))["version"];
+        t = os.environ["GITHUB_REF_NAME"].removeprefix("v");
+        assert v == t, f"tag {t} != herdr-plugin.toml version {v}"'
+      build-cmd: >-
+        mkdir -p dist &&
+        git archive --format=tar.gz --prefix="my-plugin-${GITHUB_REF_NAME}/"
+        -o "dist/my-plugin-${GITHUB_REF_NAME}.tar.gz" HEAD &&
+        (cd dist && sha256sum -- *.tar.gz > SHA256SUMS.txt)
+      release-files: 'dist/*'
+
+  # The reusable uploads dist/ as the `dist` artifact but attests nothing.
+  attest:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
+```
+
+The separate `attest` job exists because `python-release.yml` has no provenance input. [netresearch/.github#417](https://github.com/netresearch/.github/issues/417) proposes an `attest` input; once it is available, the job can be replaced by that input.
+
 ## Generic Release Workflow Structure
 
 For projects that don't use shared workflows, use this template as a starting point:
