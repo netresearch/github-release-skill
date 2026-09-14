@@ -157,6 +157,53 @@ check "CRLF manifest yields a clean version" \
   "version-file:QuickRoute/QuickRoute.toc:1.16.0" \
   "$(detect_in "$ADDON" | grep '^version-file:')"
 
+# ---------------------------------------------------------------------------
+# herdr plugin manifests
+# ---------------------------------------------------------------------------
+# A herdr plugin states its version only in herdr-plugin.toml, so without these
+# lines the repository reports no version file at all.
+
+HERDR="$(mktemp -d)"
+trap 'rm -rf "$TMP" "$ADDON" "$HERDR"' EXIT
+
+# herdrver <manifest-content> -> the version detect-ecosystem.sh reports
+herdrver() {
+  printf '%s' "$1" >"$HERDR/herdr-plugin.toml"
+  detect_in "$HERDR" | sed -n 's|^version-file:herdr-plugin\.toml:||p'
+}
+
+# The manifest of netresearch/herdr-bg-activity v0.1.0, verbatim.
+printf '%s\n' 'id = "netresearch.bg-activity"' 'name = "Background Activity"' \
+  'version = "0.1.0"' 'min_herdr_version = "0.9.0"' \
+  'description = "Marks idle agents that still own running monitors or background shells"' \
+  'platforms = ["linux", "macos"]' '' '[[startup]]' \
+  'command = ["python3", "herdr_bg_activity.py"]' >"$HERDR/herdr-plugin.toml"
+
+check "herdr plugin is detected" \
+  "ecosystem:herdr-plugin" \
+  "$(detect_in "$HERDR" | grep '^ecosystem:')"
+
+check "version comes from herdr-plugin.toml" \
+  "version-file:herdr-plugin.toml:0.1.0" \
+  "$(detect_in "$HERDR" | grep '^version-file:')"
+
+# The key must be exactly `version`: min_herdr_version must not be read.
+check "min_herdr_version before version is not read" "0.2.0" "$(herdrver 'min_herdr_version = "0.9.0"
+version = "0.2.0"
+')"
+
+# A version under a table belongs to that table, not to the plugin.
+check "a version inside a table is not the plugin version" "" "$(herdrver 'id = "x"
+
+[[startup]]
+version = "9.9.9"
+')"
+
+check "literal string with a trailing comment" "0.3.0" "$(herdrver "version = '0.3.0'   # bumped by release
+")"
+
+check "CRLF herdr manifest yields a clean version" "0.4.0" "$(herdrver "$(printf 'id = "x"\r\nversion = "0.4.0"\r\n')")"
+
 if [ "$fail" = 0 ]; then
   echo "detect-ecosystem.test.sh: all checks passed"
 else

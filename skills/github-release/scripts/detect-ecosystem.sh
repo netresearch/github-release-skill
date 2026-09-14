@@ -68,6 +68,29 @@ toc_version() {
         | head -1 || true
 }
 
+# Extract the top-level version from a herdr plugin manifest (herdr-plugin.toml).
+# Only keys before the first table header count: a `version` under [[startup]]
+# or any other table belongs to that table, not to the plugin. The key must be
+# exactly `version` (bare or quoted), so `min_herdr_version` beside it is not
+# read. The value may be a basic "..." or literal '...' string with a trailing
+# comment; a CRLF line ending is dropped before matching.
+herdr_plugin_version() {
+    awk -v sq="'" '
+        { sub(/\r$/, "") }
+        /^[ \t]*\[/ { exit }
+        /=/ {
+            k = $0; sub(/[ \t]*=.*/, "", k); sub(/^[ \t]+/, "", k)
+            if (k != "version" && k != "\"version\"" && k != sq "version" sq) next
+            v = $0; sub(/^[^=]*=[ \t]*/, "", v)
+            q = substr(v, 1, 1)
+            if (q != "\"" && q != sq) exit
+            v = substr(v, 2); i = index(v, q)
+            if (i > 1) print substr(v, 1, i - 1)
+            exit
+        }
+    ' "$1" 2>/dev/null || true
+}
+
 # ---------------------------------------------------------------------------
 # TYPO3
 # ---------------------------------------------------------------------------
@@ -236,6 +259,16 @@ if [[ ${#toc_manifests[@]} -gt 0 ]]; then
     for toc in "${toc_manifests[@]}"; do
         echo "version-file:${toc}:$(toc_version "$toc")"
     done
+fi
+
+# ---------------------------------------------------------------------------
+# herdr plugin
+# ---------------------------------------------------------------------------
+# herdr requires every plugin to ship herdr-plugin.toml at the repository root,
+# and its top-level `version` is the plugin's only version surface.
+if [[ -f herdr-plugin.toml ]]; then
+    echo "ecosystem:herdr-plugin"
+    echo "version-file:herdr-plugin.toml:$(herdr_plugin_version herdr-plugin.toml)"
 fi
 
 # ---------------------------------------------------------------------------

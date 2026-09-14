@@ -93,6 +93,27 @@ fi
 [ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
 [ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
 
+# herdr plugin: herdr-plugin.toml at the root carries the version as a top-level
+# key. Only keys before the first table header count — a `version` under
+# [[startup]] belongs to that table — and the key must be exactly `version`, so
+# `min_herdr_version` beside it is not read. Basic and literal strings, trailing
+# comments and CRLF endings are handled; no TOML tool is required.
+if [ -z "$declared" ] && [ -f herdr-plugin.toml ]; then
+  declared=$(awk -v sq="'" '
+    { sub(/\r$/, "") }
+    /^[ \t]*\[/ { exit }
+    /=/ {
+      k = $0; sub(/[ \t]*=.*/, "", k); sub(/^[ \t]+/, "", k)
+      if (k != "version" && k != "\"version\"" && k != sq "version" sq) next
+      v = $0; sub(/^[^=]*=[ \t]*/, "", v)
+      q = substr(v, 1, 1)
+      if (q != "\"" && q != sq) exit
+      v = substr(v, 2); i = index(v, q)
+      if (i > 1) print substr(v, 1, i - 1)
+      exit
+    }' herdr-plugin.toml 2>/dev/null || true)
+fi
+
 # WoW addon: the version lives in a .toc manifest and nowhere else. Not every
 # .toc is one — the extension also belongs to LaTeX tables of contents — but the
 # `## Version:` line is itself the evidence, so a file without one is skipped and
@@ -189,7 +210,7 @@ if [ "$LOCAL_ONLY" = 1 ] && [ -n "$declared" ]; then
   add_note "version files declare v$declared; whether that is released cannot be checked without gh"
   cmd="release-status.sh -R ${REPO:-owner/repo}   # re-run once gh is available"
 elif [ -z "$declared" ]; then
-  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json)"
+  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json / herdr-plugin.toml / *.toc)"
 elif [ "$relpr" != "null" ] && [ -n "$relpr" ]; then
   next="merge-release-pr"; cmd="pr-status.sh -R $REPO $relpr   # then pr-merge.sh"
   add_note "release PR #$relpr is open for v$declared"

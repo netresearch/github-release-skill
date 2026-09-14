@@ -16,6 +16,57 @@ Netresearch maintains org-level reusable workflows:
 - Contains shared release, CI, and quality workflows
 - Projects should prefer org workflows over per-repo copies to reduce maintenance
 
+## GitHub Release Only (No Package Registry)
+
+A project installed straight from its repository (a herdr plugin, for example) publishes nothing to PyPI, npm, Packagist or TER; the release carries the tagged source tree as an archive plus a checksum file. The org `python-release.yml` covers this with `publish-pypi: false`. Pattern from [netresearch/herdr-bg-activity](https://github.com/netresearch/herdr-bg-activity/blob/main/.github/workflows/release.yml):
+
+```yaml
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+jobs:
+  release:
+    uses: netresearch/.github/.github/workflows/python-release.yml@main
+    permissions:
+      contents: write
+      id-token: write
+    with:
+      publish-pypi: false
+      package-manager: pip
+      # Fail before building when the tag and the manifest disagree.
+      check-cmd: >-
+        python -c 'import os, tomllib;
+        v = tomllib.load(open("herdr-plugin.toml", "rb"))["version"];
+        t = os.environ["GITHUB_REF_NAME"].removeprefix("v");
+        assert v == t, f"tag {t} != herdr-plugin.toml version {v}"'
+      build-cmd: >-
+        mkdir -p dist &&
+        git archive --format=tar.gz --prefix="my-plugin-${GITHUB_REF_NAME}/"
+        -o "dist/my-plugin-${GITHUB_REF_NAME}.tar.gz" HEAD &&
+        (cd dist && sha256sum -- *.tar.gz > SHA256SUMS.txt)
+      release-files: 'dist/*'
+
+  # python-release.yml uploads dist/ as the `dist` artifact but attests nothing.
+  attest:
+    needs: release
+    uses: netresearch/.github/.github/workflows/attest-release-files.yml@main
+    permissions:
+      id-token: write
+      attestations: write
+    with:
+      subject-path: 'dist/*'  # same value as release-files
+```
+
+Provenance is a separate reusable, `attest-release-files.yml`, rather than an input on `python-release.yml`: it needs `attestations: write`, and a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. The reusable workflow is the signer, so verification has to name it; `--repo` alone checks the signer against the caller repository and fails:
+
+```bash
+gh attestation verify <file> --repo <owner>/<repo> \
+  --signer-workflow netresearch/.github/.github/workflows/attest-release-files.yml
+```
+
 ## Generic Release Workflow Structure
 
 For projects that don't use shared workflows, use this template as a starting point:

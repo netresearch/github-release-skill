@@ -147,6 +147,16 @@ Two things decide the detection rather than the file extension:
 
 Manifests are commonly CRLF; the extracted version carries no carriage return.
 
+### herdr Plugins
+
+**Detection**: `herdr-plugin.toml` exists at the repository root.
+
+| File | Field/Pattern | Example |
+|------|--------------|---------|
+| `herdr-plugin.toml` | top-level `version = "X.Y.Z"` | `version = "0.1.0"` |
+
+herdr requires the manifest for every plugin, and its `version` is the plugin's only version surface. Only keys before the first table header count — a `version` under `[[startup]]` or any other table is not the plugin's — and the key must be exactly `version`, so `min_herdr_version` beside it is not read. Basic and literal strings, trailing comments and CRLF endings are handled without a TOML tool.
+
 ### Generic (Always Check)
 
 These files are ecosystem-independent and should always be checked:
@@ -164,5 +174,6 @@ A single project may match multiple ecosystems. For example:
 - **Node.js library with Rust bindings**: Node.js + Rust + Generic
 - **Full-stack monorepo**: May have Node.js frontend + Python backend + Generic
 - **WoW addon**: WoW Addon + Generic — the `.toc` set is the whole version surface
+- **herdr plugin**: herdr Plugin + Generic — `herdr-plugin.toml` is the whole version surface
 
 Update ALL matching version files. Report which files were updated in the PR description.
