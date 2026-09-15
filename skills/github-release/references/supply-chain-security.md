@@ -97,9 +97,10 @@ The instructions a CI-appended "Verify your download" block emits must reflect t
 **A successful `gh attestation verify` is silent when stdout is not a terminal — read the exit code, and prove the check can fail.** Run from a script or a tool call it prints nothing at all on success (measured with gh 2.83 on a GitHub-issued SLSA attestation), so "no output" is indistinguishable from "the command did nothing". Gate on `$?`, and confirm the instrument once against a tampered copy: appending a single byte changes the digest, the attestation lookup answers `HTTP 404: Not Found (…/attestations/sha256:…)` and the exit code is 1. Without that negative control a verification claim only says the command ran.
 
 ```bash
-gh attestation verify "$f" --repo "$R"; echo "rc=$?"          # expect rc=0, no output
+W=<org>/.github/.github/workflows/<signer>.yml   # omit --signer-workflow only when the repo's own workflow signed
+gh attestation verify "$f" --repo "$R" --signer-workflow "$W"; echo "rc=$?"          # expect rc=0, no output
 cp "$f" /tmp/t.tar.gz && printf x >> /tmp/t.tar.gz
-gh attestation verify /tmp/t.tar.gz --repo "$R"; echo "rc=$?" # expect 404, rc=1
+gh attestation verify /tmp/t.tar.gz --repo "$R" --signer-workflow "$W"; echo "rc=$?" # expect 404, rc=1
 ```
 
 ## GitHub Artifact Attestations
