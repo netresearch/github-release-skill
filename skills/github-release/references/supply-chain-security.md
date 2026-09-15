@@ -94,6 +94,15 @@ Consequences:
 
 The instructions a CI-appended "Verify your download" block emits must reflect this. If the block hands out `gh attestation verify --repo <consumer>` without `--signer-workflow`, every user who follows it gets a verification failure on a perfectly valid artifact (and may conclude it is compromised). Fix the emitting workflow at the source (`golib-create-release.yml` already documents the pitfall in its "Verify Cosign signature" step; the go-app orchestrator needed the same fix). Correct any already-published release bodies with `gh release edit --notes-file` — the tag is not affected.
 
+**A successful `gh attestation verify` is silent when stdout is not a terminal — read the exit code, and prove the check can fail.** Run from a script or a tool call it prints nothing at all on success (measured with gh 2.83 on a GitHub-issued SLSA attestation), so "no output" is indistinguishable from "the command did nothing". Gate on `$?`, and confirm the instrument once against a tampered copy: appending a single byte changes the digest, the attestation lookup answers `HTTP 404: Not Found (…/attestations/sha256:…)` and the exit code is 1. Without that negative control a verification claim only says the command ran.
+
+```bash
+W=<org>/.github/.github/workflows/<signer>.yml   # omit --signer-workflow only when the repo's own workflow signed
+gh attestation verify "$f" --repo "$R" --signer-workflow "$W"; echo "rc=$?"          # expect rc=0, no output
+cp "$f" /tmp/t.tar.gz && printf x >> /tmp/t.tar.gz
+gh attestation verify /tmp/t.tar.gz --repo "$R" --signer-workflow "$W"; echo "rc=$?" # expect 404, rc=1
+```
+
 ## GitHub Artifact Attestations
 
 GitHub's native attestation system using `actions/attest@v4`:
