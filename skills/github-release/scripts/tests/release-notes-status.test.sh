@@ -80,7 +80,7 @@ check "inline credit is not a section"            0 "$(has_section "$narrative")
 # repository maintaining two majors the neighbour of a v12 patch is a v13
 # release — and harvesting that range reports everyone who worked on v13 as an
 # uncredited contributor to the v12 patch. Observed on
-# netresearch/t3x-rte_ckeditor_image: v12.0.12 was compared against v13.9.0 and
+# a measured TYPO3 extension: v12.0.12 was compared against v13.9.0 and
 # demanded credit for two people who had not touched it.
 # The path is computed at runtime, so shellcheck cannot follow it without -x;
 # the script guards its own main body and exits early when sourced.

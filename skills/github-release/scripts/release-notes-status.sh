@@ -47,7 +47,7 @@ previous_release_on_line() { # <tag> <newline-separated tags, newest first>
 # dies on the closed pipe with 141, and pipefail turns the *successful* match
 # into a failed command. Measured against this script's own sibling blob
 # (52,989 bytes, first match at byte 2,474): 25 of 40 runs returned 141. So
-# netresearch/t3x-rte_ckeditor_image v13.10.0, whose body really had lost the
+# a TYPO3 extension's v13.10.0 release, whose body really had lost the
 # SBOM block, reported `ok — narrative, credits and CI blocks all present` in
 # roughly seven runs out of eight — the check answered "nothing missing"
 # BECAUSE it had found something. The same race sits under the credit test,
@@ -129,7 +129,7 @@ check_one() {
   # The comparison set is the releases on the SAME line, for the same reason the
   # credit range is. Taking the newest six of the whole repository asks a v12
   # patch from May to carry blocks that a v13 release added in August, on a line
-  # whose CI never emitted them — netresearch/t3x-rte_ckeditor_image reported
+  # whose CI never emitted them — one measured repository reported
   # exactly that for v12.0.12, where the entire v12 line has zero release assets
   # and no Installation or SBOM section anywhere. Writing those blocks would have
   # described signed artifacts and an SBOM that do not exist.
