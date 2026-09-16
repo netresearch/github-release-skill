@@ -134,8 +134,7 @@ Before declaring a release broken, check all four targets separately —
 Packagist, TER, the rendered docs, and the GitHub release object. They
 fail independently, and one red job in the run does not tell you which.
 
-*Observed 2026-08-21 on `netresearch/t3x-contexts` v5.0.2, run
-32534659449.*
+*Observed 2026-08-21 on a TYPO3 extension release, run 32534659449.*
 
 ## `release: published` Never Fires When CI Created the Release
 
