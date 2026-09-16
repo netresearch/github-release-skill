@@ -169,9 +169,8 @@ establish these four facts.
 keeps serving the old reference for the affected version and continues to
 crawl everything else, so the fix-forward release is not itself blocked.
 Confirm it on the package: a tag pushed *after* the retag appears normally
-(observed in `netresearch/t3x-nr-image-optimize`: `v2.4.0` stayed pinned to
-the pre-retag ref while `v1.3.0`, tagged 40 minutes later, published as
-usual). Do not delay the remedy waiting for the block to "clear" — it does
+(observed on a TYPO3 extension package: the retagged version stayed pinned to
+its pre-retag ref while a version tagged 40 minutes later published as usual). Do not delay the remedy waiting for the block to "clear" — it does
 not clear.
 
 **Read `repo.packagist.org/p2/`, not `packagist.org/packages/`.** The p2
