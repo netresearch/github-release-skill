@@ -28,6 +28,12 @@ is a statement about the bundled npm, not about npm. Say it that way — a calle
 reading the other version will try to fix it by upgrading npm inside a Node 22
 job, which also works and is a different change.
 
+Two floors, not one, if the same job also publishes over OIDC: Trusted
+Publishing needs npm >= 11.5.1 on Node >= 22.14, which is stricter than npm's
+own engine range. A workflow doing both is governed by whichever floor is
+higher, and on the usual Node 24 default both are satisfied without thinking
+about it.
+
 Version data above is from `https://nodejs.org/dist/index.json`, which carries
 an `npm` field per release. Re-derive it rather than trusting this table.
 
@@ -45,6 +51,14 @@ The check is an unauthenticated GET of `https://registry.npmjs.org/<name>` —
 registry did not answer", never as "the package is new": a rate limit or a 5xx
 otherwise turns into an error message telling the maintainer their package does
 not exist.
+
+**That probe is only valid for a public package.** A restricted one is not
+publicly readable, so the unauthenticated request returns 404 for a package that
+exists — and the guard then tells the maintainer to do a first-ever direct
+publish of something already published. Gate the check on the access level and
+skip it where the package is restricted, or authenticate the request. Skipping
+loses nothing that matters: the guard exists to turn npm's refusal into a
+clearer message, and without it the refusal still arrives, just less legibly.
 
 **A version that is already staged cannot be staged again.** *"Staged packages
 share the same semver version unique index as published packages — you cannot
@@ -68,10 +82,17 @@ lists GAT with bypass, GAT without bypass, session token and trust token (OIDC)
 as all able to stage. Only `npm stage approve` and `npm stage reject` require
 2FA.
 
-A trusted publisher on npmjs.com permits staging by default, while permitting
-direct publish is a separate checkbox npm's own UI labels "not recommended". A
-publisher left at its defaults therefore stages and nothing else, and a direct
-publish from it fails with:
+What a trusted publisher permits is a per-publisher setting, and the two answers
+differ by age. A publisher created in the npmjs.com UI today shows, verbatim:
+*"npm stage publish is always allowed. Choose whether this trusted publisher can
+also publish directly."* — with the direct-publish box unchecked and annotated
+*"Not recommended. For stronger security, leave unchecked to allow staged
+publishing only."* Configurations that predate staging allow `npm publish`
+instead, so an older publisher behaves the opposite way. Do not infer either
+from the other: open the publisher and read its allowed actions.
+
+A stage-only publisher — direct publish not allowed — fails a direct publish
+with:
 
 ```
 E403 … OIDC permission denied for this action
@@ -102,6 +123,12 @@ The maintainer who approves needs the id. On success npm prints:
 ```
 + <pkg>@<version> (staged with id <uuid>)
 ```
+
+— but only in text mode. Under `--json` the id arrives as the `stageId` field of
+the JSON object instead (`lib/commands/publish.js` puts it there and suppresses
+the human line), so a regex written for the text form silently yields nothing on
+a publish that succeeded. Pin the output format for this one command rather than
+inheriting whatever the caller's argument list carries, or parse both shapes.
 
 The id is a UUID (`lib/utils/validate-uuid.js`). Capture it from that line and
 hand it on — a notice, a job summary with the ready-to-run command, a job
