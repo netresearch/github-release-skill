@@ -11,6 +11,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-17
+
 ### Fixed
 
 - The skill description now names every file a version lives in. Measured on OFR-TYPO3-RELEASE-001 (eighteen trials, Haiku 4.5): agents prepared the release and updated three of the four places a TYPO3 extension states its version, and eight of nine failures in one round were `CHANGELOG.md` alone, with `ext_emconf.php`, `guides.xml` and the rendered changelog page all carrying the new version. `references/ecosystem-detection.md` already lists every file with the pattern to change, but that reference is read only by an agent that opens the skill, and on this case it mostly does not — the description is what reaches it
@@ -109,7 +111,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/netresearch/github-release-skill/compare/v0.12.3...v1.0.0
 [0.12.3]: https://github.com/netresearch/github-release-skill/compare/v0.12.2...v0.12.3
 [0.12.1]: https://github.com/netresearch/github-release-skill/compare/v0.12.0...v0.12.1
