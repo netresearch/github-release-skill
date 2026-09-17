@@ -11,11 +11,17 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-17
+
+### Fixed
+
+- The changelog entry for 1.0.1 identified the benchmark case the description was measured on by its identifier. A case name in a skill is readable by an agent working on that case, and the finding does not need it: what the runs showed is that the last file a release touches is the one left behind, which holds wherever a project states its version in more than one place
+
 ## [1.0.1] - 2026-09-17
 
 ### Fixed
 
-- The skill description now names every file a version lives in. Measured on OFR-TYPO3-RELEASE-001 (eighteen trials, Haiku 4.5): agents prepared the release and updated three of the four places a TYPO3 extension states its version, and eight of nine failures in one round were `CHANGELOG.md` alone, with `ext_emconf.php`, `guides.xml` and the rendered changelog page all carrying the new version. `references/ecosystem-detection.md` already lists every file with the pattern to change, but that reference is read only by an agent that opens the skill, and on this case it mostly does not — the description is what reaches it
+- The skill description now names every file a version lives in. Measured over eighteen release-preparation runs under a small model: agents prepared the release and updated three of the four places a TYPO3 extension states its version, and eight of nine failures in one round were `CHANGELOG.md` alone, with `ext_emconf.php`, `guides.xml` and the rendered changelog page all carrying the new version. `references/ecosystem-detection.md` already lists every file with the pattern to change, but a reference is read only by an agent that opens the skill, and these runs mostly did not — the description is what reaches it
 - The description named "the rendered changelog page" as a role rather than a place. The skill's own reference allows two layouts — `Documentation/Changelog.rst` for a single file, `Documentation/Changelog/Index.rst` for a directory — so naming one path would be wrong for extensions using the other. The description now names the directory, which covers both, and the reference keeps the two filenames
 - Two references and the two remaining script comments cited a repository by name for observations that do not need one: a Packagist block after a retag, a release run where four publication paths failed independently, `grep -q` behind a pipe reporting a found match as a failure, and a comparison across release lines asking a v12 patch for blocks a v13 line introduced. The mechanism is the finding and the name applies to one repository only; the measurements stay (52,989 bytes, first match at byte 2,474, 25 of 40 runs at 141)
 
@@ -111,8 +117,10 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/netresearch/github-release-skill/compare/v0.12.3...v1.0.0
 [0.12.3]: https://github.com/netresearch/github-release-skill/compare/v0.12.2...v0.12.3
+[0.12.2]: https://github.com/netresearch/github-release-skill/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/netresearch/github-release-skill/compare/v0.12.0...v0.12.1
