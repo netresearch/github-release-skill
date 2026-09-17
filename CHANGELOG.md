@@ -117,8 +117,10 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/netresearch/github-release-skill/compare/v0.12.3...v1.0.0
 [0.12.3]: https://github.com/netresearch/github-release-skill/compare/v0.12.2...v0.12.3
+[0.12.2]: https://github.com/netresearch/github-release-skill/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/netresearch/github-release-skill/compare/v0.12.0...v0.12.1
