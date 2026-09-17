@@ -62,4 +62,5 @@ checks the published body.
 - `references/ter-republish.md` — TER re-publish
 - `references/typo3-ter-publishing.md` — TYPO3 TER publish gotchas
 - `references/ci-workflow-templates.md` — CI workflow templates
+- `references/npm-staged-publishing.md` — `npm stage publish`: version floor, the two states it refuses, capturing the stage id
 - `references/no-editorializing.md` — no self-praise
