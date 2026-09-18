@@ -11,6 +11,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-18
+
 ### Added
 
 - `references/npm-staged-publishing.md`, named in the skill's contents list. `npm stage publish` puts a version into npm's staging area rather than the registry, where it is not installable until a maintainer approves it with 2FA — so an automated workflow can produce a release without holding a credential that can publish on its own. The page carries the version floor (`npm stage` first shipped in npm 11.15.0, and what decides a CI job is the npm its Node bundles, so Node 22.23.2 at npm 10.9.8 has no such command while Node 24 does), the two registry states a release workflow walks into, and how to capture the stage id. All of it read out of `npm-stage(1)` and `lib/commands/stage/` as shipped with npm 12.0.2
@@ -127,7 +129,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/netresearch/github-release-skill/compare/v0.12.3...v1.0.0
