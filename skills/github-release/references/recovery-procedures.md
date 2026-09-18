@@ -38,6 +38,12 @@
    ```bash
    gh run rerun <run-id>
    ```
+   **A re-run replays the reusable workflows the run pinned when it started.** A caller that binds `uses: org/repo/.github/workflows/x.yml@main` resolves `@main` once, at run start, and a re-run executes *that* commit — so a fix merged into the reusable afterwards does not reach it, and the re-run fails the same way. Check before re-running:
+   ```bash
+   gh api repos/OWNER/REPO/actions/runs/<run-id> \
+     --jq '[.referenced_workflows[]? | "\(.path) @ \(.sha[0:8])"]'
+   ```
+   If a pinned SHA predates the fix, only a **fresh** run picks it up. `release.yml` usually triggers on tag push alone, so that means deleting and re-pushing the tag — safe when the publish steps are idempotent (`publish-to-ter.yml` HEADs the download URL and skips a version already on TER), and worth confirming per step before doing it. Measured twice on one release: the re-run kept executing the old copy; the tag re-push resolved the merged fix.
 3. If the workflow was never triggered:
    - Verify the workflow file exists and has correct `on: push: tags:` trigger
    - Verify the tag was actually pushed: `git ls-remote --tags origin | grep vX.Y.Z`
