@@ -48,6 +48,12 @@
    gh run rerun <run-id> --job <id>   # same lock
    ```
 
+   `--job` takes the job's `databaseId`. That is the number in the Actions URL (`…/runs/<run-id>/job/<id>`), but when the id came from anywhere else, read it rather than guess:
+
+   ```bash
+   gh run view <run-id> --json jobs --jq '.jobs[] | "\(.databaseId)  \(.name)"'
+   ```
+
    `--failed` is the reflex, because it is cheaper and the skill recommends it elsewhere for a flaky signing step. When the failure is in the reusable itself, it is the one that cannot work. Observed: `--failed` on a release run kept executing the pre-fix copy and failed identically; the fix arrived only on a run that resolved `@main` again. Confirm which copy a run used:
 
    ```bash
