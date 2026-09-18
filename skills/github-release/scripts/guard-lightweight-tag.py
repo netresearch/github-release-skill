@@ -144,6 +144,20 @@ def check_tag_invocation(segment: str) -> None:
     # Non-version tag -- allow.
 
 
+def targets_only_major_pointer(push_args: str) -> bool:
+    """True when every tag ref in this push is a bare major pointer (`v4`).
+
+    A moving major pointer is not a published release: consumers pin it *because*
+    it moves, and `vX.Y.Z+1` — what the force-push block advises — is meaningless
+    for it. The immutable `vX.Y.Z` releases it points at are untouched, and the
+    convention is guarded on the server side by the repository's own pointer
+    check. Blocking the force-push here does not prevent the move, it pushes the
+    author to the tags API, which cannot sign the tag.
+    """
+    refs = re.findall(r"(?:refs/tags/)?(v\d[\w.\-]*)", push_args)
+    return bool(refs) and all(re.fullmatch(r"v\d+", ref) for ref in refs)
+
+
 def check_push_invocation(segment: str) -> None:
     """Block tag deletion and tag force-push in a single "git push"."""
     push_match = re.match(INVOCATION_PREFIX + r"git\s+push\b(.*)", segment)
@@ -178,7 +192,9 @@ def check_push_invocation(segment: str) -> None:
         )
         if has_force:
             # Check if pushing tag refs.
-            if re.search(r"refs/tags/v\d", push_args):
+            if re.search(
+                r"refs/tags/v\d", push_args
+            ) and not targets_only_major_pointer(push_args):
                 block(
                     "Force-pushing version tags rewrites published release history. "
                     "This is extremely dangerous as consumers may have already "
