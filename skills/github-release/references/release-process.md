@@ -348,6 +348,42 @@ jobs:
 
 For dispatch-only publishes (no tag-push trigger), drop the `push:` block; the combined expressions above still work, and you can simplify if you like. For tag-push-only workflows, drop the `workflow_dispatch:` block and always use `github.ref_name` with a fixed `make_latest` — but note that the fixed approach can't express "backport, don't steal Latest" without the dispatch input.
 
+#### A dispatch input that feeds `actions/checkout` must carry a FULL commit SHA
+
+`actions/checkout` resolves a value it does not recognise as a 40-character SHA by fetching it as a branch or tag name:
+
+```
+git fetch --depth=1 origin +refs/heads/3f677090*:... +refs/tags/3f677090*:...
+```
+
+An abbreviated SHA is an unqualified ref, so checkout looks for a branch and then a tag of that name. Two outcomes, and the quiet one is worse:
+
+- **Nothing matches** — the fetch brings back nothing and every job in the run dies at checkout, before any step that would have said something useful. The `git fetch` line above with your value spliced into the refspecs is the tell.
+- **Something matches** — a branch or tag that happens to carry that name is checked out instead, the run goes green, and the evidence describes a commit nobody asked about. Nothing in the log looks wrong.
+
+Because the second outcome is silent, a job that takes a ref input is worth one assertion after checkout:
+
+```yaml
+- name: Confirm the checked-out commit
+  run: |
+    test "$(git rev-parse HEAD)" = "$EXPECTED" \
+      || { echo "::error::checked out $(git rev-parse HEAD), expected $EXPECTED"; exit 1; }
+  env:
+    EXPECTED: ${{ inputs.ref }}
+```
+
+This bites hardest on a pre-release evidence check, where the input is naturally a commit rather than a tag:
+
+```bash
+# wrong — dies at checkout in every job
+gh workflow run release-evidence.yml -f ref=3f677090
+
+# right
+gh workflow run release-evidence.yml -f ref="$(git rev-parse HEAD)"
+```
+
+Cost when it happened: a full evidence run — four jobs including a complete mutation pass — with nothing measured, and the run still counts as a failed attempt in the workflow's history.
+
 For repos using the shared release workflow template at `skills/github-release/templates/release-generic.yml`, file a patch there to expose a `make_latest` input (keep the name underscored to match GitHub's own action parameter; hyphenated names would force bracket-expression access, which is easy to get wrong) rather than forking per-repo.
 
 ## Multi-Repo / Bulk Releases

@@ -38,6 +38,30 @@
    ```bash
    gh run rerun <run-id>
    ```
+   **Which flavour of re-run matters when the fix lives in a reusable workflow.** [The documentation is explicit](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations): *"Re-running all jobs in a workflow will use the reusable workflow from the specified reference"*, while *"Re-running failed jobs or a specific job in a workflow will use the reusable workflow from the same commit SHA of the first attempt."*
+
+   So a caller binding `uses: org/repo/.github/workflows/x.yml@main` picks up a fix merged after the run only on a **full** re-run:
+
+   ```bash
+   gh run rerun <run-id>              # re-resolves @main — picks the fix up
+   gh run rerun <run-id> --failed     # locked to the first attempt's SHA — does not
+   gh run rerun <run-id> --job <id>   # same lock
+   ```
+
+   `--job` takes the job's `databaseId`. That is the number in the Actions URL (`…/runs/<run-id>/job/<id>`), but when the id came from anywhere else, read it rather than guess:
+
+   ```bash
+   gh run view <run-id> --json jobs --jq '.jobs[] | "\(.databaseId)  \(.name)"'
+   ```
+
+   `--failed` is the reflex, because it is cheaper and the skill recommends it elsewhere for a flaky signing step. When the failure is in the reusable itself, it is the one that cannot work. Observed: `--failed` on a release run kept executing the pre-fix copy and failed identically; the fix arrived only on a run that resolved `@main` again. Confirm which copy a run used:
+
+   ```bash
+   gh api repos/OWNER/REPO/actions/runs/<run-id> \
+     --jq '[.referenced_workflows[]? | "\(.path) @ \(.sha[0:8])"]'
+   ```
+
+   Only if a full re-run is unavailable or also fails does a **fresh** run become the answer. `release.yml` usually triggers on tag push alone, so that means deleting and re-pushing the tag — safe as far as the publish steps are idempotent (`publish-to-ter.yml` HEADs the download URL and skips a version already on TER) and worth confirming per step first.
 3. If the workflow was never triggered:
    - Verify the workflow file exists and has correct `on: push: tags:` trigger
    - Verify the tag was actually pushed: `git ls-remote --tags origin | grep vX.Y.Z`
