@@ -204,6 +204,64 @@ publish on tag push" in `immutable-releases.md` instead.
 4. Commit the workflow to the default branch (it must be on `main`/`master` for tag triggers to work)
 5. Test by creating a pre-release tag (e.g., `v0.0.1-test.1`)
 
+## Release Workflow Never Fired (Tag Pattern Does Not Match)
+
+**Symptom**: Same as "Missing CI Release Workflow" above — a tag is pushed and
+no release appears. The difference is that a workflow *does* exist and reads
+correctly, so the section above sends you looking for a file that is already
+there.
+
+**Cause**: `on.push.tags` does not match how this repository spells its tags.
+The common case is a workflow that lists only `'v*'` in a repository that tags
+without a prefix (`12.0.2`, `13.0.6`, `14.0.0`), or the reverse. No run is
+queued, no run fails, and nothing is logged anywhere.
+
+**Why it stays invisible for weeks**: Packagist (and npm, via its own
+provenance webhook) publishes from the tag independently of GitHub Actions, so
+`composer require` keeps resolving the new version and the package looks
+released. Only the channels the workflow owns — the GitHub release, its signed
+artifacts, and the TER publish — are missing. In one extension this went
+unnoticed for seven weeks.
+
+**Detection** — the tell is an *empty* run list, not a failed one:
+
+```bash
+gh run list --workflow=release.yml --limit 5     # nothing at all → never triggered
+gh release view <tag>                            # "release not found"
+git ls-remote --tags origin | awk -F/ '{print $NF}' | grep -v '\^{}' | tail -5
+yq '.on.push.tags' .github/workflows/release.yml
+```
+
+Hold the last two against each other: the tag spellings the repository actually
+uses versus the patterns the workflow accepts. A rerun cannot help — `gh run
+rerun` needs a run, and there is none.
+
+**Recovery**:
+
+1. Fix the trigger to accept both spellings, and say in a comment why both are
+   there so the next sync from a template does not drop one:
+   ```yaml
+   on:
+     push:
+       tags:
+         - 'v*'
+         - '[0-9]+.[0-9]+.[0-9]+'
+   ```
+2. **Cut a new patch release.** A workflow fix does not trigger retroactively,
+   and the tag that missed its run is not moved (see `immutable-releases.md`).
+   Bump every version surface, merge, then tag the new version in the spelling
+   the repository uses — that tag is what carries the missed release's content
+   to the channels it never reached.
+3. Do **not** reach for `gh release create` to paper over it. A hand-made
+   release has no artifacts, no checksums, no signatures and no registry
+   publish, and the skill blocks it for that reason.
+4. Verify against the registries rather than the run's own summary: the release
+   exists, and the TER/npm page shows the new version.
+
+The CHANGELOG entry for that patch release should say which version it
+publishes and which change set it carries — they are not the same number, and a
+reader looking for an artifact under the old one will not find it.
+
 ## Version File Drift
 
 **Symptom**: Different version files show different version numbers, or version files don't match the latest Git tag.
@@ -356,7 +414,12 @@ Run these checks before starting any release:
 - [ ] All version files agree on current version
 - [ ] Latest Git tag matches version files
 - [ ] Latest tag is annotated and signed: `git cat-file -t <tag>` returns `tag`
-- [ ] CI release workflow exists and is functional
+- [ ] CI release workflow exists, and its `on.push.tags` patterns match the
+      spelling this repository actually tags in — `yq '.on.push.tags'` against
+      `git ls-remote --tags origin`. "Exists" is not enough: a `v*`-only
+      pattern in a repository that tags unprefixed queues no run at all, and
+      the failure looks like nothing happening. See *Release Workflow Never
+      Fired* above
 - [ ] No burned tag names blocking the target version
 - [ ] CHANGELOG.md is up to date
 - [ ] Default branch is clean (no uncommitted changes)
