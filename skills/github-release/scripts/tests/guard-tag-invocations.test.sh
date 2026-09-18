@@ -201,4 +201,15 @@ check 0 'non-version tag' 'git tag nightly'
 check 0 'non-version tag deletion' 'git tag -d nightly'
 check 0 'ordinary branch push' 'git push origin main'
 
+# A moving major pointer is not a published release. Both directions are asserted:
+# the bare pointer moves, every immutable release tag stays blocked — a guard that
+# only ever refuses is satisfied by refusing everything.
+check 0 'force-push of a bare major pointer' 'git push --force origin refs/tags/v4'
+check 0 'force-push of a bare major pointer, short flag' 'git push -f origin refs/tags/v12'
+check 2 'force-push of a release tag stays blocked' 'git push --force origin refs/tags/v4.7.2'
+check 2 'force-push of a pre-release tag stays blocked' 'git push -f origin refs/tags/v4.0.0-rc1'
+check 2 'pointer and release tag together stay blocked' 'git push -f origin refs/tags/v4 refs/tags/v4.7.2'
+check 2 'force-push of all tags stays blocked' 'git push --force --tags'
+check 2 'deleting the pointer stays blocked' 'git push origin :refs/tags/v4'
+
 exit "$fail"
