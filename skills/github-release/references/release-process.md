@@ -356,7 +356,21 @@ For dispatch-only publishes (no tag-push trigger), drop the `push:` block; the c
 git fetch --depth=1 origin +refs/heads/3f677090*:... +refs/tags/3f677090*:...
 ```
 
-An abbreviated SHA matches neither, the fetch brings back nothing, and **every job in the run dies at checkout** — before any step that would have said something useful. The job log shows the `git fetch` line above with your value spliced into the refspecs; that line is the tell.
+An abbreviated SHA is an unqualified ref, so checkout looks for a branch and then a tag of that name. Two outcomes, and the quiet one is worse:
+
+- **Nothing matches** — the fetch brings back nothing and every job in the run dies at checkout, before any step that would have said something useful. The `git fetch` line above with your value spliced into the refspecs is the tell.
+- **Something matches** — a branch or tag that happens to carry that name is checked out instead, the run goes green, and the evidence describes a commit nobody asked about. Nothing in the log looks wrong.
+
+Because the second outcome is silent, a job that takes a ref input is worth one assertion after checkout:
+
+```yaml
+- name: Confirm the checked-out commit
+  run: |
+    test "$(git rev-parse HEAD)" = "$EXPECTED" \
+      || { echo "::error::checked out $(git rev-parse HEAD), expected $EXPECTED"; exit 1; }
+  env:
+    EXPECTED: ${{ inputs.ref }}
+```
 
 This bites hardest on a pre-release evidence check, where the input is naturally a commit rather than a tag:
 
