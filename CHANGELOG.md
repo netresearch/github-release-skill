@@ -11,6 +11,16 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Added
+
+- `references/npm-staged-publishing.md`, named in the skill's contents list. `npm stage publish` puts a version into npm's staging area rather than the registry, where it is not installable until a maintainer approves it with 2FA — so an automated workflow can produce a release without holding a credential that can publish on its own. The page carries the version floor (`npm stage` first shipped in npm 11.15.0, and what decides a CI job is the npm its Node bundles, so Node 22.23.2 at npm 10.9.8 has no such command while Node 24 does), the two registry states a release workflow walks into, and how to capture the stage id. All of it read out of `npm-stage(1)` and `lib/commands/stage/` as shipped with npm 12.0.2
+- `references/recovery-procedures.md` distinguishes the two re-run flavours where the fix lives in a reusable workflow. GitHub resolves `uses: org/repo/.github/workflows/x.yml@main` again only on a full `gh run rerun`; `--failed` and `--job` stay locked to the first attempt's SHA, so the reflex re-run keeps executing the pre-fix copy and fails identically. The section names `gh run view <run-id> --json jobs` as where a `--job` id is read rather than guessed, and the `referenced_workflows` query that says which copy a run actually used
+- `references/release-process.md` documents that a dispatch input feeding `actions/checkout` must carry a full 40-character commit SHA. An abbreviated one is an unqualified ref, so checkout fetches it as a branch or tag name: either nothing matches and every job dies at checkout, or something does and the run goes green against a commit nobody asked about. The section carries the post-checkout assertion that catches the silent case
+
+### Fixed
+
+- `guard-lightweight-tag.py` no longer blocks a force-push whose tag refs are all bare major pointers (`v4`). A moving major pointer is not a published release — consumers pin it because it moves, and the block's advice to cut `vX.Y.Z+1` is meaningless for it, while the immutable releases it points at are untouched. Blocking it did not prevent the move, it pushed the author to the tags API, which cannot sign the tag
+
 ## [1.0.2] - 2026-09-17
 
 ### Fixed
