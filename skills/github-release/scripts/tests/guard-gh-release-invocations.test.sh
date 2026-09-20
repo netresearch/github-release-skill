@@ -108,6 +108,75 @@ harmless
 EOF
 gh release create v1.2.3"
 
+# --- a create against an already-pushed tag ---------------------------------
+# "--verify-tag" makes gh abort unless the tag ALREADY exists on the remote
+# ("Abort in case the git tag doesn't already exist in the remote repository",
+# gh 2.100.0), so this invocation can never create a tag -- and creating one is
+# the whole reason a bare create is blocked. The tag itself is still guarded:
+# guard-lightweight-tag.py refuses a lightweight version tag at "git tag".
+# Case one is the invocation that motivated this change, copied verbatim.
+check 0 'the real invocation that motivated this' \
+  'gh release create v6.4.0 --repo netresearch/timetracker --title "v6.4.0" --verify-tag --notes-file /tmp/notes-640.md'
+check 0 'create --verify-tag, minimal' 'gh release create v1.2.3 --verify-tag'
+check 0 'create --verify-tag on its own line' \
+  'git push origin v1.2.3
+gh release create v1.2.3 --verify-tag --notes-file notes.md'
+check 0 'create --verify-tag behind a prefix' \
+  'GH_TOKEN=x gh release create v1.2.3 --verify-tag'
+
+# The flag has to be the flag, not a mention of it.
+check 2 'create with --verify-tag only inside a quoted argument' \
+  'gh release create v1.2.3 --notes "pass --verify-tag next time"'
+# pflag accepts "--flag=false" for a boolean, which turns the safeguard off.
+check 2 'create --verify-tag=false' 'gh release create v1.2.3 --verify-tag=false'
+check 2 'create --verify-tag=0' 'gh release create v1.2.3 --verify-tag=0'
+check 0 'create --verify-tag=true' 'gh release create v1.2.3 --verify-tag=true'
+# The exemption is for create only; delete destroys a published release either way.
+check 2 'delete does not become allowed by --verify-tag' \
+  'gh release delete v1.2.3 --verify-tag'
+
+# --- a repeated flag is decided by its LAST occurrence ----------------------
+# Reported by CodeRabbit on PR #144 and reproduced before the fix. pflag allows
+# a boolean to be repeated and keeps the last value, so an opening --verify-tag
+# says nothing: gh resolves the pair below to false and can create the tag.
+check 2 'create, enabled then disabled' \
+  'gh release create v1.2.3 --verify-tag --verify-tag=false'
+check 2 'create, three occurrences ending disabled' \
+  'gh release create v1.2.3 --verify-tag=true --verify-tag --verify-tag=0'
+# The same rule in the other direction: the last occurrence enables it.
+check 0 'create, disabled then enabled' \
+  'gh release create v1.2.3 --verify-tag=false --verify-tag'
+check 0 'create, disabled then enabled explicitly' \
+  'gh release create v1.2.3 --verify-tag=0 --verify-tag=True'
+# A value pflag does not accept makes gh exit; it must not be the branch that
+# lets the command through.
+check 2 'create, unparseable value' 'gh release create v1.2.3 --verify-tag=yes'
+
+# --- a shell comment is not an argument -------------------------------------
+# Reported by CodeRabbit on PR #144, and reproduced before the fix: the shell
+# drops everything after an unquoted "#", so a --verify-tag offered there never
+# reaches gh -- bash runs the bare create, which can mint a lightweight tag.
+# The first two are the reported forms, copied verbatim.
+check 2 'create with --verify-tag in a shell comment' \
+  'gh release create v1.2.3 # --verify-tag'
+check 2 'delete with --help in a shell comment' \
+  'gh release delete v1.2.3 # --help'
+check 2 'create, comment with no space after the hash' \
+  'gh release create v1.2.3 #--verify-tag'
+check 2 'create, comment after a real but unrelated flag' \
+  'gh release create v1.2.3 --notes-file n.md # --verify-tag'
+check 2 'edit, notes only inside a comment' \
+  'gh release edit v1.2.3 # --notes "x"'
+# A hash that is not opening a comment must not cut the line short.
+check 0 'create, hash inside a quoted argument' \
+  'gh release create v1.2.3 --verify-tag --notes "fixes #42"'
+check 0 'create, hash inside an unquoted value' \
+  'gh release create v1.2.3 --notes-file rel#7.md --verify-tag'
+
+# --- reading the help is not running the command ----------------------------
+check 0 'create --help' 'gh release create --help'
+check 0 'delete -h' 'gh release delete -h'
+
 # --- gh api to a release endpoint ------------------------------------------
 check 2 'api POST to releases' 'gh api repos/o/r/releases -X POST -f tag_name=v1.2.3'
 check 2 'api DELETE on its own line' \

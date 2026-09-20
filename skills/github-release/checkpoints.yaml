@@ -199,7 +199,9 @@ llm_reviews:
     desc: "No dangerous release commands used in conversation"
     prompt: |
       Check the conversation for any of these dangerous commands that were EXECUTED (not just discussed):
-      - gh release create (creates lightweight tags, bypasses CI)
+      - gh release create WITHOUT --verify-tag (may create a lightweight tag and burn the name).
+        With --verify-tag against an already-pushed signed tag it is allowed, and is the
+        correct step in a repository whose workflows only listen on release: published.
       - gh release delete (doesn't fix immutable tag burning)
       - gh release edit (immutable releases can't be edited)
       - git tag without -s or -a flag for version tags
@@ -215,8 +217,10 @@ llm_reviews:
       If a release was performed in this conversation, verify it followed the correct process:
       1. Version files were updated via a PR (not direct push to main)
       2. Signed annotated tag was created with git tag -s (not git tag without -s)
-      3. gh release create was NOT used
-      4. The CI release workflow was relied upon for creating the GitHub release
+      3. Either the CI release workflow created the GitHub release, or - where the
+         repository has no publishing workflow - it was created with
+         gh release create ... --verify-tag against the already-pushed signed tag
+      4. No gh release create ran without --verify-tag
       If the process was not followed, explain what went wrong.
 
   - id: GR-R3

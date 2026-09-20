@@ -19,6 +19,10 @@ Modern releases require more than just a tarball. Supply chain security ensures 
 
 GitHub Actions natively supports SLSA L1 via `actions/attest-build-provenance`. L2+ requires the [slsa-framework/slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator) reusable workflows that run in isolated, hardened runners.
 
+**The generic generator cannot run under `sha_pinning_required`.** Its own workflow calls four nested actions by tag — `detect-workflow-js@v2.1.0`, `generate-builder@v2.1.0`, `secure-download-artifact@v2.1.0`, `secure-builder-checkout@v2.1.0`, read out of `generator_generic_slsa3.yml` at `v2.1.0`, which is the latest release (2025-02-24). A repository or organisation with the SHA-pinning ruleset on rejects the run at the first of them: `detect-workflow-js@v2.1.0 is not allowed … must be pinned to a full-length commit SHA`. Pinning the generator's own `uses:` line to a SHA does not help, because the rejected references are inside it, and the generator refuses to run from a SHA anyway. Upstream knows: [slsa-github-generator#4440](https://github.com/slsa-framework/slsa-github-generator/issues/4440) ("Actions must be pinned to a full-length commit SHA") is open. `github-project`'s `references/security-config.md` reaches the same conclusion from that issue; this page states it for the release flow.
+
+Where that ruleset is on — it is, organisation-wide, at Netresearch — use `actions/attest-build-provenance` and drop the L3 claim. The attestation it issues is GitHub-signed, verifiable with `gh attestation verify <artifact> --repo owner/repo`, and covers the same subject; what it does not carry is the isolated-builder guarantee that the level is about. State the level you actually reach rather than the one the workflow was named after.
+
 ## Sigstore / Cosign Keyless Signing
 
 [Sigstore](https://sigstore.dev/) enables keyless signing — no long-lived signing keys to manage.

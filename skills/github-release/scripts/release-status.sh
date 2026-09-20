@@ -131,6 +131,18 @@ if [ -z "$declared" ]; then
   done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
 fi
 
+# A repository may state its version nowhere -- an application deployed from a
+# tag rather than installed from a registry has no manifest to bump. Reporting
+# "prepare-release -- no version file found" for one of those answers a question
+# it was not asked and hides every real finding behind it, because each later
+# phase keys off $declared. For such a repository the released tag IS the
+# version, so take it from there and say so.
+version_source="file"
+if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$latest" ]; then
+  declared="${latest#v}"
+  version_source="release"
+fi
+
 pkg=$(jq -r '.name // empty' composer.json 2>/dev/null || true)
 extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/dev/null || true)
 
@@ -210,12 +222,17 @@ if [ "$LOCAL_ONLY" = 1 ] && [ -n "$declared" ]; then
   add_note "version files declare v$declared; whether that is released cannot be checked without gh"
   cmd="release-status.sh -R ${REPO:-owner/repo}   # re-run once gh is available"
 elif [ -z "$declared" ]; then
-  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json / herdr-plugin.toml / *.toc)"
+  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json / herdr-plugin.toml / *.toc) and no release to take a version from"
 elif [ "$relpr" != "null" ] && [ -n "$relpr" ]; then
   next="merge-release-pr"; cmd="pr-status.sh -R $REPO $relpr   # then pr-merge.sh"
   add_note "release PR #$relpr is open for v$declared"
 elif [ "$declared" = "${latest#v}" ] && [ "$tag_state" = "annotated" ] && [ "$notes_next" = "ok" ] && [ -z "$reg_missing" ]; then
-  next="ok"; add_note "v$declared released, notes rewritten, registries serving it"
+  next="ok"
+  if [ "$version_source" = "release" ]; then
+    add_note "v$declared released, notes rewritten, registries serving it (no version file in the tree; version read from the release)"
+  else
+    add_note "v$declared released, notes rewritten, registries serving it"
+  fi
 elif [ "$stale" = 1 ]; then
   next="prepare-release"; cmd="git fetch origin && git switch --detach origin/main   # then re-run"
 elif [ "$tag_state" = "absent" ]; then
@@ -246,12 +263,14 @@ if [ "$JSON" = 1 ]; then
   jq -nc --arg repo "$REPO" --arg declared "$declared" --arg latest "$latest" \
      --arg tag "$tag_state" --arg wf "$wf_state" --arg notes "$notes_next" \
      --arg reg "${reg_missing# }" --arg next "$next" --arg note "$note" --arg cmd "$cmd" \
-     '{repo:$repo, declared_version:$declared, latest_release:$latest, tag:$tag,
+     --arg vsrc "$version_source" \
+     '{repo:$repo, declared_version:$declared, version_source:$vsrc,
+       latest_release:$latest, tag:$tag,
        workflow:$wf, notes:$notes, registries_missing:$reg, next:$next,
        note:$note, cmd:$cmd}'
 else
   echo "${REPO:-<repository not identified>}"
-  printf '  declared    : %s\n' "${declared:-<none>}"
+  printf '  declared    : %s%s\n' "${declared:-<none>}" "$([ "$version_source" = release ] && echo '  (from the latest release; no version file in the tree)')"
   printf '  latest rel  : %s\n' "${latest:-<none>}"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
   [ -n "$wf_state" ] && printf '  workflow    : %s\n' "$wf_state"

@@ -11,6 +11,22 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `guard-gh-release.py` allows `gh release create` when `--verify-tag` is set. gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation cannot create the lightweight tag that the block exists to prevent — it can only publish a tag that was pushed on purpose, and `guard-lightweight-tag.py` is what keeps that tag annotated and signed. `--verify-tag=false` and `--verify-tag=0` stay blocked, and a mention of the flag inside a quoted argument is not the flag. Without the exemption the guard blocked the one correct step in a repository whose supply-chain workflows listen on `release: published`: that event never fires for a release created with `GITHUB_TOKEN`, so nothing but a human credential can start the provenance and SBOM jobs, and the release had to be published around the guard
+- `release-status.sh` derives the version from the latest release where the repository states it in no manifest. Every phase of the verdict keys off the declared version, so `prepare-release — no version file found` short-circuited all of them and reported a version-file question to a repository that has no version file by design; the output now names where the version came from. A repository with neither a manifest nor a release still gets the original verdict, manifest list included
+- the release-safety checkpoint and the release-process checkpoint distinguish the two flows: a workflow-published release, and a tag-only repository where the release is created by hand against the pushed signed tag
+- `references/supply-chain-security.md` records that the SLSA generic generator cannot run under the `sha_pinning_required` ruleset: `generator_generic_slsa3.yml` at `v2.1.0` — the latest release, 2025-02-24 — calls four nested actions by tag, and the run is rejected at the first of them. Pinning the generator's own `uses:` does not help, the references are inside it. The page names `actions/attest-build-provenance` as what to use there, and says to state the level actually reached rather than the one the workflow is named after
+- `SKILL.md`, `references/release-process.md`, `references/immutable-releases.md`, `README.md`, `AGENTS.md` and both release commands state the rule as "never without `--verify-tag`" rather than "never", and name which of the two flows a repository is in as something to establish from its workflows
+
+### Fixed
+
+- a repeated `--verify-tag` is decided by its LAST occurrence, as pflag decides it. `gh release create v1.2.3 --verify-tag --verify-tag=false` passed the guard while gh resolved the flag to false and could create the tag; the check stopped at the first enabled occurrence. Both directions are pinned — the same pair reversed is allowed — and a value pflag does not accept counts as off, because gh exits on it and that branch must never be the one letting a command through
+- an unquoted shell comment is no longer read as arguments. `gh release create v1.2.3 # --verify-tag` offered a flag the shell discards, so the guard allowed the invocation and bash ran the bare create that can mint a lightweight tag; `gh release delete v1.2.3 # --help` passed the same way. The comment is now stripped with the quoted spans, before either check, and the notes-only test for `gh release edit` uses the same stripping. Found by CodeRabbit on the pull request that introduced the `--verify-tag` exemption, reproduced before the fix, and pinned by seven cases including two where a `#` is part of an argument rather than a comment
+- `gh release create --help` and `gh release delete -h` are no longer blocked. Reading the help runs no release operation, and the blocked command was the one that would have explained `--verify-tag`
+- a block message spanning several lines emitted its continuation lines at column 0, which ends the YAML block scalar and leaves the rest as stray text
+
+
 ## [1.0.4] - 2026-09-20
 
 ### Changed

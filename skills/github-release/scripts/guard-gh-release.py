@@ -3,14 +3,17 @@
 PreToolUse hook that blocks dangerous GitHub release operations.
 
 Blocks:
-  - gh release create/delete (always)
+  - gh release create, unless --verify-tag is set (see below)
+  - gh release delete (always)
   - gh release edit (unless only --notes or --notes-file flags are used)
   - gh api calls to release endpoints with mutating HTTP methods
 
 Allows:
   - gh release view/list/download (read-only)
+  - gh release create --verify-tag (publishes against an already-pushed tag)
   - gh release edit --notes "..." (release description overhaul)
   - gh release edit --notes-file ... (release description overhaul)
+  - gh release <anything> --help (reading the help runs nothing)
   - gh run commands (workflow management)
   - Any non-release gh commands
 
@@ -50,15 +53,24 @@ def parse_command(input_data: str) -> str:
     return data.get("command", "")
 
 
+def _indent(text: str) -> str:
+    """Indent every line by two spaces, as a YAML block scalar requires.
+
+    A message spanning several lines used to emit its continuation lines at
+    column 0, which ends the block scalar and leaves the rest as stray YAML.
+    """
+    return "\n".join("  " + line if line else "" for line in text.split("\n"))
+
+
 def block(reason: str, suggestion: str) -> None:
     """Print a YAML-formatted block reason to stderr and exit 2."""
     print(
         f"""---
 blocked: true
 reason: |
-  {reason}
+{_indent(reason)}
 suggestion: |
-  {suggestion}
+{_indent(suggestion)}
 ---""",
         file=sys.stderr,
     )
@@ -119,14 +131,71 @@ _DANGEROUS_EDIT_FLAGS = re.compile(
 )
 
 
+# "--verify-tag" is what makes a create safe. gh's own help (2.100.0): "Abort
+# in case the git tag doesn't already exist in the remote repository." So the
+# invocation cannot create a tag, which is the outcome the create block exists
+# to prevent; what it publishes is a tag somebody pushed on purpose.
+#
+# Whether it is ON takes two readings of pflag, not one. It accepts a value
+# ("--verify-tag=false" turns the safeguard back off), and it accepts the flag
+# REPEATED, keeping the last value — so "--verify-tag --verify-tag=false"
+# leaves it off while the first occurrence looks reassuring. Hence every
+# occurrence is collected and only the last one decides. The accepted spellings
+# are pflag's own for a boolean in long form (flag.go: 1, 0, t, f, true, false,
+# TRUE, FALSE, True, False); a bare occurrence is true.
+_VERIFY_TAG_OCCURRENCE = re.compile(r"(?:^|\s)--verify-tag(?:=(\S*))?(?=\s|$)")
+_PFLAG_TRUE = {"", "1", "t", "T", "true", "TRUE", "True"}
+
+
+def _verify_tag_is_on(args: str) -> bool:
+    """Whether the effective --verify-tag is on, reading the LAST occurrence.
+
+    A value pflag does not recognise makes gh exit before it does anything, so
+    it counts as off: this must never be the branch that lets a command
+    through.
+    """
+    values = _VERIFY_TAG_OCCURRENCE.findall(args)
+    if not values:
+        return False
+    return values[-1] in _PFLAG_TRUE
+
+
+# Asking for the help text runs no release operation at all. Before this, the
+# guard blocked "gh release create --help", i.e. the one command that would have
+# told the reader what --verify-tag does.
+_HELP_FLAG = re.compile(r"(?:^|\s)(?:--help|-h)(?=\s|$)")
+
+
+# An unquoted "#" at the start of a word opens a shell comment: everything
+# after it is text the shell never passes to the command. Reading it as
+# arguments inverts the guard -- `gh release create v1.2.3 # --verify-tag`
+# offered a --verify-tag the shell discards, and bash then ran the bare create
+# that can mint a lightweight tag. Applied AFTER the quoted spans are dropped,
+# so a "#" inside an argument is already gone and cannot cut the line short.
+_SHELL_COMMENT = re.compile(r"(?:^|\s)#.*$", re.DOTALL)
+
+
+def _strip_quoted(args: str) -> str:
+    """Drop quoted spans and any trailing shell comment.
+
+    `--notes "pass --verify-tag next time"` mentions the flag; it does not set
+    it, and neither does `# --verify-tag`. The quote half mirrors
+    _is_notes_only_edit; the comment half is what CodeRabbit found missing on
+    PR #144, where it turned the --verify-tag exemption into a bypass.
+    """
+    return _SHELL_COMMENT.sub("", re.sub(r'"[^"]*"|\'[^\']*\'', "", args))
+
+
 def _is_notes_only_edit(args: str) -> bool:
     """Return True if gh release edit args only modify notes."""
     # Truncate at shell separators so chained commands don't pollute the check.
     # e.g. "v1.0.0 --notes '...' ; other-cmd --draft" → "v1.0.0 --notes '...'"
     args = re.split(r"\s*(?:;|&&|\|\|)\s*", args)[0]
-    # Strip quoted strings to avoid false positives from notes content.
-    # e.g. --notes "Changed --draft behavior" should not trigger --draft block.
-    clean_args = re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
+    # Strip quoted strings to avoid false positives from notes content
+    # (--notes "Changed --draft behavior" must not trigger the --draft block),
+    # and the trailing shell comment with them: a --notes the shell discards is
+    # not a notes-only edit.
+    clean_args = _strip_quoted(args)
     has_notes = bool(
         re.search(r"(?:^|\s)(?:--notes\b|--notes-file\b|-n\b|-F\b)", clean_args)
     )
@@ -158,14 +227,23 @@ def _check_invocation(cmd: str) -> None:
         subcommand = match.group(1).lower()
         if subcommand in ALLOWED_RELEASE_SUBCOMMANDS:
             return
+        # Everything below judges a release operation. Reading the help is none.
+        args = _strip_quoted(cmd[match.end() :])
+        if _HELP_FLAG.search(args):
+            return
         if subcommand == "create":
+            if _verify_tag_is_on(args):
+                return
             block(
-                "Direct 'gh release create' bypasses the CI release pipeline. "
-                "Releases MUST be created by the CI/CD workflow to ensure "
-                "proper provenance, signing, and artifact generation.",
-                "Push a version tag (git tag -s vX.Y.Z && git push origin vX.Y.Z) "
-                "to trigger the release workflow, or run the release workflow "
-                "manually via 'gh workflow run'.",
+                "'gh release create' without --verify-tag creates the tag when it "
+                "is missing, and that tag is lightweight: no signature, no author, "
+                "and under immutable releases the name is burned permanently.",
+                "Tag and push first, then publish against that tag:\n"
+                "    git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z\n"
+                "    gh release create vX.Y.Z --verify-tag --notes-file <notes>\n"
+                "  --verify-tag makes gh abort unless the tag already exists on the "
+                "remote, so nothing can be created by accident. Where a release "
+                "workflow exists, let it publish instead and do not run this at all.",
             )
         elif subcommand == "delete":
             block(

@@ -14,9 +14,11 @@ allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 
 ## Critical Rules
 
-**NEVER run `gh release create` or `gh release delete`.**
+**NEVER run `gh release delete`, and never `gh release create` without `--verify-tag`.**
 
-Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — a lightweight tag from `gh release create` burns that name forever, unrecoverably. CI creates releases from signed tags.
+Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — a bare `gh release create` creates the tag when it is missing, that tag is lightweight, and the name is burned forever. `--verify-tag` aborts unless the tag already exists on the remote, so the invocation can only publish a tag somebody pushed on purpose; the guard allows it for that reason (`--verify-tag=false` stays blocked).
+
+Where the repository has a workflow that publishes the release, that workflow does it and you do not run `gh release create` at all. Where it does not — see *Tag-only repositories* below — publishing by hand against the pushed signed tag is the correct step, not a workaround.
 
 **`gh release edit` is allowed ONLY for `--notes` / `--notes-file`** to overhaul the release description after CI publishes. All other `gh release edit` flags are blocked.
 
@@ -40,6 +42,19 @@ checks the published body.
 8. **CI publishes release** — artifacts, checksums, auto-generated notes
 9. **Overhaul release description** — rewrite CI's notes into a narrative; `@mention` every contributor **and reporter** inline at their change, never as a `## Contributors` section. Source them from `scripts/harvest-contributors.sh`, never `git log`. Verify with `scripts/release-notes-status.sh`. See `references/release-process.md` Phase 5.
 10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
+
+### Tag-only repositories
+
+Some repositories have no workflow that creates the release object. Their supply-chain workflows listen on `release: published` instead — provenance attestation, SBOM upload, registry publish — and that event never fires for a release created with `GITHUB_TOKEN` (`references/typo3-ter-publishing.md` has the mechanism). The release therefore has to be created by a human credential, which is `gh` on your machine:
+
+```bash
+git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z   # Docker/image workflows run on the tag
+gh release create vX.Y.Z --title "vX.Y.Z" --verify-tag --notes-file <notes>
+```
+
+**Run that second command under your own credential, never a workflow's.** It is the whole point of this branch of the flow: `gh` authenticated as `GITHUB_TOKEN` creates the release without firing `release: published`, so every downstream job stays silent and the release looks complete while carrying no provenance and no SBOM. Locally that means the `gh` you are logged into; from automation it means a PAT or a GitHub App installation token in `GH_TOKEN`, and `${{ github.token }}` is exactly the value that must not appear there.
+
+Steps 8 and 9 collapse into that second command: it publishes and carries the notes, so there is no CI-generated body to overhaul afterwards. Everything downstream — provenance, SBOM, registry publish — hangs off the `release: published` it fires, so verify it landed rather than assuming: `gh attestation verify <asset> --repo owner/repo` for the archive, `cosign verify` for an image. `scripts/release-status.sh` still reports `NEXT: prepare-release — no version file found` for a repository that states its version nowhere; that is the version-file question, not the release one.
 
 ## Commands
 
