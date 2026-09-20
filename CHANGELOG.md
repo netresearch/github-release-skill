@@ -11,7 +11,7 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
-### Added
+### Changed
 
 - `references/recovery-procedures.md`: a release workflow that never fired looks like nothing at all — no run, no failure, no red check — so the recovery path now starts by establishing whether the workflow was dispatched, rather than by reading a run that does not exist
 
