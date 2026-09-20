@@ -21,6 +21,7 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ### Fixed
 
+- an unquoted shell comment is no longer read as arguments. `gh release create v1.2.3 # --verify-tag` offered a flag the shell discards, so the guard allowed the invocation and bash ran the bare create that can mint a lightweight tag; `gh release delete v1.2.3 # --help` passed the same way. The comment is now stripped with the quoted spans, before either check, and the notes-only test for `gh release edit` uses the same stripping. Found by CodeRabbit on the pull request that introduced the `--verify-tag` exemption, reproduced before the fix, and pinned by seven cases including two where a `#` is part of an argument rather than a comment
 - `gh release create --help` and `gh release delete -h` are no longer blocked. Reading the help runs no release operation, and the blocked command was the one that would have explained `--verify-tag`
 - a block message spanning several lines emitted its continuation lines at column 0, which ends the YAML block scalar and leaves the rest as stray text
 

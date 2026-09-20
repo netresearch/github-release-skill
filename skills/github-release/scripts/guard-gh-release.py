@@ -149,13 +149,24 @@ _VERIFY_TAG_ON = re.compile(
 _HELP_FLAG = re.compile(r"(?:^|\s)(?:--help|-h)(?=\s|$)")
 
 
+# An unquoted "#" at the start of a word opens a shell comment: everything
+# after it is text the shell never passes to the command. Reading it as
+# arguments inverts the guard -- `gh release create v1.2.3 # --verify-tag`
+# offered a --verify-tag the shell discards, and bash then ran the bare create
+# that can mint a lightweight tag. Applied AFTER the quoted spans are dropped,
+# so a "#" inside an argument is already gone and cannot cut the line short.
+_SHELL_COMMENT = re.compile(r"(?:^|\s)#.*$", re.DOTALL)
+
+
 def _strip_quoted(args: str) -> str:
-    """Drop quoted spans so flag text inside an argument is not read as a flag.
+    """Drop quoted spans and any trailing shell comment.
 
     `--notes "pass --verify-tag next time"` mentions the flag; it does not set
-    it. Same reasoning as in _is_notes_only_edit, which this mirrors.
+    it, and neither does `# --verify-tag`. The quote half mirrors
+    _is_notes_only_edit; the comment half is what CodeRabbit found missing on
+    PR #144, where it turned the --verify-tag exemption into a bypass.
     """
-    return re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
+    return _SHELL_COMMENT.sub("", re.sub(r'"[^"]*"|\'[^\']*\'', "", args))
 
 
 def _is_notes_only_edit(args: str) -> bool:
@@ -163,9 +174,11 @@ def _is_notes_only_edit(args: str) -> bool:
     # Truncate at shell separators so chained commands don't pollute the check.
     # e.g. "v1.0.0 --notes '...' ; other-cmd --draft" → "v1.0.0 --notes '...'"
     args = re.split(r"\s*(?:;|&&|\|\|)\s*", args)[0]
-    # Strip quoted strings to avoid false positives from notes content.
-    # e.g. --notes "Changed --draft behavior" should not trigger --draft block.
-    clean_args = re.sub(r'"[^"]*"|\'[^\']*\'', "", args)
+    # Strip quoted strings to avoid false positives from notes content
+    # (--notes "Changed --draft behavior" must not trigger the --draft block),
+    # and the trailing shell comment with them: a --notes the shell discards is
+    # not a notes-only edit.
+    clean_args = _strip_quoted(args)
     has_notes = bool(
         re.search(r"(?:^|\s)(?:--notes\b|--notes-file\b|-n\b|-F\b)", clean_args)
     )

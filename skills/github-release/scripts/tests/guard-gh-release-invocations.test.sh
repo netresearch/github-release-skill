@@ -135,6 +135,27 @@ check 0 'create --verify-tag=true' 'gh release create v1.2.3 --verify-tag=true'
 check 2 'delete does not become allowed by --verify-tag' \
   'gh release delete v1.2.3 --verify-tag'
 
+# --- a shell comment is not an argument -------------------------------------
+# Reported by CodeRabbit on PR #144, and reproduced before the fix: the shell
+# drops everything after an unquoted "#", so a --verify-tag offered there never
+# reaches gh -- bash runs the bare create, which can mint a lightweight tag.
+# The first two are the reported forms, copied verbatim.
+check 2 'create with --verify-tag in a shell comment' \
+  'gh release create v1.2.3 # --verify-tag'
+check 2 'delete with --help in a shell comment' \
+  'gh release delete v1.2.3 # --help'
+check 2 'create, comment with no space after the hash' \
+  'gh release create v1.2.3 #--verify-tag'
+check 2 'create, comment after a real but unrelated flag' \
+  'gh release create v1.2.3 --notes-file n.md # --verify-tag'
+check 2 'edit, notes only inside a comment' \
+  'gh release edit v1.2.3 # --notes "x"'
+# A hash that is not opening a comment must not cut the line short.
+check 0 'create, hash inside a quoted argument' \
+  'gh release create v1.2.3 --verify-tag --notes "fixes #42"'
+check 0 'create, hash inside an unquoted value' \
+  'gh release create v1.2.3 --notes-file rel#7.md --verify-tag'
+
 # --- reading the help is not running the command ----------------------------
 check 0 'create --help' 'gh release create --help'
 check 0 'delete -h' 'gh release delete -h'
