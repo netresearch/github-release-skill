@@ -252,7 +252,8 @@ rerun` needs a run, and there is none.
    Bump every version surface, merge, then tag the new version in the spelling
    the repository uses — that tag is what carries the missed release's content
    to the channels it never reached.
-3. Do **not** reach for `gh release create` to paper over it. A hand-made
+3. Do **not** reach for `gh release create` to paper over it — not even with
+   `--verify-tag`, which addresses the tag, not the missing artifacts. A hand-made
    release has no artifacts, no checksums, no signatures and no registry
    publish, and the skill blocks it for that reason.
 4. Verify against the registries rather than the run's own summary: the release

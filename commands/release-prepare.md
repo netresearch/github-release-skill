@@ -106,5 +106,6 @@ git tag -s vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-**IMPORTANT**: NEVER use `gh release create`. NEVER create lightweight tags.
-Always use `git tag -s` to create signed annotated tags.
+**IMPORTANT**: this command stops before the tag. Never create lightweight tags;
+the release step uses `git tag -s`, and any later `gh release create` carries
+`--verify-tag`.

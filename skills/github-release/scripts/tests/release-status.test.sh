@@ -118,6 +118,69 @@ table_out=$(cd "$herdr/repo" && env -i PATH="$herdr/bin:/usr/bin:/bin" HOME="$he
 refute "ignores a version inside a table" "9.9.9" "$table_out"
 check "the hint lists herdr-plugin.toml" "herdr-plugin.toml" "$table_out"
 
+# ---------------------------------------------------------------------------
+# A repository that states its version NOWHERE, with a release published
+# ---------------------------------------------------------------------------
+# netresearch/timetracker is deployed from a tag and has no manifest to bump.
+# Every phase of the verdict keys off $declared, so "no version file found"
+# short-circuited all of them and the one actionable thing -- the state of the
+# published release -- was never reported. The released tag is that version.
+#
+# This case needs a forge, so `gh` is stubbed: each call the script makes is
+# answered from the fixture, and anything unexpected exits non-zero rather than
+# silently returning the empty string.
+
+tagonly=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly"' EXIT
+mkdir -p "$tagonly/bin" "$tagonly/repo"
+ln -sf "$jq_path" "$tagonly/bin/jq"
+cat >"$tagonly/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# Minimal gh for release-status.sh: a repo with one annotated tag v6.4.0,
+# released, and no version file anywhere.
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/tagonly"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "run list")     echo "none"; exit 0 ;;
+  "release view") exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)  echo "v6.4.0"; exit 0 ;;
+    */git/ref/tags/v6.4.0) echo "tag"; exit 0 ;;
+    */git/ref/tags/*)   exit 1 ;;
+    */contents/*)       exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$tagonly/bin/gh"
+
+tagonly_out=$(cd "$tagonly/repo" && env -i PATH="$tagonly/bin:/usr/bin:/bin" HOME="$tagonly" \
+              bash --noprofile --norc "$SCRIPT" -R acme/tagonly 2>&1)
+check  "takes the version from the release when no file states it" "declared    : 6.4.0" "$tagonly_out"
+check  "says where that version came from"   "no version file in the tree" "$tagonly_out"
+refute "does not demand a version-file bump" "NEXT: prepare-release" "$tagonly_out"
+check  "reports the tag it found"            "tag         : annotated" "$tagonly_out"
+
+# Without a release there is nothing to fall back on, and the original verdict
+# -- with its list of the manifests that were looked for -- must survive.
+cat >"$tagonly/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "repo view")   echo "acme/tagonly"; exit 0 ;;
+  "pr list")     echo "null"; exit 0 ;;
+esac
+exit 1
+STUB
+chmod +x "$tagonly/bin/gh"
+norelease_out=$(cd "$tagonly/repo" && env -i PATH="$tagonly/bin:/usr/bin:/bin" HOME="$tagonly" \
+                bash --noprofile --norc "$SCRIPT" -R acme/tagonly 2>&1)
+check "versionless with no release still says so" "no version file found" "$norelease_out"
+check "and still names the manifests"             "herdr-plugin.toml" "$norelease_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }

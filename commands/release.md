@@ -117,9 +117,12 @@ summarize the version changes.
 - Create a **signed, annotated** tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 - Push the tag: `git push origin vX.Y.Z`
 
-**IMPORTANT**: NEVER use `gh release create`. NEVER create lightweight tags.
-Always use `git tag -s` to create signed annotated tags. The CI workflow
-triggered by the tag push handles GitHub release creation.
+**IMPORTANT**: NEVER create lightweight tags; always use `git tag -s` for signed
+annotated tags. Where a CI workflow publishes the release, the tag push triggers
+it and you do not run `gh release create`. Where the repository has no such
+workflow, publish against the pushed tag with
+`gh release create vX.Y.Z --verify-tag --notes-file <notes>` — never without
+`--verify-tag`, which is what stops gh creating the tag itself.
 
 **If a wrong tag was already pushed**: treat it as published — registries
 (Packagist, TER) consume the tag push via webhook within seconds. NEVER

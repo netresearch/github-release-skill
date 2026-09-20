@@ -43,7 +43,7 @@ This error is permanent and unrecoverable for that tag name in that repository.
 
 ### How tag names get burned accidentally
 
-1. **`gh release create v1.0.0`** — creates a lightweight tag AND publishes immediately (not as draft). The tag name is instantly burned.
+1. **`gh release create v1.0.0`** — with no `--verify-tag` it creates a lightweight tag AND publishes immediately (not as draft). The tag name is instantly burned. With `--verify-tag` gh aborts instead of creating the tag, so only a tag you pushed yourself can be burned.
 2. **Publishing too early** — clicking "Publish" on a draft before verifying contents. Once published, there is no "unpublish."
 3. **CI workflow that auto-publishes** — if the workflow creates a non-draft release, the tag is burned on first run. A failed re-run cannot reuse it.
 
@@ -73,14 +73,14 @@ See `recovery-procedures.md` for detailed recovery steps.
 
 ### Do Not
 
-- Never use `gh release create` without `--draft` flag (and even then, prefer CI)
+- Never use `gh release create` without `--verify-tag`; where a publishing workflow exists, prefer it over running the command at all
 - Never auto-publish releases in CI — always leave as draft for human review
 - Never delete and recreate tags expecting to reuse the name
 - Never assume a failed release can be "retried" with the same version number
 
 ## When Moving a Tag IS Safe
 
-Tag-name burning is tied to **release publication**, not to the tag push itself. A tag pushed to the remote is *not* automatically burned. Burning happens only when `gh release create` (or the equivalent REST/GraphQL API call, or the Release workflow's create-release step) actually creates the release object.
+Tag-name burning is tied to **release publication**, not to the tag push itself. A tag pushed to the remote is *not* automatically burned. Burning happens only when `gh release create` (or the equivalent REST/GraphQL API call, or the Release workflow's create-release step) actually creates the release object — `--verify-tag` does not change that: it governs whether the *tag* can be created, not whether publishing burns the name.
 
 This means: **if a release workflow fails before the create-release step runs** — e.g., a broken reusable-workflow reference, a failing build, a failing SBOM step, a failing signing step — the tag name is still available to re-use. The workflow never reached the publication event, so the tag name is not burned.
 

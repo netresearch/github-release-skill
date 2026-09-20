@@ -4,7 +4,7 @@ Claude Code skill plugin for safe, automated GitHub releases with supply chain s
 
 ## Problem
 
-AI coding agents (Claude Code, Copilot, etc.) naturally reach for `gh release create` when asked to "create a release". This:
+AI coding agents (Claude Code, Copilot, etc.) naturally reach for a bare `gh release create` when asked to "create a release". This:
 
 1. Creates **lightweight unsigned tags** instead of signed annotated tags
 2. Creates **immutable releases** that permanently burn tag names (no recovery)
@@ -14,7 +14,7 @@ This skill prevents these mistakes structurally via hooks and provides the corre
 
 ## Features
 
-- **Guard hooks**: Block `gh release create/delete/edit` and lightweight tag creation at the tool level
+- **Guard hooks**: Block `gh release delete`, `gh release edit` beyond notes, a `gh release create` that could create the tag (i.e. without `--verify-tag`), and lightweight tag creation — at the tool level
 - **Ecosystem detection**: Auto-detect project type (TYPO3, PHP, Node.js, Go, Python, Rust, skill repos)
 - **Version management**: Suggest next semver version from conventional commits, update all version files
 - **Release orchestration**: Version bump PR → merge → signed tag → CI handles the rest

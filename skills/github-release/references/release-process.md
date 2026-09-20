@@ -4,16 +4,24 @@
 
 The complete flow from "create a release" to "release published on GitHub."
 
-## Why `gh release create` Is Forbidden
+## Why a bare `gh release create` Is Forbidden
 
-`gh release create` does the following harmful things:
+`gh release create` without `--verify-tag` does the following harmful things:
 
 1. **Creates a lightweight tag** if the tag doesn't exist — lightweight tags have no signature, no author metadata, and cannot be retroactively converted to annotated tags.
 2. **Burns the tag name permanently** — since GitHub immutable releases (GA Oct 2025), once a release uses a tag name, that name can never be reused. Not even `gh release delete` followed by `git push --delete origin vX.Y.Z` recovers it. GitHub returns: `"tag_name was used by an immutable release"`.
 3. **Bypasses CI** — no provenance attestation, no SBOM, no artifact signing. The release is created directly with whatever you attach manually.
 4. **Skips version file bumps** — source code still shows the old version.
 
-The hooks in this repository block `gh release create` and `gh release delete` to prevent these outcomes. `gh release edit` is allowed only for `--notes`/`--notes-file` flags (release description overhaul).
+`--verify-tag` removes the first two: gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation can only publish against a tag that was pushed on purpose — and `guard-lightweight-tag.py` is what makes sure that tag was annotated and signed. Points 3 and 4 are not about the flag at all: they are about whether a workflow is doing the work, and they are why the flag is an exemption rather than a licence.
+
+So the hooks block `gh release create` only without `--verify-tag` (and `--verify-tag=false` counts as without), and `gh release delete` always. `gh release edit` is allowed only for `--notes`/`--notes-file` flags (release description overhaul). Reading `--help` is allowed for any subcommand.
+
+**Which of the two flows applies is a property of the repository, not a preference.** If a workflow creates the release object, that workflow is the only thing that may create it. If none does — because the supply-chain workflows listen on `release: published`, which a `GITHUB_TOKEN`-created release never fires (see `typo3-ter-publishing.md`) — then a human credential must create it, and `gh release create … --verify-tag` is that step. Establish which case you are in by reading the workflows, not by trying the command:
+
+```bash
+grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh release create\|softprops/action-gh-release\|create-release" .github/workflows
+```
 
 ## The Correct Release Flow
 
@@ -289,11 +297,14 @@ Release notes are for the people deciding whether to upgrade — users, admins, 
 
 Creating a backport release (say v11.0.17) AFTER a newer release on a higher branch (v13.5.0) steals the "Latest" badge from v13.5.0, and users who click "Latest release" then get the old major.
 
-**Rule:** this guidance does **not** override the policy above. On repositories guarded by this skill's hooks (including every Netresearch repo with a release workflow), manual `gh release create` stays blocked — CI creates releases from signed tags, not the agent. The rest of this subsection applies only to the rare unguarded case: repos WITHOUT a release workflow, where manual `gh release create` is the only path. In that case, pass `--latest=false` for non-default-branch releases:
+**Rule:** this guidance does **not** override the policy above. Where a workflow publishes the release, it does so and the agent does not run `gh release create` at all. This subsection applies to the tag-only case: repos without a publishing workflow, where the release is created by hand against an already-pushed signed tag. There, pass `--latest=false` for non-default-branch releases:
 
 ```bash
-# Backport release on TYPO3_11 branch while main is on v13
+# Backport release on TYPO3_11 branch while main is on v13.
+# The tag was created with git tag -s and pushed first; --verify-tag makes gh
+# abort rather than create it, which is the condition the guard checks for.
 gh release create v11.0.17 \
+  --verify-tag \
   --latest=false \
   --title "v11.0.17" \
   --notes "Backport: CVE-2026-XXXX fix"

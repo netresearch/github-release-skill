@@ -11,6 +11,19 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `guard-gh-release.py` allows `gh release create` when `--verify-tag` is set. gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation cannot create the lightweight tag that the block exists to prevent — it can only publish a tag that was pushed on purpose, and `guard-lightweight-tag.py` is what keeps that tag annotated and signed. `--verify-tag=false` and `--verify-tag=0` stay blocked, and a mention of the flag inside a quoted argument is not the flag. Without the exemption the guard blocked the one correct step in a repository whose supply-chain workflows listen on `release: published`: that event never fires for a release created with `GITHUB_TOKEN`, so nothing but a human credential can start the provenance and SBOM jobs, and the release had to be published around the guard
+- `release-status.sh` derives the version from the latest release where the repository states it in no manifest. Every phase of the verdict keys off the declared version, so `prepare-release — no version file found` short-circuited all of them and reported a version-file question to a repository that has no version file by design; the output now names where the version came from. A repository with neither a manifest nor a release still gets the original verdict, manifest list included
+- the release-safety checkpoint and the release-process checkpoint distinguish the two flows: a workflow-published release, and a tag-only repository where the release is created by hand against the pushed signed tag
+- `SKILL.md`, `references/release-process.md`, `references/immutable-releases.md`, `README.md`, `AGENTS.md` and both release commands state the rule as "never without `--verify-tag`" rather than "never", and name which of the two flows a repository is in as something to establish from its workflows
+
+### Fixed
+
+- `gh release create --help` and `gh release delete -h` are no longer blocked. Reading the help runs no release operation, and the blocked command was the one that would have explained `--verify-tag`
+- a block message spanning several lines emitted its continuation lines at column 0, which ends the YAML block scalar and leaves the rest as stray text
+
+
 ## [1.0.4] - 2026-09-20
 
 ### Changed
