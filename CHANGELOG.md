@@ -11,6 +11,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-20
+
 ### Changed
 
 - `references/recovery-procedures.md`: a release workflow that never fired looks like nothing at all — no run, no failure, no red check — so the recovery path now starts by establishing whether the workflow was dispatched, rather than by reading a run that does not exist
@@ -133,7 +135,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/netresearch/github-release-skill/compare/v1.0.0...v1.0.1
