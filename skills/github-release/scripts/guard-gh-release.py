@@ -131,17 +131,34 @@ _DANGEROUS_EDIT_FLAGS = re.compile(
 )
 
 
-# "--verify-tag" as a flag that is actually ON. gh's own help (2.100.0):
-# "Abort in case the git tag doesn't already exist in the remote repository."
-# So the invocation cannot create a tag, which is the outcome the create block
-# exists to prevent; what it publishes is a tag somebody pushed on purpose.
+# "--verify-tag" is what makes a create safe. gh's own help (2.100.0): "Abort
+# in case the git tag doesn't already exist in the remote repository." So the
+# invocation cannot create a tag, which is the outcome the create block exists
+# to prevent; what it publishes is a tag somebody pushed on purpose.
 #
-# pflag accepts "--flag=false" for a boolean, so the value has to be read, not
-# just the flag name: "--verify-tag=false" turns the safeguard back off and must
-# stay blocked. The bare form and the truthy values pflag recognises pass.
-_VERIFY_TAG_ON = re.compile(
-    r"(?:^|\s)--verify-tag(?:=(?:1|t|T|true|TRUE|True))?(?=\s|$)"
-)
+# Whether it is ON takes two readings of pflag, not one. It accepts a value
+# ("--verify-tag=false" turns the safeguard back off), and it accepts the flag
+# REPEATED, keeping the last value — so "--verify-tag --verify-tag=false"
+# leaves it off while the first occurrence looks reassuring. Hence every
+# occurrence is collected and only the last one decides. The accepted spellings
+# are pflag's own for a boolean in long form (flag.go: 1, 0, t, f, true, false,
+# TRUE, FALSE, True, False); a bare occurrence is true.
+_VERIFY_TAG_OCCURRENCE = re.compile(r"(?:^|\s)--verify-tag(?:=(\S*))?(?=\s|$)")
+_PFLAG_TRUE = {"", "1", "t", "T", "true", "TRUE", "True"}
+
+
+def _verify_tag_is_on(args: str) -> bool:
+    """Whether the effective --verify-tag is on, reading the LAST occurrence.
+
+    A value pflag does not recognise makes gh exit before it does anything, so
+    it counts as off: this must never be the branch that lets a command
+    through.
+    """
+    values = _VERIFY_TAG_OCCURRENCE.findall(args)
+    if not values:
+        return False
+    return values[-1] in _PFLAG_TRUE
+
 
 # Asking for the help text runs no release operation at all. Before this, the
 # guard blocked "gh release create --help", i.e. the one command that would have
@@ -215,7 +232,7 @@ def _check_invocation(cmd: str) -> None:
         if _HELP_FLAG.search(args):
             return
         if subcommand == "create":
-            if _VERIFY_TAG_ON.search(args):
+            if _verify_tag_is_on(args):
                 return
             block(
                 "'gh release create' without --verify-tag creates the tag when it "

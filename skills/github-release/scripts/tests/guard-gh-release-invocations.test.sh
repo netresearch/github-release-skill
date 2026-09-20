@@ -135,6 +135,23 @@ check 0 'create --verify-tag=true' 'gh release create v1.2.3 --verify-tag=true'
 check 2 'delete does not become allowed by --verify-tag' \
   'gh release delete v1.2.3 --verify-tag'
 
+# --- a repeated flag is decided by its LAST occurrence ----------------------
+# Reported by CodeRabbit on PR #144 and reproduced before the fix. pflag allows
+# a boolean to be repeated and keeps the last value, so an opening --verify-tag
+# says nothing: gh resolves the pair below to false and can create the tag.
+check 2 'create, enabled then disabled' \
+  'gh release create v1.2.3 --verify-tag --verify-tag=false'
+check 2 'create, three occurrences ending disabled' \
+  'gh release create v1.2.3 --verify-tag=true --verify-tag --verify-tag=0'
+# The same rule in the other direction: the last occurrence enables it.
+check 0 'create, disabled then enabled' \
+  'gh release create v1.2.3 --verify-tag=false --verify-tag'
+check 0 'create, disabled then enabled explicitly' \
+  'gh release create v1.2.3 --verify-tag=0 --verify-tag=True'
+# A value pflag does not accept makes gh exit; it must not be the branch that
+# lets the command through.
+check 2 'create, unparseable value' 'gh release create v1.2.3 --verify-tag=yes'
+
 # --- a shell comment is not an argument -------------------------------------
 # Reported by CodeRabbit on PR #144, and reproduced before the fix: the shell
 # drops everything after an unquoted "#", so a --verify-tag offered there never
