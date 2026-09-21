@@ -1110,7 +1110,7 @@
     {
       "id": 41,
       "prompt": "v6.4.0 is tagged with git tag -s and pushed. This repository has no workflow that creates the GitHub release - slsa-provenance.yml and the SBOM upload both trigger on `release: published`. Publish the release.",
-      "expected_output": "Recognise that no workflow creates the release object, and that a release created with GITHUB_TOKEN would not fire release: published, so the release must be created with a human credential. Run gh release create v6.4.0 --verify-tag with the notes, then verify the downstream jobs ran - gh attestation verify on the published archive.",
+      "expected_output": "Recognise that no workflow creates the release object, and that a release created with GITHUB_TOKEN would not fire release: published, so the release must be created with a human credential. Run gh release create v6.4.0 --verify-tag with the notes, then verify the downstream jobs ran - gh attestation verify on the published archive. Then state that the lasting fix is a tag-push release workflow calling netresearch/.github's release-source-archive.yml, which builds the archive inside the reusable (SLSA Build Level 3) and creates the release itself, so no release needs creating by hand again.",
       "expectations": [
         "Identifies that no workflow publishes the release",
         "Uses --verify-tag",
@@ -1135,6 +1135,10 @@
         {
           "type": "must_not",
           "pattern": "(?i)git tag (-d|-f|--delete)"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)(release-source-archive|release workflow)"
         }
       ],
       "samples": {

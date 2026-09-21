@@ -18,7 +18,7 @@ allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 
 Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — a bare `gh release create` creates the tag when it is missing, that tag is lightweight, and the name is burned forever. `--verify-tag` aborts unless the tag already exists on the remote, so the invocation can only publish a tag somebody pushed on purpose; the guard allows it for that reason (`--verify-tag=false` stays blocked).
 
-Where the repository has a workflow that publishes the release, that workflow does it and you do not run `gh release create` at all. Where it does not — see *Tag-only repositories* below — publishing by hand against the pushed signed tag is the correct step, not a workaround.
+Where the repository has a workflow that publishes the release, that workflow does it and you do not run `gh release create` at all. Where it does not, **add one** — for a project shipped as its source tree, a tag-push caller of `netresearch/.github`'s `release-source-archive.yml` (`references/ci-workflow-templates.md`). Publishing by hand against the pushed signed tag (*Tag-only repositories* below) is the step for a release that cannot wait for that workflow, not a flow to keep.
 
 **`gh release edit` is allowed ONLY for `--notes` / `--notes-file`** to overhaul the release description after CI publishes. All other `gh release edit` flags are blocked.
 
@@ -44,6 +44,8 @@ checks the published body.
 10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
 
 ### Tag-only repositories
+
+**This state is a gap to close, not a flow to keep.** A repository in it gets its provenance from a workflow that runs after a hand-made release, so the build happens in the repository itself — SLSA Build Level 2 at best, because GitHub grants Level 3 only when the build runs inside a reusable the repository cannot edit. The fix is a release workflow on the tag push that calls the org reusable for the artefact: `release-source-archive.yml` (source tree), `release-go-app.yml` (Go), `release-typo3-extension.yml` (TYPO3). It builds, generates SBOMs, signs, attests and creates the release in one run; see `references/ci-workflow-templates.md`. Until that workflow exists:
 
 Some repositories have no workflow that creates the release object. Their supply-chain workflows listen on `release: published` instead — provenance attestation, SBOM upload, registry publish — and that event never fires for a release created with `GITHUB_TOKEN` (`references/typo3-ter-publishing.md` has the mechanism). The release therefore has to be created by a human credential, which is `gh` on your machine:
 

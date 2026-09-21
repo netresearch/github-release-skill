@@ -18,49 +18,52 @@ Netresearch maintains org-level reusable workflows:
 
 ## GitHub Release Only (No Package Registry)
 
-A project installed straight from its repository (a herdr plugin, for example) publishes nothing to PyPI, npm, Packagist or TER; the release carries the tagged source tree as an archive plus a checksum file. The org `python-release.yml` covers this with `publish-pypi: false`. Pattern from [netresearch/herdr-bg-activity](https://github.com/netresearch/herdr-bg-activity/blob/main/.github/workflows/release.yml):
+A project installed straight from its repository — an application, a plugin, anything shipped as its tagged source tree — publishes nothing to PyPI, npm, Packagist or TER. Its release carries the source archive. Use the org reusable `release-source-archive.yml`; it is the whole release workflow:
 
 ```yaml
+name: Release
+
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*"]
 
 permissions: {}
 
 jobs:
   release:
-    uses: netresearch/.github/.github/workflows/python-release.yml@main
+    uses: netresearch/.github/.github/workflows/release-source-archive.yml@main
     permissions:
-      contents: write
-      id-token: write
-    with:
-      publish-pypi: false
-      package-manager: pip
-      # Fail before building when the tag and the manifest disagree.
-      check-cmd: >-
-        python -c 'import os, tomllib;
-        v = tomllib.load(open("herdr-plugin.toml", "rb"))["version"];
-        t = os.environ["GITHUB_REF_NAME"].removeprefix("v");
-        assert v == t, f"tag {t} != herdr-plugin.toml version {v}"'
-      build-cmd: >-
-        mkdir -p dist &&
-        git archive --format=tar.gz --prefix="my-plugin-${GITHUB_REF_NAME}/"
-        -o "dist/my-plugin-${GITHUB_REF_NAME}.tar.gz" HEAD &&
-        (cd dist && sha256sum -- *.tar.gz > SHA256SUMS.txt)
-      release-files: 'dist/*'
+      contents: write        # create the release
+      id-token: write        # Sigstore OIDC identity
+      attestations: write    # file the attestations with GitHub
 
-  # python-release.yml uploads dist/ as the `dist` artifact but attests nothing.
-  attest:
+  # The release is created with GITHUB_TOKEN, so no `release` event starts
+  # anything afterwards; checks on the published release run as jobs here.
+  verify:
     needs: release
-    uses: netresearch/.github/.github/workflows/attest-release-files.yml@main
+    uses: netresearch/.github/.github/workflows/verify-release.yml@main
     permissions:
+      contents: read
+      attestations: read
       id-token: write
-      attestations: write
     with:
-      subject-path: 'dist/*'  # same value as release-files
+      tag: ${{ github.ref_name }}
+      identity-regexp: '^https://github\.com/netresearch/\.github/\.github/workflows/release-source-archive\.yml@'
+      signer-workflow: netresearch/.github/.github/workflows/release-source-archive.yml
 ```
 
-Provenance is a separate reusable, `attest-release-files.yml`, rather than an input on `python-release.yml`: it needs `attestations: write`, and a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. The reusable workflow is the signer, so verification has to name it; `--repo` alone checks the signer against the caller repository and fails:
+On the tag push it checks out the tag (refusing a lightweight one), builds `<repo>-<tag>-source.tar.gz` with `git archive --format=tar | gzip -9 -n`, generates SPDX and CycloneDX SBOMs, attests build provenance and the SBOM, writes `checksums.txt`, signs every file with Cosign, and creates the release last: a draft, every file uploaded with per-asset retries, then published. Because the build runs inside a reusable the project cannot edit, the provenance is **SLSA Build Level 3** — GitHub: "Artifact attestations by itself provides SLSA v1.0 Build Level 2. Reusable workflows can provide isolation between the build process and the calling workflow, to meet SLSA v1.0 Build Level 3." The first caller is [netresearch/timetracker](https://github.com/netresearch/timetracker/blob/main/.github/workflows/release.yml).
+
+Verification names the reusable as the signer; `--repo` alone checks the signer against the caller repository and fails:
+
+```bash
+gh attestation verify <repo>-<tag>-source.tar.gz --repo <owner>/<repo> \
+  --signer-workflow netresearch/.github/.github/workflows/release-source-archive.yml
+```
+
+### Level 2 alternative: your own build command
+
+`python-release.yml` with `publish-pypi: false` runs a `build-cmd` the caller supplies, and `attest-release-files.yml` attests its output. That is the shape [netresearch/herdr-bg-activity](https://github.com/netresearch/herdr-bg-activity/blob/main/.github/workflows/release.yml) uses. The build command lives in the calling repository, so the provenance is **Level 2**, however isolated the signer is. Use it only when the release has to carry something `release-source-archive.yml` does not build; for a plain source archive, switch to the reusable above. `attest-release-files.yml` needs `attestations: write`, which is why it is a separate reusable: a called workflow's job permissions are checked at startup, so adding that scope to `python-release.yml` would fail every caller that does not grant it. Verification names it as the signer:
 
 ```bash
 gh attestation verify <file> --repo <owner>/<repo> \
