@@ -425,20 +425,24 @@ batched.
 
 **3. Every test suite the repository ships is invoked by CI.** A suite that exists but is never
 run is not a gate, and a first stable release is where that gap becomes a claim about quality.
-Enumerate them mechanically rather than from memory:
+List both sides and read them side by side. This is a **prompt, not a comparison**: the two
+commands do not produce matching identifiers, and neither sees a suite launched through a
+project script or a reusable workflow. It is here so the question gets asked at all.
 
 ```bash
 # suites the repo declares
 grep -o 'name="[^"]*"' Build/phpunit*.xml phpunit*.xml 2>/dev/null | sort -u
 ls -d Tests/*/ 2>/dev/null
 
-# what CI actually invokes
+# what CI invokes — plus the callers, which hide the command in another repository
 grep -rhoE '(runTests\.sh -s [a-z:]+|phpunit[^|]*--testsuite [a-z]+|npx (playwright|vitest)[a-z ]*)' \
     .github/workflows/ | sort -u
+grep -rhoE 'uses: [^ ]+\.ya?ml@' .github/workflows/ | sort -u   # follow each one
 ```
 
-A suite in the first list and not in the second is either wired up before the release or named in
-the release notes as not running. `nr_passkeys_fe` 1.0.0 shipped 19 end-to-end specifications that
+For every suite in the first list, name where the second list runs it, and follow a reusable
+workflow into its own repository rather than assuming its name covers the suite. A suite you
+cannot place is either wired up before the release or named in the release notes as not running. `nr_passkeys_fe` 1.0.0 shipped 19 end-to-end specifications that
 every file skipped with a blanket `test.skip()` and no workflow invoked; the release notes had to
 say so, and the suite was built for real in 1.0.1.
 
@@ -508,8 +512,9 @@ published pair is broken for anyone who installs both at their newest version.
 Two checks before the removal, neither of which the dependency's own repository can answer:
 
 ```bash
-# the consumer's source, not the dependency's
-grep -rn "removedMethodName" /path/to/consumer/Classes/
+# the consumer's whole tree, not just Classes/ — a caller can sit in a template,
+# in JavaScript, in a fixture or in configuration
+git -C /path/to/consumer grep -n "removedMethodName" -- ':!vendor' ':!.Build' ':!node_modules'
 
 # who else declares the dependency
 gh search code "netresearch/the-dependency" --owner netresearch --limit 50
