@@ -71,7 +71,7 @@ Steps 8 and 9 collapse into that second command: it publishes and carries the no
 
 ## References
 
-- `references/release-process.md`
+- `references/release-process.md` — the flow; also the 0.x → 1.0 release (what a first stable promises, and the suites CI must actually invoke) and the order for a coupled pair
 - `references/ecosystem-detection.md` — version-file patterns
 - `references/immutable-releases.md` — immutable releases, tag burning
 - `references/supply-chain-security.md` — SLSA, Sigstore

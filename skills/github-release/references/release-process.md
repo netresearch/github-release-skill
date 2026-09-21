@@ -407,6 +407,45 @@ When releasing many repositories that share one reusable release workflow (e.g. 
 4. **Run the notes overhaul as a separate pass.** The Phase 5 description overhaul is the step most likely to run out of context in a combined loop — do the bump→merge→tag→publish pipeline for the whole batch first, then a second pass for narrative notes via `gh release edit --notes-file`.
 5. **Handle "drift" repos.** If a repo's version file was already bumped ahead of its latest tag, the next tag is `max(natural_bump, current_version_in_file)` — use the pre-bumped value (unless that version was already published/burned, in which case bump higher).
 
+## The 0.x → 1.0 Release: What Changes Besides the Number
+
+A patch or minor release ships changes. A first stable release ships a **promise**, and three
+things that were optional until then become binding. It is also the release a project does once,
+so nobody has the routine.
+
+**1. The promise itself, written where a consumer reads it.** From 1.0 on, an incompatible change
+to a public class, method or setting needs a new major. Put that sentence in the changelog entry,
+not only in a commit message, and set the state that carries it in the ecosystem's own metadata —
+for a TYPO3 extension `'state' => 'stable'` in `ext_emconf.php`, which is a separate field from
+the version and is easy to leave at `beta` while every version surface says 1.0.0.
+
+**2. Every deprecated API the release removes has its consumers migrated first.** See the next
+section for the order; at 1.0 this is not a nicety, because a 1.0 is where the removals get
+batched.
+
+**3. Every test suite the repository ships is invoked by CI.** A suite that exists but is never
+run is not a gate, and a first stable release is where that gap becomes a claim about quality.
+Enumerate them mechanically rather than from memory:
+
+```bash
+# suites the repo declares
+grep -o 'name="[^"]*"' Build/phpunit*.xml phpunit*.xml 2>/dev/null | sort -u
+ls -d Tests/*/ 2>/dev/null
+
+# what CI actually invokes
+grep -rhoE '(runTests\.sh -s [a-z:]+|phpunit[^|]*--testsuite [a-z]+|npx (playwright|vitest)[a-z ]*)' \
+    .github/workflows/ | sort -u
+```
+
+A suite in the first list and not in the second is either wired up before the release or named in
+the release notes as not running. `nr_passkeys_fe` 1.0.0 shipped 19 end-to-end specifications that
+every file skipped with a blanket `test.skip()` and no workflow invoked; the release notes had to
+say so, and the suite was built for real in 1.0.1.
+
+Two more surfaces that only matter at 1.0: the documentation version (a docs build pinned to
+`main` keeps serving the pre-release manual), and a dependency range that still allows the 0.x of a
+sibling package you are releasing in the same batch.
+
 ## Releasing a Dependency: the Consumer's CI Races the Registry
 
 When the repo you just released is a **dependency of another repo you are also working on**, the consumer's PR has a window in which its CI is guaranteed to fail for a reason that has nothing to do with its code.
@@ -450,6 +489,36 @@ composer show "netresearch/nr-vault" "$VERSION" >/dev/null 2>&1 && echo availabl
 ```
 
 Observed 2026-07-30: 31 red checks on a consumer PR, zero real defects — CI created 16:13:27, release published 16:22:59.
+
+
+## Releasing a Coupled Pair: the Consumer Migrates First
+
+Where two packages you maintain are coupled — a frontend extension importing the backend
+extension's services, a library and its bundle — a release that **removes** something they share
+has an order, and the wrong order ships a combination that cannot work.
+
+1. The consumer migrates to the new API and merges, while its constraint still allows the old
+   dependency version.
+2. The dependency releases the removal.
+3. The consumer opens its constraint to the new major and releases.
+
+Doing it the other way round — remove first, migrate afterwards — leaves a window in which the
+published pair is broken for anyone who installs both at their newest version.
+
+Two checks before the removal, neither of which the dependency's own repository can answer:
+
+```bash
+# the consumer's source, not the dependency's
+grep -rn "removedMethodName" /path/to/consumer/Classes/
+
+# who else declares the dependency
+gh search code "netresearch/the-dependency" --owner netresearch --limit 50
+```
+
+Measured in this fleet on 2026-09-20: `nr_passkeys_be` 1.0.0 removed two `RateLimiterService`
+methods after a grep that covered only its own repository. `nr_passkeys_fe` called both, at three
+sites. The broken pair was unreachable only because the consumer's `^0.12` constraint refused the
+new major — luck, not order.
 
 ## Prove an Unproven Pipeline With an `-rc` Tag First
 
