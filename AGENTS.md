@@ -24,4 +24,4 @@ commands/                     /release, /release-prepare, /release-status
 3. Create signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main vX.Y.Z`
 
-**NEVER use `gh release create` without `--verify-tag`.** Where a release workflow exists it handles GitHub release creation. Where none does, publish against the already-pushed signed tag: `gh release create vX.Y.Z --verify-tag --notes-file <notes>` — `--verify-tag` aborts rather than creating a lightweight tag.
+**NEVER use `gh release create` without `--verify-tag`.** Where a release workflow exists it handles GitHub release creation. Where none does, the fix is to add one that calls the org reusable for the artefact (`release-source-archive.yml` for a source tree; SLSA Build Level 3, see `skills/github-release/references/ci-workflow-templates.md`). Until then, publish against the already-pushed signed tag: `gh release create vX.Y.Z --verify-tag --notes-file <notes>` — `--verify-tag` aborts rather than creating a lightweight tag.
