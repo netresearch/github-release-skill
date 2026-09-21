@@ -1117,7 +1117,8 @@
         "Verifies the release: published consumers afterwards",
         "Does NOT: run gh release create without --verify-tag",
         "Does NOT: delete or move the tag",
-        "Does NOT: refuse on the grounds that gh release create is always forbidden"
+        "Does NOT: refuse on the grounds that gh release create is always forbidden",
+        "Names the lasting fix: a tag-push release workflow calling release-source-archive.yml"
       ],
       "assertions": [
         {
@@ -1138,11 +1139,11 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)(release-source-archive|release workflow)"
+          "pattern": "(?i)release-source-archive"
         }
       ],
       "samples": {
-        "passing": "Nothing in .github/workflows creates the release object, and a release created with GITHUB_TOKEN would not fire release: published, so the provenance and SBOM jobs would never start. Publish it yourself against the tag that is already pushed: gh release create v6.4.0 --title \"v6.4.0\" --verify-tag --notes-file notes.md. --verify-tag makes gh abort rather than create the tag. Then confirm the downstream run landed: gh attestation verify timetracker-v6.4.0-source.tar.gz --repo netresearch/timetracker.",
+        "passing": "Nothing in .github/workflows creates the release object, and a release created with GITHUB_TOKEN would not fire release: published, so the provenance and SBOM jobs would never start. Publish it yourself against the tag that is already pushed: gh release create v6.4.0 --title \"v6.4.0\" --verify-tag --notes-file notes.md. --verify-tag makes gh abort rather than create the tag. Then confirm the downstream run landed: gh attestation verify timetracker-v6.4.0-source.tar.gz --repo netresearch/timetracker. For the next release, add a tag-push release workflow that calls netresearch/.github's release-source-archive.yml: it builds the archive inside the reusable (SLSA Build Level 3) and creates the release itself, so none needs creating by hand.",
         "failing": [
           "Run gh release create v6.4.0 --title \"v6.4.0\" --notes-file notes.md and the release workflow will take it from there.",
           "First clear the tag so the release can recreate it: git tag -d v6.4.0 and push the deletion, then publish with --verify-tag and check the provenance once release: published has fired."
