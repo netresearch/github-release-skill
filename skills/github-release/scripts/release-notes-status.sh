@@ -60,6 +60,22 @@ body_has() { # <text> <grep-flag>... <pattern>
   grep -q "$@" <<<"$text"
 }
 
+# The sections the netresearch orchestrators append after `## Changes`, one per
+# line. It is a function rather than a literal inside the loop so the test reads
+# the same list the check reads, instead of a retyped copy that agrees with
+# whatever the check happens to do.
+#
+# `release-go-app.yml` emits `## Container image` (the three rolling tags) when
+# the run builds one, and `## Verify your download` always; the library and
+# source-archive orchestrators emit `## Installation` and
+# `## Software Bill of Materials`. Anything this list omits is destroyed by an
+# overhaul in silence — `## Container image` was omitted here and a measured
+# v1.7.0 release lost it while this script reported `ok`.
+ci_block_sections() {
+  printf '%s\n' Installation "Container image" "Verify your download" \
+                "Software Bill of Materials"
+}
+
 # Sourced by the test to exercise the helpers above; everything below needs gh.
 if [ "${BASH_SOURCE[0]}" != "${0}" ]; then return 0; fi
 
@@ -139,11 +155,11 @@ check_one() {
     "[.[] | select(.draft==false) | select(.tag_name!=\"$tag\") | {t: .tag_name, b: .body}]
      | map(select(.t | ltrimstr(\"v\") | split(\".\")[0] == \"$major_of_tag\"))
      | map(.b) | join(\"\n\")" 2>/dev/null || true)
-  for s in Installation "Verify your download" "Software Bill of Materials"; do
+  while IFS= read -r s; do
     if body_has "$sibling" -F "## $s" && ! body_has "$body" -F "## $s"; then
       lost="$lost \"$s\""
     fi
-  done
+  done <<< "$(ci_block_sections)"
 
   local next="ok"
   [ "$raw" = 1 ] || [ "$stub" = 1 ] && next="overhaul-notes"
