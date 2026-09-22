@@ -25,6 +25,11 @@ their notes were not backfilled here rather than reconstructed after the fact.
 - an unquoted shell comment is no longer read as arguments. `gh release create v1.2.3 # --verify-tag` offered a flag the shell discards, so the guard allowed the invocation and bash ran the bare create that can mint a lightweight tag; `gh release delete v1.2.3 # --help` passed the same way. The comment is now stripped with the quoted spans, before either check, and the notes-only test for `gh release edit` uses the same stripping. Found by CodeRabbit on the pull request that introduced the `--verify-tag` exemption, reproduced before the fix, and pinned by seven cases including two where a `#` is part of an argument rather than a comment
 - `gh release create --help` and `gh release delete -h` are no longer blocked. Reading the help runs no release operation, and the blocked command was the one that would have explained `--verify-tag`
 - a block message spanning several lines emitted its continuation lines at column 0, which ends the YAML block scalar and leaves the rest as stray text
+- `release-status.sh` finds the tag's workflow run again once other runs have happened since the tag. It filtered the 12 newest runs of every workflow on its own side, so Renovate, a merge queue and CI pushed the release run out of that window within hours: `netresearch/raybeam` v1.2.0 and `netresearch/terraform-provider-ad` v0.5.3 both reported `workflow : none` while their release runs had succeeded, and a failed release run would have been missed the same way. The lookup now asks GitHub for the tag's runs with `--branch`, prefers the run whose name says release or publish over CI started by the same push, prints `unknown` rather than `none` when the lookup itself fails, and prints `in_progress/-` for a running run, where gh's empty `conclusion` used to leave `in_progress/`
+
+### Added
+
+- `release-status.sh --watch` waits while the tag's publishing workflow has not completed, prints each state change to stderr, and then gives the normal verdict. Until now the release side had no counterpart to `pr-status.sh --watch`, and every wait on a release run was a hand-written loop
 
 
 ## [1.0.4] - 2026-09-20

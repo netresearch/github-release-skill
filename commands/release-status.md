@@ -20,6 +20,10 @@ Run the manual inspection below only to explain a verdict it already gave, or
 when the script is unavailable — reasoning the phase out by hand is how a step
 gets skipped.
 
+Right after pushing a tag, add `--watch`: the script then waits until the tag's
+publishing workflow has completed and reports the verdict after it, instead of
+answering `await-release-workflow` at once.
+
 ### 1. List recent releases
 
 Run:
