@@ -181,6 +181,91 @@ norelease_out=$(cd "$tagonly/repo" && env -i PATH="$tagonly/bin:/usr/bin:/bin" H
 check "versionless with no release still says so" "no version file found" "$norelease_out"
 check "and still names the manifests"             "herdr-plugin.toml" "$norelease_out"
 
+# ---------------------------------------------------------------------------
+# The tag's workflow run, behind a dozen newer runs of other workflows
+# ---------------------------------------------------------------------------
+# netresearch/raybeam v1.2.0 reported "workflow : none" on 2026-09-22 although
+# its Release run 32944806553 had succeeded: the script filtered the 12 newest
+# runs of every workflow, and Renovate, the merge queue and CI had long pushed
+# the tag's run out of that window. This stub behaves like gh: `run list` honours
+# --branch and applies the --jq filter with real jq, so a lookup that does not
+# ask for the tag gets the twelve foreign runs and nothing else.
+
+runs=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs"' EXIT
+mkdir -p "$runs/bin" "$runs/repo"
+ln -sf "$jq_path" "$runs/bin/jq"
+cat >"$runs/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# A repo released as v6.4.0 whose tag push started CI and Release. Twelve CI
+# runs on main came after it. RUNS_MODE selects the state of the tag's runs.
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/runs"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "release view") exit 1 ;;
+  "run list")
+    [ "${RUNS_MODE:-}" = fail ] && exit 1
+    branch=""; filter="."; shift 2
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --branch) branch="$2"; shift 2 ;;
+        --jq)     filter="$2"; shift 2 ;;
+        *)        shift ;;
+      esac
+    done
+    if [ "$branch" = "v6.4.0" ]; then
+      n=0; [ -f "$RUNS_COUNTER" ] && n=$(cat "$RUNS_COUNTER"); echo $((n + 1)) >"$RUNS_COUNTER"
+      rel='{"name":"Release","status":"completed","conclusion":"success","headBranch":"v6.4.0"}'
+      if [ "${RUNS_MODE:-}" = watch ] && [ "$n" -lt 2 ]; then
+        rel='{"name":"Release","status":"in_progress","conclusion":"","headBranch":"v6.4.0"}'
+      fi
+      # CI on the same tag is newer and still running; it is not the publisher.
+      data="[{\"name\":\"CI\",\"status\":\"in_progress\",\"conclusion\":\"\",\"headBranch\":\"v6.4.0\"},$rel]"
+    elif [ -z "$branch" ]; then
+      # Cancelled, so a foreign run can never pass for the tag's successful one.
+      data=$(jq -nc '[range(12) | {name:"Release",status:"completed",conclusion:"cancelled",headBranch:"main"}]')
+    else
+      data='[]'
+    fi
+    printf '%s' "$data" | jq -r "$filter"
+    exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)     echo "v6.4.0"; exit 0 ;;
+    */git/ref/tags/v6.4.0) echo "tag"; exit 0 ;;
+    */git/ref/tags/*)      exit 1 ;;
+    */contents/*)          exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$runs/bin/gh"
+
+runs_env() { env -i PATH="$runs/bin:/usr/bin:/bin" HOME="$runs" RUNS_COUNTER="$runs/count" "$@"; }
+
+rm -f "$runs/count"
+runs_out=$(cd "$runs/repo" && runs_env bash --noprofile --norc "$SCRIPT" -R acme/runs 2>&1)
+check  "finds the tag's run behind twelve newer ones" "workflow    : completed/success" "$runs_out"
+refute "does not report the run as missing"          "workflow    : none" "$runs_out"
+
+# The failed lookup must not read as "there is no run".
+rm -f "$runs/count"
+fail_out=$(cd "$runs/repo" && runs_env RUNS_MODE=fail bash --noprofile --norc "$SCRIPT" -R acme/runs 2>&1)
+check "a failed lookup says unknown" "workflow    : unknown" "$fail_out"
+
+# --watch: the Release run is in progress for the first two lookups, then done.
+# The timeout is short so that a broken watch fails this test in seconds rather
+# than holding it for the default 45 minutes.
+rm -f "$runs/count"
+watch_out=$(cd "$runs/repo" && runs_env RUNS_MODE=watch RELEASE_STATUS_WATCH_INTERVAL=0 \
+            RELEASE_STATUS_WATCH_TIMEOUT=3 bash --noprofile --norc "$SCRIPT" -R acme/runs --watch 2>&1)
+check  "watch reports the state it waited through" "watch: v6.4.0 workflow in_progress/-" "$watch_out"
+check  "watch ends on the completed run"           "workflow    : completed/success" "$watch_out"
+refute "watch did not run into its timeout"        "watch timed out" "$watch_out"
+check  "watch polled exactly until the state changed" "lookups=3;" "lookups=$(cat "$runs/count");"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }

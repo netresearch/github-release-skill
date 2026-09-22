@@ -19,16 +19,23 @@
 #
 #   ./release-status.sh [-R owner/repo]
 #   ./release-status.sh -R owner/repo --json
+#   ./release-status.sh -R owner/repo --watch   # wait for the tag's workflow, then report
+#
+# --watch waits only while the tag exists and its publishing workflow has not
+# completed: it prints each state change to stderr and then gives the normal
+# verdict. RELEASE_STATUS_WATCH_INTERVAL (seconds, default 20) and
+# RELEASE_STATUS_WATCH_TIMEOUT (default 2700) tune it.
 #
 # Exit: 0 = ok, 1 = action needed, 2 = usage/lookup error.
 set -euo pipefail
 
-REPO=""; JSON=0
+REPO=""; JSON=0; WATCH=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -R|--repo) REPO="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
-    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+    --watch) WATCH=1; shift ;;
+    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
     *) shift ;;
   esac
 done
@@ -166,11 +173,49 @@ if [ -n "$declared" ] && [ "$LOCAL_ONLY" = 0 ]; then
 fi
 
 # --- phase 4: the publishing workflow ---------------------------------------
+# Ask GitHub for the tag's runs by name. Filtering the 12 newest runs of EVERY
+# workflow on this side found nothing once a dozen other runs had happened since
+# the tag -- Renovate, a merge queue and CI get there in hours -- and reported
+# "none" for a release whose run existed (netresearch/raybeam v1.2.0, run
+# 32944806553, measured 2026-09-22). A failed release run falls out of that
+# window just the same, and then nothing reports it.
+#
+# One tag push can start several workflows (CI beside Release). The publishing
+# one is the run whose name says release or publish; only without such a run is
+# the newest run on the tag taken. A failed lookup is "unknown", not "none":
+# "the query failed" and "there is no run" must stay distinguishable. gh gives a
+# run in progress `conclusion: ""`, which jq's `//` treats as present, so the
+# empty string is tested for explicitly.
+wf_query() {
+  gh run list --repo "$REPO" --branch "v$declared" --limit 20 \
+    --json status,conclusion,name \
+    --jq '([.[] | select(.name|test("release|publish";"i"))] + .) | .[0]
+          | if .==null then "none"
+            else "\(.status)/\(if (.conclusion // "") == "" then "-" else .conclusion end)" end' \
+    2>/dev/null || echo "unknown"
+}
+
 wf_state=""
 if [ "$tag_state" = "annotated" ]; then
-  wf_state=$(gh run list --repo "$REPO" --limit 12 \
-    --json headBranch,status,conclusion,name \
-    --jq "[.[] | select(.headBranch==\"v$declared\")] | .[0] | if .==null then \"none\" else \"\(.status)/\(.conclusion // \"-\")\" end" 2>/dev/null || echo "none")
+  wf_state=$(wf_query)
+  if [ "$WATCH" = 1 ]; then
+    interval="${RELEASE_STATUS_WATCH_INTERVAL:-20}"
+    deadline=$(( $(date +%s) + ${RELEASE_STATUS_WATCH_TIMEOUT:-2700} ))
+    last=""
+    while [ "${wf_state%%/*}" != "completed" ]; do
+      if [ "$wf_state" != "$last" ]; then
+        printf 'watch: v%s workflow %s\n' "$declared" "$wf_state" >&2
+        last="$wf_state"
+      fi
+      if [ "$(date +%s)" -ge "$deadline" ]; then
+        add_note "watch timed out while the workflow was $wf_state"
+        break
+      fi
+      sleep "$interval"
+      wf_state=$(wf_query)
+    done
+    [ "${wf_state%%/*}" = "completed" ] && printf 'watch: v%s workflow %s\n' "$declared" "$wf_state" >&2
+  fi
 fi
 
 # --- phase 5: is the published body finished? --------------------------------
@@ -273,7 +318,8 @@ else
   printf '  declared    : %s%s\n' "${declared:-<none>}" "$([ "$version_source" = release ] && echo '  (from the latest release; no version file in the tree)')"
   printf '  latest rel  : %s\n' "${latest:-<none>}"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
-  [ -n "$wf_state" ] && printf '  workflow    : %s\n' "$wf_state"
+  [ -n "$wf_state" ] && printf '  workflow    : %s%s\n' "$wf_state" \
+    "$([ "$wf_state" = none ] && echo "  (no run found for v$declared)")"
   [ -n "$notes_next" ] && printf '  notes       : %s\n' "$notes_next"
   [ -n "$reg_missing" ] && printf '  registries  : missing on%s\n' "$reg_missing"
   echo
