@@ -150,4 +150,23 @@ pipelines=$(grep -v '^[[:space:]]*#' "$(dirname "${BASH_SOURCE[0]}")/../release-
             | grep -c '| *grep -q' || true)
 check "no pattern test goes through a pipe"            0 "$pipelines"
 
+# --- which CI blocks the overhaul check looks for -----------------------------
+# The list is read from the script, not retyped here: a copy would agree with
+# whatever the check does and stay green when a section is dropped from it.
+# `## Container image` is the section this pins. `release-go-app.yml` emits it
+# for every run that builds a container, and it was absent from the check's list
+# until a measured ldap-manager v1.7.0 overhaul destroyed it while this script
+# answered `ok`. The sibling comparison cannot recover from that on its own:
+# once a block is gone from every release on the line, no sibling carries it and
+# the check has nothing left to compare against.
+check "Container image is a CI block the check looks for" \
+      1 "$(ci_block_sections | grep -cxF 'Container image')"
+check "every orchestrator section is listed" \
+      4 "$(ci_block_sections | grep -c .)"
+
+# Structural: the check must READ that list rather than carry its own copy.
+literal=$(grep -c 'for s in Installation' \
+          "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh" || true)
+check "the loop reads ci_block_sections, not a retyped list" 0 "$literal"
+
 exit $fail
