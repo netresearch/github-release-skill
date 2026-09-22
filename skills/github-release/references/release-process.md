@@ -266,6 +266,8 @@ gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | 
 
 The compare API caps at 250 commits — for a wider range, run it in two halves.
 
+**Where the release workflow builds the body from `CHANGELOG.md`, the credit belongs in the CHANGELOG entry.** Some workflows extract the new version's section with `sed` and publish it as the body — `netresearch/terraform-provider-ad` does. Such a body carries exactly the `@mentions` its CHANGELOG entries carry. If the entries credit nobody, every release fails `release-notes-status.sh` with `MISSING CREDITS` and needs a hand edit after publishing, and a release nobody edits stays uncredited: that repository's v0.5.3 still is. Write the credit into the entry itself — `([#43](https://github.com/owner/repo/pull/43) by @login)` — so the extraction publishes it. For a release already out without it, add the credit with `gh release edit --notes-file`, and credit the next entries in the CHANGELOG.
+
 #### Narrative over implementation details
 
 Release notes are for the people deciding whether to upgrade — users, admins, integrators — not for developers reading the diff. Lead with the user-facing story, then brief feature sections.
