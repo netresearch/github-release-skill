@@ -18,6 +18,7 @@ their notes were not backfilled here rather than reconstructed after the fact.
 - the release-safety checkpoint and the release-process checkpoint distinguish the two flows: a workflow-published release, and a tag-only repository where the release is created by hand against the pushed signed tag
 - `references/supply-chain-security.md` records that the SLSA generic generator cannot run under the `sha_pinning_required` ruleset: `generator_generic_slsa3.yml` at `v2.1.0` — the latest release, 2025-02-24 — calls four nested actions by tag, and the run is rejected at the first of them. Pinning the generator's own `uses:` does not help, the references are inside it. The page names `actions/attest-build-provenance` as what to use there, and says to state the level actually reached rather than the one the workflow is named after
 - `SKILL.md`, `references/release-process.md`, `references/immutable-releases.md`, `README.md`, `AGENTS.md` and both release commands state the rule as "never without `--verify-tag`" rather than "never", and name which of the two flows a repository is in as something to establish from its workflows
+- `references/release-process.md` says where the credit goes when the release workflow builds the body from `CHANGELOG.md`: into the CHANGELOG entry, because the extracted body carries only the `@mentions` the entries carry. Without them every such release fails `release-notes-status.sh` with `MISSING CREDITS` until someone edits the published body by hand
 
 ### Fixed
 
