@@ -11,6 +11,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
 ### Changed
 
 - `guard-gh-release.py` allows `gh release create` when `--verify-tag` is set. gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation cannot create the lightweight tag that the block exists to prevent — it can only publish a tag that was pushed on purpose, and `guard-lightweight-tag.py` is what keeps that tag annotated and signed. `--verify-tag=false` and `--verify-tag=0` stay blocked, and a mention of the flag inside a quoted argument is not the flag. Without the exemption the guard blocked the one correct step in a repository whose supply-chain workflows listen on `release: published`: that event never fires for a release created with `GITHUB_TOKEN`, so nothing but a human credential can start the provenance and SBOM jobs, and the release had to be published around the guard
@@ -31,7 +33,6 @@ their notes were not backfilled here rather than reconstructed after the fact.
 ### Added
 
 - `release-status.sh --watch` waits while the tag's publishing workflow has not completed, prints each state change to stderr, and then gives the normal verdict. Until now the release side had no counterpart to `pr-status.sh --watch`, and every wait on a release run was a hand-written loop
-
 
 ## [1.0.4] - 2026-09-20
 
@@ -157,7 +158,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...v1.1.0
 [1.0.4]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/netresearch/github-release-skill/compare/v1.0.1...v1.0.2
