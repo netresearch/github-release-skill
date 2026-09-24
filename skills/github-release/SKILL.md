@@ -57,7 +57,7 @@ gh release create vX.Y.Z --title "vX.Y.Z" --verify-tag --notes-file <notes>
 
 **Run that second command under your own credential, never a workflow's.** It is the whole point of this branch of the flow: `gh` authenticated as `GITHUB_TOKEN` creates the release without firing `release: published`, so every downstream job stays silent and the release looks complete while carrying no provenance and no SBOM. Locally that means the `gh` you are logged into; from automation it means a PAT or a GitHub App installation token in `GH_TOKEN`, and `${{ github.token }}` is exactly the value that must not appear there.
 
-Steps 8 and 9 collapse into that second command: it publishes and carries the notes, so there is no CI-generated body to overhaul afterwards. Everything downstream — provenance, SBOM, registry publish — hangs off the `release: published` it fires, so verify it landed rather than assuming: `gh attestation verify <asset> --repo owner/repo` for the archive, `cosign verify` for an image. `scripts/release-status.sh` still reports `NEXT: prepare-release — no version file found` for a repository that states its version nowhere; that is the version-file question, not the release one.
+Steps 8 and 9 collapse into that second command: it publishes and carries the notes, so there is no CI-generated body to overhaul afterwards. Everything downstream — provenance, SBOM, registry publish — hangs off the `release: published` it fires, so verify it landed rather than assuming: `gh attestation verify <asset> --repo owner/repo` for the archive, `cosign verify` for an image. For a repository that states its version nowhere, `scripts/release-status.sh` takes the version from the latest release.
 
 ## Commands
 

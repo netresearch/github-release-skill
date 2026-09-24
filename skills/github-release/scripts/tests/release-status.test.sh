@@ -266,6 +266,149 @@ check  "watch ends on the completed run"           "workflow    : completed/succ
 refute "watch did not run into its timeout"        "watch timed out" "$watch_out"
 check  "watch polled exactly until the state changed" "lookups=3;" "lookups=$(cat "$runs/count");"
 
+# ---------------------------------------------------------------------------
+# package.json / composer.json versions, and tags without a `v`
+# ---------------------------------------------------------------------------
+# netresearch/assetpicker states its version only in package.json and tags its
+# releases bare: 2.0.0, 2.0.1. The script read no version file, took 2.0.1 from
+# the release, asked for the tag `v2.0.1`, got a 404, and answered
+# "tag: absent" / "NEXT: prepare-release" for a finished release.
+#
+# The stub serves the releases/latest tag from STUB_LATEST and treats every name
+# in STUB_TAGS as an annotated tag with a successful Release run. Anything it is
+# not told about is a 404, so a lookup under the wrong spelling finds nothing.
+
+manif=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif"' EXIT
+mkdir -p "$manif/bin" "$manif/repo"
+ln -sf "$jq_path" "$manif/bin/jq"
+cat >"$manif/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/manif"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "release view")
+    # STUB_PUBLISHED: every tag in STUB_TAGS has a published release whose
+    # body is already a narrative, so release-notes-status.sh answers ok.
+    [ -n "${STUB_PUBLISHED:-}" ] || exit 1
+    found=""; for t in ${STUB_TAGS:-}; do [ "$t" = "$3" ] && found=1; done
+    [ -n "$found" ] || exit 1
+    case "$*" in
+      *isDraft*) echo "false" ;;
+      *body*)    echo "Pictures can be picked from the new media browser." ;;
+    esac
+    exit 0 ;;
+  "run list")
+    branch=""; shift 2
+    while [ $# -gt 0 ]; do
+      case "$1" in --branch) branch="$2"; shift 2 ;; *) shift ;; esac
+    done
+    for t in ${STUB_TAGS:-}; do
+      [ "$t" = "$branch" ] && { echo "completed/success"; exit 0; }
+    done
+    echo "none"; exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)
+      [ -n "${STUB_LATEST:-}" ] && { echo "$STUB_LATEST"; exit 0; }
+      exit 1 ;;
+    */releases\?*)  exit 0 ;;
+    */git/ref/tags/*)
+      for t in ${STUB_TAGS:-}; do
+        [ "$t" = "${2##*/git/ref/tags/}" ] && { echo "tag"; exit 0; }
+      done
+      exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$manif/bin/gh"
+# Packagist as it answers for netresearch/assetpicker: the versions are the tag
+# names as tagged, so a bare tag is listed as "2.0.1", not "v2.0.1".
+cat >"$manif/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *repo.packagist.org/p2/netresearch/assetpicker.json*)
+    printf '%s\n200' '{"packages":{"netresearch/assetpicker":[{"version":"2.0.1"},{"version":"2.0.0"}]}}' ;;
+  *) exit 7 ;;
+esac
+STUB
+chmod +x "$manif/bin/curl"
+
+# manif_run <STUB_LATEST> <STUB_TAGS> [script args...] — gh on PATH, forge stubbed
+manif_run() {
+  local latest="$1" tags="$2"; shift 2
+  (cd "$manif/repo" && env -i PATH="$manif/bin:/usr/bin:/bin" HOME="$manif" \
+     STUB_LATEST="$latest" STUB_TAGS="$tags" STUB_PUBLISHED="${STUB_PUBLISHED:-}" \
+     bash --noprofile --norc "$SCRIPT" "$@" 2>&1)
+}
+# local_run — no gh on PATH, only the version files are read
+local_run() {
+  (cd "$manif/repo" && env -i PATH="$work/bin:/usr/bin:/bin" HOME="$manif" \
+     bash --noprofile --norc "$SCRIPT" 2>&1)
+}
+
+# The real case: assetpicker's package.json and composer.json (the latter has
+# no version), its latest release 2.0.1, and its bare tags.
+printf '%s\n' '{"name": "assetpicker", "version": "2.0.1", "type": "module"}' >"$manif/repo/package.json"
+printf '%s\n' '{"name": "netresearch/assetpicker", "type": "library"}' >"$manif/repo/composer.json"
+ap_out=$(manif_run 2.0.1 "2.0.0 2.0.1" -R netresearch/assetpicker)
+# The line must end after the version: the release fallback prints the same
+# number followed by "(from the latest release ...)".
+check  "assetpicker: reads the version from package.json"  "declared    : 2.0.1"$'\n' "$ap_out"
+refute "assetpicker: does not fall back to the release"    "no version file in the tree" "$ap_out"
+check  "assetpicker: finds the bare tag 2.0.1"             "tag         : annotated" "$ap_out"
+refute "assetpicker: does not report the tag as absent"    "tag         : absent" "$ap_out"
+check  "assetpicker: looks up the run under the bare tag"  "workflow    : completed/success" "$ap_out"
+refute "assetpicker: is not sent back to prepare-release"  "NEXT: prepare-release" "$ap_out"
+
+# With the release published and its notes finished, the verdict reaches the
+# registry check, and Packagist lists the version under the bare tag name.
+ap_pub=$(STUB_PUBLISHED=1 manif_run 2.0.1 "2.0.0 2.0.1" -R netresearch/assetpicker)
+check  "assetpicker: the finished release is ok"        "NEXT: ok" "$ap_pub"
+refute "assetpicker: Packagist is not reported missing" "registries  : missing" "$ap_pub"
+
+# The `v` spelling is still found, also when the latest release is bare.
+vtag_out=$(manif_run 2.0.0 "v2.0.1" -R acme/manif)
+check  "a v-tag is found when the latest release is bare"  "tag         : annotated" "$vtag_out"
+refute "and is not reported absent"                        "tag         : absent" "$vtag_out"
+
+# A missing tag is suggested in the spelling the repository already uses.
+printf '%s\n' '{"name": "assetpicker", "version": "2.0.2"}' >"$manif/repo/package.json"
+bare_next=$(manif_run 2.0.1 "2.0.0 2.0.1" -R acme/manif)
+check  "suggests a bare tag after bare releases"  "git tag -s 2.0.2 -m 2.0.2" "$bare_next"
+refute "does not suggest a v-tag there"           "git tag -s v2.0.2" "$bare_next"
+printf '%s\n' '{"name": "assetpicker", "version": "6.5.0"}' >"$manif/repo/package.json"
+v_next=$(manif_run v6.4.0 "v6.4.0" -R acme/manif)
+check  "suggests a v-tag after v-releases"        "git tag -s v6.5.0 -m v6.5.0" "$v_next"
+
+# A private package.json is local tooling: its version is not the release's.
+rm -f "$manif/repo/composer.json"
+printf '%s\n' '{"name": "tooling", "private": true, "version": "9.9.9"}' >"$manif/repo/package.json"
+priv_out=$(local_run)
+refute "a private package.json is not read"   "9.9.9" "$priv_out"
+check  "and the tree counts as versionless"   "declared    : <none>" "$priv_out"
+printf '%s\n' '{"name": "tooling", "private": false, "version": "9.9.9"}' >"$manif/repo/package.json"
+check  "a package.json with private: false is read" "declared    : 9.9.9" "$(local_run)"
+rm -f "$manif/repo/package.json"
+
+# composer.json's top-level "version" (the PHP/Composer row of
+# ecosystem-detection.md), and nothing when the field is absent.
+printf '%s\n' '{"name": "acme/lib", "version": "3.2.1"}' >"$manif/repo/composer.json"
+check  "reads the top-level composer.json version" "declared    : 3.2.1" "$(local_run)"
+printf '%s\n' '{"name": "acme/lib"}' >"$manif/repo/composer.json"
+check  "a composer.json without version is not a version file" "declared    : <none>" "$(local_run)"
+# composer.json allows a leading v; the tag lookup must not become vv2.0.1.
+printf '%s\n' '{"name": "acme/lib", "version": "v2.0.1"}' >"$manif/repo/composer.json"
+cv_out=$(manif_run 2.0.1 "2.0.0 2.0.1" -R acme/manif)
+check  "a v-prefixed composer version is read without the v" "declared    : 2.0.1"$'\n' "$cv_out"
+check  "and its bare tag is found"                          "tag         : annotated" "$cv_out"
+refute "and no vv-tag is looked for or suggested"           "vv2.0.1" "$cv_out"
+refute "and the tag is not reported absent"                 "tag         : absent" "$cv_out"
+rm -f "$manif/repo/composer.json"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }

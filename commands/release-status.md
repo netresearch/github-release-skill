@@ -37,8 +37,11 @@ Report each release with its tag, title, date, and asset count.
 
 Run:
 ```bash
-git for-each-ref refs/tags/v* --format='%(objecttype) %(refname:short)'
+git for-each-ref 'refs/tags/v*' 'refs/tags/[0-9]*' --format='%(objecttype) %(refname:short)'
 ```
+
+Release tags are `vX.Y.Z` in most repositories and a bare `X.Y.Z` in some
+(netresearch/assetpicker); the two patterns cover both.
 
 Flag any tags with objecttype `commit` -- these are **lightweight** (unsigned) tags,
 which is a problem. Tags should have objecttype `tag` (annotated/signed).
