@@ -155,14 +155,31 @@ fi
 echo ""
 echo "CI status:"
 if command -v gh &>/dev/null; then
-    # Try to get status of latest commit
-    ci_status=$(gh run list --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null || true)
-    if [[ "$ci_status" == "success" ]]; then
-        check "PASS" "CI checks passing"
-    elif [[ -z "$ci_status" ]]; then
-        check "WARN" "CI checks passing" "no recent workflow runs found"
+    # Grade every run of the commit that gets tagged (HEAD) on this branch.
+    # An unpinned `gh run list --limit 1` returns the newest run of any
+    # workflow on any branch, so a green feature branch passed a red main.
+    head_sha=$(git rev-parse HEAD 2>/dev/null || true)
+    ok='(.conclusion == "success" or .conclusion == "skipped" or .conclusion == "neutral")'
+    if ci_summary=$(gh run list --branch "$current_branch" --commit "$head_sha" --limit 100 \
+            --json workflowName,status,conclusion \
+            --jq "[length,
+                   ([.[] | select(.status != \"completed\")] | length),
+                   ([.[] | select(.status == \"completed\" and ($ok | not))
+                         | .workflowName + \"=\" + .conclusion] | join(\", \"))] | @tsv" \
+            2>/dev/null); then
+        IFS=$'\t' read -r ci_total ci_pending ci_failed <<<"$ci_summary"
+        where="${head_sha:0:7} on ${current_branch}"
+        if [[ -n "$ci_failed" ]]; then
+            check "FAIL" "CI checks passing" "${where}: ${ci_failed}"
+        elif [[ "${ci_total:-0}" == 0 ]]; then
+            check "WARN" "CI checks passing" "no workflow runs for ${where} — pushed yet?"
+        elif [[ "$ci_pending" != 0 ]]; then
+            check "WARN" "CI checks passing" "${ci_pending} of ${ci_total} run(s) for ${where} not finished"
+        else
+            check "PASS" "CI checks passing" "${ci_total} run(s) for ${where}"
+        fi
     else
-        check "FAIL" "CI checks passing" "last run: $ci_status"
+        check "WARN" "CI checks passing" "run lookup failed for ${current_branch}@${head_sha:0:7}"
     fi
 else
     check "WARN" "CI checks passing" "gh CLI not available"
@@ -207,7 +224,6 @@ echo "Tag integrity:"
 lightweight_tags=0
 while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
-    tagname="${ref##*/}"
     objtype=$(git cat-file -t "$ref" 2>/dev/null || echo "unknown")
     if [[ "$objtype" != "tag" ]]; then
         ((lightweight_tags++)) || true
