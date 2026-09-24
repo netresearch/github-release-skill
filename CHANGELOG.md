@@ -11,11 +11,24 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-24
+
 ### Changed
 
 - `references/release-process.md` keeps the CI-appended blocks of the library and source-archive orchestrators, too. The capture recipe cut only at `## Container image`, the first block of `release-go-app.yml`; a TYPO3 extension release starts its CI blocks with `## Installation`, so the cut captured nothing and the overhaul would have dropped them. It now cuts at the first of `## Installation`, `## Container image` and `## Verify your download`, the headings `release-notes-status.sh` already checks, and says to look at the tail before publishing
 - the same recipe captures the body with `jq -j .body`. `gh … --jq .body` appends a newline the stored body does not have, and the recipe published it: 8054 bytes against the stored 8053 on nr-llm v0.36.0
 - `references/release-process.md` has a section on 0.x minor releases: every consumer in the target installation's lock that pins the previous minor refuses the new one, and each needs a widened constraint and a release of its own first. It gives the `jq` query over `composer.lock` that lists them
+- `guard-gh-release.py` reads a `gh api` call as the argument list the shell hands to gh (`shlex`), instead of matching its text. A mutating call on a release endpoint is one with an explicit POST, PUT, PATCH or DELETE, a method the guard cannot read (`"$M"`, empty), or data flags without GET or HEAD. Flags that take a value consume it in every form gh accepts: separate, attached, after `=`, and inside shorthand groups such as `-iXDELETE`. Unbalanced quotes around a release path block
+
+### Added
+
+- `references/recovery-procedures.md` has a section "Release Titles Differ From the Tag": `--title "$TAG"` in the release workflow as prevention, and as recovery a script the maintainer runs, dry run by default, which renames only exact matches on `--apply`, reads each title back and ends with a check that no title differs from its tag. The guard blocks title edits, so the agent hands the script over rather than running it
+
+### Fixed
+
+- `guard-gh-release.py` blocked a mutating `gh api` call on a release endpoint only in the forms its regexes knew. A quoted path, a flag value with blanks, a long data flag, a full URL, `repos/$R/releases` with owner and repo in one variable, the `repos/{owner}/{repo}` placeholders and the numeric `repositories/<id>/releases` route all passed. One of those regexes also backtracked exponentially: 20 dash-words took over 20 s, where 2000 now take about 15 ms
+- a trailing shell comment can no longer hide a method: `gh api … -X DELETE # -X GET` is blocked. The call is judged with and without the comment cut off, and blocks if either reading does. A release path or method only in a comment, or an apostrophe in such a comment, therefore blocks too
+- the invocation splitter both guards share no longer cuts a word at a brace (`repos/{owner}/{repo}`, `${VAR}`), separates at bash 5.3's `${ cmd; }`, and reads an assignment prefix whose value holds `${…}`, a quoted span or an escaped character with blanks. `A="x y" gh release create v1.2.3` and `a='x y' git tag v1.2.3` passed both guards before; the second finding came from CodeRabbit
 
 ## [1.1.0] - 2026-09-23
 
@@ -164,7 +177,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...v1.1.0
 [1.0.4]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/netresearch/github-release-skill/compare/v1.0.2...v1.0.3
