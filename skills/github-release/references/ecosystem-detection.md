@@ -75,6 +75,8 @@ Note: Many Composer packages omit the `version` field entirely, relying on Git t
 
 Note: Update `package-lock.json` by running `npm install --package-lock-only` after bumping `package.json`, not by manual editing.
 
+Note: a `"private": true` package.json is local tooling, not a release surface; `validate-pre-release.sh` and `release-status.sh` do not read its version.
+
 ### Go
 
 **Detection**: `go.mod` exists.

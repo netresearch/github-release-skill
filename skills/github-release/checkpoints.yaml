@@ -48,11 +48,12 @@ mechanical:
   # Tag integrity checks
   - id: GR-6
     type: command
-    pattern: "! git for-each-ref 'refs/tags/v*' --format='%(objecttype)' | grep -qvx tag"
+    pattern: "! git for-each-ref 'refs/tags/v*' 'refs/tags/[0-9]*' --format='%(objecttype)' | grep -qvx tag"
     severity: error
     desc: >-
       All version tags must be annotated (not lightweight). `for-each-ref`
-      prints one object type per `v*` tag: `tag` for an annotated tag, `commit`
+      prints one object type per version tag, `v*` or bare `[0-9]*` (some
+      repositories tag `1.2.3`): `tag` for an annotated tag, `commit`
       for a lightweight one. `grep -qvx tag` succeeds as soon as one line is
       not exactly `tag`, and the leading `!` inverts that — so the check exits
       0 only when every version tag is annotated, or no version tag exists yet.

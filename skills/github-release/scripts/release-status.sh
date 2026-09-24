@@ -90,8 +90,9 @@ fi
 # Version the working tree declares: TYPO3 ext_emconf, else composer extra,
 # else a skill repo's plugin.json (the whole skill fleet declares it there and
 # nowhere else — without this the verdict is "prepare-release" for every one of
-# them, however cleanly they are released), else a WoW addon's .toc manifest,
-# which is the only place such an addon states its version.
+# them, however cleanly they are released), else the top-level "version" of
+# composer.json or package.json, else a herdr or WoW addon manifest, which is
+# the only place such a plugin or addon states its version.
 declared=""
 if [ -f ext_emconf.php ]; then
   declared=$(grep -oE "'version'[[:space:]]*=>[[:space:]]*'[^']+'" ext_emconf.php 2>/dev/null \
@@ -99,6 +100,11 @@ if [ -f ext_emconf.php ]; then
 fi
 [ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
 [ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
+[ -n "$declared" ] || declared=$(jq -r '.version // empty' composer.json 2>/dev/null || true)
+# A "private": true package.json is local tooling, not a release surface: its
+# version never tracks the release (validate-pre-release.sh skips it too).
+[ -n "$declared" ] || declared=$(jq -r 'if .private == true then empty else .version // empty end' \
+                                 package.json 2>/dev/null || true)
 
 # herdr plugin: herdr-plugin.toml at the root carries the version as a top-level
 # key. Only keys before the first table header count — a `version` under
@@ -161,15 +167,27 @@ if [ "$LOCAL_ONLY" = 0 ]; then
 fi
 
 # --- phase 3: tag exists, and is annotated + signed --------------------------
+# A repository tags either `v1.2.3` or bare `1.2.3` (netresearch/assetpicker
+# releases 2.0.1 under a bare tag). Asking only for `v$declared` reported such a
+# release's tag as absent and sent it back to prepare-release. Both spellings
+# are asked for, the one the latest release uses first; $tag_ref is the name
+# every later lookup uses, and the one a missing tag is suggested under.
 tag_state=""
+tag_ref="v$declared"
 if [ -n "$declared" ] && [ "$LOCAL_ONLY" = 0 ]; then
-  want="v$declared"
-  if gh api "repos/$REPO/git/ref/tags/$want" >/dev/null 2>&1; then
-    obj=$(gh api "repos/$REPO/git/ref/tags/$want" --jq .object.type 2>/dev/null || echo "")
-    if [ "$obj" = "tag" ]; then tag_state="annotated"; else tag_state="lightweight"; fi
+  if [ -n "$latest" ] && [ "${latest#v}" = "$latest" ]; then
+    tag_ref="$declared"; tag_alt="v$declared"
   else
-    tag_state="absent"
+    tag_alt="$declared"
   fi
+  tag_state="absent"
+  for cand in "$tag_ref" "$tag_alt"; do
+    if obj=$(gh api "repos/$REPO/git/ref/tags/$cand" --jq .object.type 2>/dev/null); then
+      tag_ref="$cand"
+      if [ "$obj" = "tag" ]; then tag_state="annotated"; else tag_state="lightweight"; fi
+      break
+    fi
+  done
 fi
 
 # --- phase 4: the publishing workflow ---------------------------------------
@@ -187,7 +205,7 @@ fi
 # run in progress `conclusion: ""`, which jq's `//` treats as present, so the
 # empty string is tested for explicitly.
 wf_query() {
-  gh run list --repo "$REPO" --branch "v$declared" --limit 20 \
+  gh run list --repo "$REPO" --branch "$tag_ref" --limit 20 \
     --json status,conclusion,name \
     --jq '([.[] | select(.name|test("release|publish";"i"))] + .) | .[0]
           | if .==null then "none"
@@ -204,7 +222,7 @@ if [ "$tag_state" = "annotated" ]; then
     last=""
     while [ "${wf_state%%/*}" != "completed" ]; do
       if [ "$wf_state" != "$last" ]; then
-        printf 'watch: v%s workflow %s\n' "$declared" "$wf_state" >&2
+        printf 'watch: %s workflow %s\n' "$tag_ref" "$wf_state" >&2
         last="$wf_state"
       fi
       if [ "$(date +%s)" -ge "$deadline" ]; then
@@ -214,15 +232,15 @@ if [ "$tag_state" = "annotated" ]; then
       sleep "$interval"
       wf_state=$(wf_query)
     done
-    [ "${wf_state%%/*}" = "completed" ] && printf 'watch: v%s workflow %s\n' "$declared" "$wf_state" >&2
+    [ "${wf_state%%/*}" = "completed" ] && printf 'watch: %s workflow %s\n' "$tag_ref" "$wf_state" >&2
   fi
 fi
 
 # --- phase 5: is the published body finished? --------------------------------
 notes_next=""
-if [ -n "$declared" ] && gh release view "v$declared" --repo "$REPO" >/dev/null 2>&1; then
+if [ -n "$declared" ] && gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
   if [ -x "$HERE/release-notes-status.sh" ]; then
-    notes_next=$("$HERE/release-notes-status.sh" -R "$REPO" "v$declared" --json 2>/dev/null | jq -r .next 2>/dev/null || echo "")
+    notes_next=$("$HERE/release-notes-status.sh" -R "$REPO" "$tag_ref" --json 2>/dev/null | jq -r .next 2>/dev/null || echo "")
   fi
 fi
 
@@ -236,7 +254,7 @@ if [ -n "$declared" ] && [ "$notes_next" = "ok" ]; then
     pk=$(curl -sS -w '\n%{http_code}' "https://repo.packagist.org/p2/${pkg}.json" 2>/dev/null || true)
     if [ "$(printf '%s' "$pk" | tail -1)" = "200" ]; then
       printf '%s' "$pk" | sed '$d' \
-        | jq -e --arg v "v$declared" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
+        | jq -e --arg v "$tag_ref" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
         || reg_missing="$reg_missing packagist"
     fi
   fi
@@ -267,36 +285,36 @@ if [ "$LOCAL_ONLY" = 1 ] && [ -n "$declared" ]; then
   add_note "version files declare v$declared; whether that is released cannot be checked without gh"
   cmd="release-status.sh -R ${REPO:-owner/repo}   # re-run once gh is available"
 elif [ -z "$declared" ]; then
-  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json / herdr-plugin.toml / *.toc) and no release to take a version from"
+  next="prepare-release"; add_note "no version file found (ext_emconf.php / composer extra.typo3/cms.version / .claude-plugin/plugin.json / composer.json version / package.json version / herdr-plugin.toml / *.toc) and no release to take a version from"
 elif [ "$relpr" != "null" ] && [ -n "$relpr" ]; then
   next="merge-release-pr"; cmd="pr-status.sh -R $REPO $relpr   # then pr-merge.sh"
   add_note "release PR #$relpr is open for v$declared"
 elif [ "$declared" = "${latest#v}" ] && [ "$tag_state" = "annotated" ] && [ "$notes_next" = "ok" ] && [ -z "$reg_missing" ]; then
   next="ok"
   if [ "$version_source" = "release" ]; then
-    add_note "v$declared released, notes rewritten, registries serving it (no version file in the tree; version read from the release)"
+    add_note "$tag_ref released, notes rewritten, registries serving it (no version file in the tree; version read from the release)"
   else
-    add_note "v$declared released, notes rewritten, registries serving it"
+    add_note "$tag_ref released, notes rewritten, registries serving it"
   fi
 elif [ "$stale" = 1 ]; then
   next="prepare-release"; cmd="git fetch origin && git switch --detach origin/main   # then re-run"
 elif [ "$tag_state" = "absent" ]; then
   if [ "$declared" = "${latest#v}" ]; then
-    next="prepare-release"; add_note "version files already on the released v$declared"
+    next="prepare-release"; add_note "version files already on the released $tag_ref"
   else
     next="signed-tag"
-    cmd="git tag -s v$declared -m v$declared && git push origin v$declared   # verify HEAD==origin/main first"
-    add_note "v$declared prepared but not tagged"
+    cmd="git tag -s $tag_ref -m $tag_ref && git push origin $tag_ref   # verify HEAD==origin/main first"
+    add_note "$tag_ref prepared but not tagged"
   fi
 elif [ "$tag_state" = "lightweight" ]; then
-  next="signed-tag"; add_note "v$declared is a LIGHTWEIGHT tag -- unsigned, and the name is spent once a release uses it"
+  next="signed-tag"; add_note "$tag_ref is a LIGHTWEIGHT tag -- unsigned, and the name is spent once a release uses it"
 elif [ -n "$wf_state" ] && [ "${wf_state%%/*}" != "completed" ] && [ "$wf_state" != "none" ]; then
   next="await-release-workflow"; add_note "publishing workflow is $wf_state"
 elif [ -n "$wf_state" ] && [ "$wf_state" = "completed/failure" ]; then
   next="await-release-workflow"; add_note "publishing workflow FAILED -- read its annotations before re-running"
 elif [ -n "$notes_next" ] && [ "$notes_next" != "ok" ]; then
   next="rewrite-release-notes"
-  cmd="release-notes-status.sh -R $REPO v$declared   # then gh release edit --notes-file"
+  cmd="release-notes-status.sh -R $REPO $tag_ref   # then gh release edit --notes-file"
   add_note "release body: $notes_next"
 elif [ -n "$reg_missing" ]; then
   next="verify-publication"; add_note "not served yet by:$reg_missing"
@@ -319,7 +337,7 @@ else
   printf '  latest rel  : %s\n' "${latest:-<none>}"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
   [ -n "$wf_state" ] && printf '  workflow    : %s%s\n' "$wf_state" \
-    "$([ "$wf_state" = none ] && echo "  (no run found for v$declared)")"
+    "$([ "$wf_state" = none ] && echo "  (no run found for $tag_ref)")"
   [ -n "$notes_next" ] && printf '  notes       : %s\n' "$notes_next"
   [ -n "$reg_missing" ] && printf '  registries  : missing on%s\n' "$reg_missing"
   echo
