@@ -231,7 +231,14 @@ check 0 'api -i on a release read' 'gh api -i repos/o/r/releases/latest'
 # A shell comment is cut the way bash cuts it: words after it never reach gh.
 check 2 'api DELETE with a comment naming GET' 'gh api repos/o/r/releases/1 -X DELETE # -X GET'
 check 2 'api data with a comment naming GET' 'gh api repos/o/r/releases -f tag_name=v1 # -X GET'
-check 0 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
+# The call is also judged without the comment cut, so a release path that
+# appears only in a comment blocks. That is the safe direction: the cutter is a
+# text scan, and a "#" bash does not read as a comment must never cost a real
+# method (the two cases below).
+check 2 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
+# shellcheck disable=SC2016  # the guard must see the expansion unexpanded
+check 2 'api "#" inside a ${...} expansion' 'gh api repos/o/r/releases/1 -H X-A:${V/ #/} -X DELETE'
+check 2 "api \"#\" after a \$'...' string with an escaped quote" "gh api repos/o/r/releases/1 -H \$'X-A: a\\'b' -H 'X-B: #c' -X DELETE"
 check 2 'api method flag without a value' 'gh api repos/o/r/releases/1 -X DELETE -X'
 check 2 'api numeric repositories route' 'gh api repositories/123/releases/1 -X DELETE'
 # shellcheck disable=SC2016  # the guard must see the expansion unexpanded

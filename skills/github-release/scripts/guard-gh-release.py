@@ -153,16 +153,30 @@ _SAFE_METHODS = {"GET", "HEAD"}
 def _gh_api_mutates_release(args: str):
     """Return the method name if a gh api call mutates a release, else None.
 
-    `args` is the text after `gh api`. gh sends POST when a field or an input
-    body is present and no method is given, so data alone is a mutation unless
-    the method is GET or HEAD (then the fields become query parameters).
+    `args` is the text after `gh api`. The call is judged twice, with and
+    without a trailing shell comment cut off, and it mutates if either reading
+    says so. Cutting is needed: kept, a comment's words override the real
+    method ("-X DELETE # -X GET"). Cutting alone is not safe: the cutter is a
+    text scan, and a "#" bash does not treat as a comment -- inside ${V/ #/},
+    or after a $'...' string with an escaped quote -- made it drop a real
+    "-X DELETE". Judging both ways, a mistake in either reading can only block.
+    A method or path that appears only in a comment therefore blocks too, which
+    is the safe direction.
+    """
+    return _judge_gh_api(_without_comment(args)) or _judge_gh_api(args)
+
+
+def _judge_gh_api(args: str):
+    """One reading of a gh api call; see _gh_api_mutates_release.
+
+    gh sends POST when a field or an input body is present and no method is
+    given, so data alone is a mutation unless the method is GET or HEAD (then
+    the fields become query parameters).
     """
     try:
-        # The comment is cut the way bash cuts it, before splitting. shlex's
-        # own comments=True treats a "#" inside a word as a comment ("-H
-        # X-A:a#b -X DELETE" lost its method), and keeping a comment's words
-        # let "# -X GET" override the real method.
-        words = shlex.split(_without_comment(args))
+        # No comments=True: shlex would treat a "#" inside a word as a
+        # comment, which bash does not ("-H X-A:a#b -X DELETE").
+        words = shlex.split(args)
     except ValueError:
         # Unbalanced quotes: the shell will not run this as written, but a
         # release path in it is reason enough not to guess.
