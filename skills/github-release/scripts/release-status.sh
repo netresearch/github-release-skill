@@ -50,6 +50,7 @@ command -v jq >/dev/null || { echo "jq required" >&2; exit 2; }
 HAVE_GH=0
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then HAVE_GH=1; fi
 
+REPO_ARG="$REPO"
 if [ "$HAVE_GH" = 1 ] && [ -z "$REPO" ]; then
   REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
 fi
@@ -87,62 +88,117 @@ if [ "$LOCAL_ONLY" = 0 ]; then
   fi
 fi
 
-# Version the working tree declares: TYPO3 ext_emconf, else composer extra,
-# else a skill repo's plugin.json (the whole skill fleet declares it there and
-# nowhere else — without this the verdict is "prepare-release" for every one of
-# them, however cleanly they are released), else the top-level "version" of
-# composer.json or package.json, else a herdr or WoW addon manifest, which is
-# the only place such a plugin or addon states its version.
+# Version the files in the current directory declare: TYPO3 ext_emconf, else
+# composer extra, else a skill repo's plugin.json (the whole skill fleet declares
+# it there and nowhere else — without this the verdict is "prepare-release" for
+# every one of them, however cleanly they are released), else the top-level
+# "version" of composer.json or package.json, else a herdr or WoW addon manifest,
+# which is the only place such a plugin or addon states its version.
+declared_in_cwd() {
+  local declared=""
+  if [ -f ext_emconf.php ]; then
+    declared=$(grep -oE "'version'[[:space:]]*=>[[:space:]]*'[^']+'" ext_emconf.php 2>/dev/null \
+               | grep -oE "'[0-9][^']*'$" | tr -d "'" || true)
+  fi
+  [ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
+  [ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
+  [ -n "$declared" ] || declared=$(jq -r '.version // empty' composer.json 2>/dev/null || true)
+  # A "private": true package.json is local tooling, not a release surface: its
+  # version never tracks the release (validate-pre-release.sh skips it too).
+  [ -n "$declared" ] || declared=$(jq -r 'if .private == true then empty else .version // empty end' \
+                                   package.json 2>/dev/null || true)
+
+  # herdr plugin: herdr-plugin.toml at the root carries the version as a
+  # top-level key. Only keys before the first table header count — a `version`
+  # under [[startup]] belongs to that table — and the key must be exactly
+  # `version`, so `min_herdr_version` beside it is not read. Basic and literal
+  # strings, trailing comments and CRLF endings are handled; no TOML tool is
+  # required.
+  if [ -z "$declared" ] && [ -f herdr-plugin.toml ]; then
+    declared=$(awk -v sq="'" '
+      { sub(/\r$/, "") }
+      /^[ \t]*\[/ { exit }
+      /=/ {
+        k = $0; sub(/[ \t]*=.*/, "", k); sub(/^[ \t]+/, "", k)
+        if (k != "version" && k != "\"version\"" && k != sq "version" sq) next
+        v = $0; sub(/^[^=]*=[ \t]*/, "", v)
+        q = substr(v, 1, 1)
+        if (q != "\"" && q != sq) exit
+        v = substr(v, 2); i = index(v, q)
+        if (i > 1) print substr(v, 1, i - 1)
+        exit
+      }' herdr-plugin.toml 2>/dev/null || true)
+  fi
+
+  # WoW addon: the version lives in a .toc manifest and nowhere else. Not every
+  # .toc is one — the extension also belongs to LaTeX tables of contents — but
+  # the `## Version:` line is itself the evidence, so a file without one is
+  # skipped and the search continues rather than stopping on it. A
+  # multi-flavour addon ships a manifest per game flavour beside the primary
+  # one; `sort` reaches the flavourless name first, and keeping the set in step
+  # is validate-pre-release.sh's job.
+  if [ -z "$declared" ]; then
+    while IFS= read -r toc; do
+      # The trailing [[:space:]]*$ takes a CRLF manifest's carriage return off
+      # the value; [:space:] includes \r.
+      declared=$(sed -n 's/^##[[:space:]]*Version:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' \
+                 "$toc" 2>/dev/null | head -1 || true)
+      [ -n "$declared" ] && break
+    done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
+  fi
+  printf '%s' "$declared"
+}
+
+# The same files from the default branch of $REPO, through the API, into <dir>.
+# A file the repository does not have is simply absent there.
+fetch_version_files() {
+  local dir="$1" f br
+  for f in ext_emconf.php composer.json .claude-plugin/plugin.json package.json herdr-plugin.toml; do
+    mkdir -p "$dir/$(dirname "$f")"
+    gh api -H 'Accept: application/vnd.github.raw+json' "repos/$REPO/contents/$f" \
+      >"$dir/$f" 2>/dev/null || rm -f "$dir/$f"
+  done
+  br=$(gh api "repos/$REPO" --jq .default_branch 2>/dev/null) || return 0
+  gh api "repos/$REPO/git/trees/$br?recursive=1" \
+    --jq '.tree[] | select(.type == "blob") | .path | select(test("^([^/]+/)?[^/]+\\.toc$"))' 2>/dev/null \
+    | while IFS= read -r f; do
+        mkdir -p "$dir/$(dirname "$f")"
+        gh api -H 'Accept: application/vnd.github.raw+json' "repos/$REPO/contents/$f" \
+          >"$dir/$f" 2>/dev/null || rm -f "$dir/$f"
+      done
+}
+
+# Where the version files are read from. `-R owner/repo` names a repository,
+# and the current directory need not be its checkout: run from a parent
+# directory after a tag push, the script found no version file, fell back to
+# the PREVIOUS release, and --watch waited on that release's finished run and
+# reported ok (t3x-nr-llm v0.37.1, 2026-09-24). A git checkout whose remotes all
+# name another repository is worse -- its files describe the wrong project --
+# so they are not read at all. In both cases the default branch of the named
+# repository is read through the API before the release fallback below.
+src="."; version_source="file"; foreign_checkout=0
+if [ "$LOCAL_ONLY" = 0 ] && [ -n "$REPO_ARG" ]; then
+  remotes=$(git remote -v 2>/dev/null | awk '{print $2}' | sort -u || true)
+  if [ -n "$remotes" ]; then
+    foreign_checkout=1
+    want=$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')
+    while IFS= read -r url; do
+      have=$(printf '%s' "$url" | sed -E 's#.*github\.com[:/]##; s#/+$##; s#\.git$##' | tr '[:upper:]' '[:lower:]')
+      case "$url" in *github.com[:/]*) [ "$have" = "$want" ] && foreign_checkout=0 ;; esac
+    done <<<"$remotes"
+  fi
+fi
+
 declared=""
-if [ -f ext_emconf.php ]; then
-  declared=$(grep -oE "'version'[[:space:]]*=>[[:space:]]*'[^']+'" ext_emconf.php 2>/dev/null \
-             | grep -oE "'[0-9][^']*'$" | tr -d "'" || true)
+[ "$foreign_checkout" = 1 ] || declared=$(declared_in_cwd)
+if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$REPO_ARG" ]; then
+  remote_dir=$(mktemp -d)
+  trap 'rm -rf "$remote_dir"' EXIT
+  fetch_version_files "$remote_dir"
+  declared=$(cd "$remote_dir" && declared_in_cwd)
+  if [ -n "$declared" ]; then src="$remote_dir"; version_source="remote"; fi
 fi
-[ -n "$declared" ] || declared=$(jq -r '.extra["typo3/cms"].version // empty' composer.json 2>/dev/null || true)
-[ -n "$declared" ] || declared=$(jq -r '.version // empty' .claude-plugin/plugin.json 2>/dev/null || true)
-[ -n "$declared" ] || declared=$(jq -r '.version // empty' composer.json 2>/dev/null || true)
-# A "private": true package.json is local tooling, not a release surface: its
-# version never tracks the release (validate-pre-release.sh skips it too).
-[ -n "$declared" ] || declared=$(jq -r 'if .private == true then empty else .version // empty end' \
-                                 package.json 2>/dev/null || true)
-
-# herdr plugin: herdr-plugin.toml at the root carries the version as a top-level
-# key. Only keys before the first table header count — a `version` under
-# [[startup]] belongs to that table — and the key must be exactly `version`, so
-# `min_herdr_version` beside it is not read. Basic and literal strings, trailing
-# comments and CRLF endings are handled; no TOML tool is required.
-if [ -z "$declared" ] && [ -f herdr-plugin.toml ]; then
-  declared=$(awk -v sq="'" '
-    { sub(/\r$/, "") }
-    /^[ \t]*\[/ { exit }
-    /=/ {
-      k = $0; sub(/[ \t]*=.*/, "", k); sub(/^[ \t]+/, "", k)
-      if (k != "version" && k != "\"version\"" && k != sq "version" sq) next
-      v = $0; sub(/^[^=]*=[ \t]*/, "", v)
-      q = substr(v, 1, 1)
-      if (q != "\"" && q != sq) exit
-      v = substr(v, 2); i = index(v, q)
-      if (i > 1) print substr(v, 1, i - 1)
-      exit
-    }' herdr-plugin.toml 2>/dev/null || true)
-fi
-
-# WoW addon: the version lives in a .toc manifest and nowhere else. Not every
-# .toc is one — the extension also belongs to LaTeX tables of contents — but the
-# `## Version:` line is itself the evidence, so a file without one is skipped and
-# the search continues rather than stopping on it. A multi-flavour addon ships a
-# manifest per game flavour beside the primary one; `sort` reaches the
-# flavourless name first, and keeping the set in step is
-# validate-pre-release.sh's job.
-if [ -z "$declared" ]; then
-  while IFS= read -r toc; do
-    # The trailing [[:space:]]*$ takes a CRLF manifest's carriage return off the
-    # value; [:space:] includes \r.
-    declared=$(sed -n 's/^##[[:space:]]*Version:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' \
-               "$toc" 2>/dev/null | head -1 || true)
-    [ -n "$declared" ] && break
-  done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
-fi
+[ "$foreign_checkout" = 1 ] && add_note "the current directory is a checkout of another repository; its version files were not read"
 
 # composer.json allows "version": "v2.0.1". Every tag candidate below is built
 # from $declared, so a prefix left in would look for vv2.0.1.
@@ -154,14 +210,13 @@ declared="${declared#v}"
 # it was not asked and hides every real finding behind it, because each later
 # phase keys off $declared. For such a repository the released tag IS the
 # version, so take it from there and say so.
-version_source="file"
 if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$latest" ]; then
   declared="${latest#v}"
   version_source="release"
 fi
 
-pkg=$(jq -r '.name // empty' composer.json 2>/dev/null || true)
-extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' composer.json 2>/dev/null || true)
+pkg=$(jq -r '.name // empty' "$src/composer.json" 2>/dev/null || true)
+extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' "$src/composer.json" 2>/dev/null || true)
 
 # --- phase 2: an open release PR --------------------------------------------
 relpr="null"
@@ -337,7 +392,12 @@ if [ "$JSON" = 1 ]; then
        note:$note, cmd:$cmd}'
 else
   echo "${REPO:-<repository not identified>}"
-  printf '  declared    : %s%s\n' "${declared:-<none>}" "$([ "$version_source" = release ] && echo '  (from the latest release; no version file in the tree)')"
+  case "$version_source" in
+    release) vnote='  (from the latest release; no version file in the tree)' ;;
+    remote)  vnote="  (from the default branch of $REPO; the current directory is not its checkout)" ;;
+    *)       vnote='' ;;
+  esac
+  printf '  declared    : %s%s\n' "${declared:-<none>}" "$vnote"
   printf '  latest rel  : %s\n' "${latest:-<none>}"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
   [ -n "$wf_state" ] && printf '  workflow    : %s%s\n' "$wf_state" \

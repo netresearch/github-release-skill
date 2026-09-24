@@ -409,6 +409,71 @@ refute "and no vv-tag is looked for or suggested"           "vv2.0.1" "$cv_out"
 refute "and the tag is not reported absent"                 "tag         : absent" "$cv_out"
 rm -f "$manif/repo/composer.json"
 
+# ---------------------------------------------------------------------------
+# -R names a repository the current directory is not a checkout of
+# ---------------------------------------------------------------------------
+# netresearch/t3x-nr-llm, 2026-09-24: `release-status.sh -R … --watch` was run
+# from a parent directory right after the v0.37.1 tag push. No version file
+# there, so the script fell back to the latest release, v0.37.0, watched that
+# release's finished run and reported ok. The stub serves acme/remote: its
+# default branch declares 3.1.0 in ext_emconf.php, its latest release is
+# v3.0.0. A raw contents request for any other file is a 404.
+
+remote=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote"' EXIT
+mkdir -p "$remote/bin" "$remote/plain" "$remote/other" "$remote/same"
+ln -sf "$jq_path" "$remote/bin/jq"
+cat >"$remote/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "run list")     echo "none"; exit 0 ;;
+  "release view") exit 1 ;;
+esac
+[ "$1" = api ] || exit 1
+path=""; for a in "$@"; do case "$a" in repos/*) path="$a" ;; esac; done
+case "$path" in
+  repos/acme/remote/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.1.0'];"; exit 0 ;;
+  repos/acme/remote/contents/*) echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/remote)             echo "main"; exit 0 ;;
+  repos/acme/remote/git/trees/*) exit 0 ;;
+  repos/acme/remote/releases/latest) echo "v3.0.0"; exit 0 ;;
+  repos/acme/remote/git/ref/tags/*)  exit 1 ;;
+esac
+exit 1
+STUB
+chmod +x "$remote/bin/gh"
+remote_run() { # remote_run <dir>
+  (cd "$1" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R acme/remote 2>&1)
+}
+
+# (a) not a checkout at all, and no version file here: the default branch is read.
+plain_out=$(remote_run "$remote/plain")
+check  "-R outside a checkout reads the default branch"   "declared    : 3.1.0" "$plain_out"
+check  "and says where the version came from"             "from the default branch of acme/remote" "$plain_out"
+refute "and does not fall back to the previous release"   "declared    : 3.0.0" "$plain_out"
+
+# (b) a checkout of ANOTHER repository with its own version file: not read.
+git -C "$remote/other" init -q
+git -C "$remote/other" remote add origin https://github.com/acme/other.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '9.9.9'];" >"$remote/other/ext_emconf.php"
+other_out=$(remote_run "$remote/other")
+refute "a foreign checkout's version file is not read"    "9.9.9" "$other_out"
+check  "the named repository's version is read instead"   "declared    : 3.1.0" "$other_out"
+check  "and the foreign checkout is named in the verdict" "checkout of another repository" "$other_out"
+
+# (c) the matching checkout (SSH remote, different case): local files as before.
+git -C "$remote/same" init -q
+git -C "$remote/same" remote add origin git@github.com:Acme/Remote.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.2.0'];" >"$remote/same/ext_emconf.php"
+same_out=$(remote_run "$remote/same")
+check  "the matching checkout's files are read"           "declared    : 3.2.0"$'\n' "$same_out"
+refute "without a remote read"                            "from the default branch" "$same_out"
+refute "and without calling it foreign"                   "checkout of another repository" "$same_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
