@@ -87,6 +87,17 @@ auto-merge without a per-release go. (Staging counts: a bumped, auto-merged
 release PR is a release the user did not ask for. "Did you release? I wasn't
 asking for a release." is the failure this prevents.)
 
+#### A release is a milestone — batch related changes into one
+
+A release is a verified milestone, not a reflex after every merged commit.
+Group related work into **one** release: a licensing change, two workflow
+fixes and new checkpoints make one minor release, not four. A patch release
+needs at least one meaningful fix; formatting alone, such as a trailing
+newline, waits for the next real release. If the previous release went out
+less than an hour ago, add the new change to the next one instead of cutting
+another. The green-CI precondition is already enforced by
+`scripts/validate-pre-release.sh` ("CI checks passing").
+
 ### Phase 2: Review and Merge
 
 ```
@@ -271,7 +282,7 @@ gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | 
 
 The compare API caps at 250 commits — for a wider range, run it in two halves.
 
-**Where the release workflow builds the body from `CHANGELOG.md`, the credit belongs in the CHANGELOG entry.** Some workflows extract the new version's section with `sed` and publish it as the body — `netresearch/terraform-provider-ad` does. Such a body carries exactly the `@mentions` its CHANGELOG entries carry. If the entries credit nobody, every release fails `release-notes-status.sh` with `MISSING CREDITS` and needs a hand edit after publishing, and a release nobody edits stays uncredited: that repository's v0.5.3 still is. Write the credit into the entry itself — `([#43](https://github.com/owner/repo/pull/43) by @login)` — so the extraction publishes it. For a release already out without it, add the credit with `gh release edit --notes-file`, and credit the next entries in the CHANGELOG.
+**Where the release workflow builds the body from `CHANGELOG.md`, the credit belongs in the CHANGELOG entry.** Some workflows extract the new version's section with `sed` and publish it as the body — `netresearch/terraform-provider-ad` does. Such a body carries exactly the `@mentions` its CHANGELOG entries carry. If the entries credit nobody, every release fails `release-notes-status.sh` with `MISSING CREDITS` and needs a hand edit after publishing, and a release nobody edits stays uncredited: that repository's v0.5.3 still is. Write the credit into the entry itself — `([#43](https://github.com/owner/repo/pull/43) by @login)` — so the extraction publishes it. For a release already out without it, add the credit with `gh release edit --notes-file`, and credit the next entries in the CHANGELOG. Use the bare `@login` in `CHANGELOG.md` too: the copied `[@login](https://github.com/login)` arrives in the body as a plain link, which is not a mention and notifies nobody. A profile link is fine in a `README.md` or `CONTRIBUTING.md`, which are read in the repository tree and never copied into a release body.
 
 #### Narrative over implementation details
 
