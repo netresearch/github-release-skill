@@ -11,6 +11,12 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `references/release-process.md` keeps the CI-appended blocks of the library and source-archive orchestrators, too. The capture recipe cut only at `## Container image`, the first block of `release-go-app.yml`; a TYPO3 extension release starts its CI blocks with `## Installation`, so the cut captured nothing and the overhaul would have dropped them. It now cuts at the first of `## Installation`, `## Container image` and `## Verify your download`, the headings `release-notes-status.sh` already checks, and says to look at the tail before publishing
+- the same recipe captures the body with `jq -j .body`. `gh … --jq .body` appends a newline the stored body does not have, and the recipe published it: 8054 bytes against the stored 8053 on nr-llm v0.36.0
+- `references/release-process.md` has a section on 0.x minor releases: every consumer in the target installation's lock that pins the previous minor refuses the new one, and each needs a widened constraint and a release of its own first. It gives the `jq` query over `composer.lock` that lists them
+
 ## [1.1.0] - 2026-09-23
 
 ### Changed
