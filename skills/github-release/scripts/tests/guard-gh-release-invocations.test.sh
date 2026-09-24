@@ -209,6 +209,25 @@ check 0 'api jq text that mentions a method' "gh api \"repos/o/r/releases\" --jq
 check 0 'api PATCH on a pull request' 'gh api -X PATCH "repos/o/r/pulls/1" -f title=x'
 check 0 'api PATCH on a repo named like releases' 'gh api -X PATCH "repos/o/releases-app/pulls/1" -f title=x'
 check 0 'api GET on the latest release' 'gh api repos/o/r/releases/latest'
+# Owner and repository in one variable, as scripts and workflows write them.
+# The first case is the command references/recovery-procedures.md prints.
+# shellcheck disable=SC2016  # the guard must see the variables unexpanded
+check 2 'api PATCH, owner/repo in one variable (recovery doc)' 'gh api -X PATCH "repos/$R/releases/$ID" -f name="$TAG"'
+# shellcheck disable=SC2016
+check 2 'api PATCH, $GITHUB_REPOSITORY' 'gh api -X PATCH repos/$GITHUB_REPOSITORY/releases/$ID -f name=x'
+# shellcheck disable=SC2016
+check 2 'api data, ${R} in braces' 'gh api "repos/${R}/releases" -f tag_name=v1'
+# gh fills in {owner}/{repo} itself; the braces are part of the word.
+check 2 'api DELETE, {owner}/{repo} placeholders' 'gh api -X DELETE repos/{owner}/{repo}/releases/1'
+check 2 'api data, {owner}/{repo} placeholders' 'gh api repos/{owner}/{repo}/releases -f tag_name=v1'
+# A "#" inside a word is not a comment in bash.
+check 2 'api "#" inside a header value' 'gh api -H X-A:a#b -X DELETE repos/o/r/releases/1'
+check 2 'api "#" at the end of the path' 'gh api repos/o/r/releases/1#x -X DELETE'
+# Shorthand groups, read the way pflag reads them.
+check 2 'api -iX DELETE' 'gh api -iX DELETE repos/o/r/releases/1'
+check 2 'api -iXDELETE' 'gh api -iXDELETE repos/o/r/releases/1'
+check 2 'api -if creates a release' 'gh api -if tag_name=v1 repos/o/r/releases'
+check 0 'api -i on a release read' 'gh api -i repos/o/r/releases/latest'
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

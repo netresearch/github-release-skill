@@ -17,6 +17,10 @@ import re
 # splitting it: a commit message holding a ";" is one invocation, not two. The
 # separator set carries the grouping constructs, so an invocation inside a
 # subshell, a brace group or a command substitution is still seen (issue #112).
+# A brace separates only as a word of its own, as the shell's reserved word
+# does: "{" or "}" with a blank or another separator on both sides. Inside a
+# word it is text -- "repos/{owner}/{repo}/releases", "${R}", "{a,b}" -- and
+# splitting there cut a gh api path in pieces the checks never saw.
 #
 # The escapes are not decoration. A double-quoted argument may contain \", and
 # reading that as the closing quote shifts every quote after it by one, which
@@ -24,7 +28,7 @@ import re
 # separator outside quotes is likewise literal text, not a separator: the shell
 # passes it to the command rather than ending it.
 QUOTED_SPAN_OR_SEPARATOR = re.compile(
-    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<sep>[;&|\n(){}]+)"""
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<sep>[;&|\n()]+|(?<![^\s;&|()])[{}](?![^\s;&|()]))"""
 )
 
 

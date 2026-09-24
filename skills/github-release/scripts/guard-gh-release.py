@@ -99,8 +99,12 @@ ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 GH_API_RE = re.compile(INVOCATION_PREFIX + r"gh\s+api(?=\s|$)")
 
 # A release endpoint anywhere in a word: a bare or leading-slash path, a full
-# URL, or a path whose quoting shlex could not resolve ($'...').
-_RELEASE_PATH_RE = re.compile(r"repos/[^/\s]+/[^/\s]+/releases(?:[/?#]|$)")
+# URL, or a path whose quoting shlex could not resolve ($'...'). Owner and
+# repository may sit in one segment, because a variable often holds both:
+# "repos/$R/releases/$ID", "repos/$GITHUB_REPOSITORY/releases". A repository
+# literally named "releases" is therefore read as a release path too, which
+# errs toward blocking.
+_RELEASE_PATH_RE = re.compile(r"repos/(?:[^/\s]+/){1,2}releases(?:[/?#]|$)")
 
 # gh api flags that take a value, from `gh api --help` (gh 2.101.0). The value
 # is consumed so it cannot be read as the endpoint.
@@ -135,7 +139,11 @@ def _gh_api_mutates_release(args: str):
     the method is GET or HEAD (then the fields become query parameters).
     """
     try:
-        words = shlex.split(args, comments=True)
+        # No comments=True: shlex would then treat a "#" inside a word as a
+        # comment, which bash does not ("-H X-A:a#b -X DELETE" lost its
+        # method). A real trailing comment is kept as words and can only make
+        # the guard stricter.
+        words = shlex.split(args)
     except ValueError:
         # Unbalanced quotes: the shell will not run this as written, but a
         # release path in it is reason enough not to guess.
@@ -146,11 +154,23 @@ def _gh_api_mutates_release(args: str):
     i = 0
     while i < len(words):
         word = words[i]
-        name, value = word, None
-        if word.startswith("--") and "=" in word:
-            name, value = word.split("=", 1)
-        elif len(word) > 2 and word[:2] in ("-X", "-f", "-F", "-H", "-q", "-t", "-p"):
-            name, value = word[:2], word[2:]
+        name, value = None, None
+        if word.startswith("--"):
+            name, _, attached = word.partition("=")
+            value = attached if "=" in word else None
+        elif word.startswith("-") and len(word) > 1:
+            # A shorthand group, read as pflag reads it: boolean letters
+            # ("-i") are skipped, and the first letter that takes a value ends
+            # the group -- the rest of the word is its value ("-iXDELETE",
+            # "-if tag_name=v1").
+            for j in range(1, len(word)):
+                if "-" + word[j] in _VALUE_FLAGS:
+                    name = "-" + word[j]
+                    rest = word[j + 1 :]
+                    value = rest.removeprefix("=") or None
+                    break
+        else:
+            positionals.append(word)
         if name in _VALUE_FLAGS:
             if value is None:
                 i += 1
@@ -160,8 +180,6 @@ def _gh_api_mutates_release(args: str):
                 method = value
             elif kind == "data":
                 has_data = True
-        elif not word.startswith("-") or word == "-":
-            positionals.append(word)
         i += 1
     if not any(_RELEASE_PATH_RE.search(w) for w in positionals):
         return None
