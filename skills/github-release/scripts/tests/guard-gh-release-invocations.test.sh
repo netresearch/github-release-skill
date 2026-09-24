@@ -183,6 +183,15 @@ check 2 'api DELETE on its own line' \
   'echo hi
 gh api repos/o/r/releases/1 -X DELETE'
 check 0 'api GET on releases' 'gh api repos/o/r/releases'
+# A quoted endpoint path is how a script with variables writes it
+# ("repos/$R/releases/$ID"), and the path pattern used to require the path to
+# start right after the flags, so every quoted form skipped the check.
+check 2 'api PATCH, path in double quotes' 'gh api -X PATCH "repos/o/r/releases/1" -f name=v1'
+check 2 'api PATCH, path in single quotes' "gh api 'repos/o/r/releases/1' -X PATCH -f name=v1"
+check 2 'api data flag only, quoted path' 'gh api "repos/o/r/releases/1" -f name=v1'
+check 2 'api --method=PATCH, quoted path' 'gh api --method=PATCH "repos/o/r/releases/1"'
+check 2 'api method in quotes' 'gh api repos/o/r/releases/1 -X "DELETE"'
+check 0 'api GET, quoted path' 'gh api "repos/o/r/releases?per_page=100" --paginate --jq .'
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

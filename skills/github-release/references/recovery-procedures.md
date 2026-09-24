@@ -352,14 +352,18 @@ maintainer a script instead, and let them run it with the `!` prefix:
 3. Per release: `gh api -X PATCH "repos/$R/releases/$ID" -f name="$TAG"`,
    then read `.name` back and count a mismatch as a failure. Only the title
    changes; tag, notes and assets stay.
-4. Run the dry run yourself first — it only reads, so the guard allows it
-   — and show its output with the `--apply` command.
+4. Run the dry run yourself first and show its output with the `--apply`
+   command. The guard sees only the script call, not the `gh` calls inside
+   it, so it would let `--apply` through as well: leaving `--apply` to the
+   maintainer is your part, not something the guard enforces.
 
-Measured on CybotTM/wow-quickroute (2026-09-23): 20 releases, none marked
-`immutable`, all renamed and read back without a failure. Afterwards check
-that no release has a title different from its tag:
+Measured on CybotTM/wow-quickroute (2026-09-23): 20 of 30 releases carried
+the prefixed title, none marked `immutable`; all 20 were renamed and read
+back without a failure. Afterwards check that no release has a title
+different from its tag:
 `gh api "repos/$R/releases?per_page=100" --paginate --jq '.[] | select(.name != .tag_name) | .tag_name'`
-must print nothing.
+must print nothing. A release with an empty `name` shows up here too;
+GitHub displays its tag as the title, so it needs no rename.
 
 ## Mis-Tagged SemVer Release (Scope Larger Than Version Bump Implies)
 

@@ -91,19 +91,22 @@ ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 #   gh api repos/owner/repo/releases -X POST
 #   gh api /repos/owner/repo/releases --method DELETE
 #   gh api repos/owner/repo/releases/123 -X PATCH
+#   gh api -X PATCH "repos/$R/releases/$ID" -f name=v1
+# The path may be quoted: a script with variables writes it that way, and
+# requiring it bare let every quoted form skip the check below.
 GH_API_RELEASE_RE = re.compile(
     INVOCATION_PREFIX
     + r"""
     gh\s+api\s+                      # gh api
-    (?:(?:-\w+|--\w[\w-]*)(?:\s+(?:"[^"]*"|'[^']*'|\S+))?\s+)*  # optional flags (e.g. -X POST, -H "...")
-    /?repos/[^\s]+/releases          # release endpoint path
+    (?:(?:-\w+|--\w[\w-]*)(?:[\s=]+(?:"[^"]*"|'[^']*'|\S+))?\s+)*  # optional flags (e.g. -X POST, --method=PATCH, -H "...")
+    ["']?/?repos/[^\s"']+/releases   # release endpoint path, bare or quoted
     """,
     re.VERBOSE,
 )
 
 MUTATING_METHOD_RE = re.compile(
     r"""
-    (?:-X|--method)\s*(POST|PUT|PATCH|DELETE)
+    (?:-X|--method)[\s=]*["']?(POST|PUT|PATCH|DELETE)
     """,
     re.VERBOSE | re.IGNORECASE,
 )
