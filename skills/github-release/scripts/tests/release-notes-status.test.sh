@@ -103,6 +103,30 @@ check "v12 minor skips the v13 releases" v12.0.13 "$(previous_release_on_line v1
 check "v13 patch follows the v13 line"   v13.10.1 "$(previous_release_on_line v13.10.2 "$interleaved")"
 check "v13 minor skips the v12 releases" v13.9.1  "$(previous_release_on_line v13.10.0 "$interleaved")"
 check "oldest on its line has no predecessor" "" "$(previous_release_on_line v12.0.11 "$interleaved")"
+
+# --- what counts as crediting a contributor -----------------------------------
+# Calls the real predicate. In a release body only a bare `@login` is a
+# mention: `[@login](https://github.com/login)` renders as a plain link, feeds
+# no avatar row and notifies nobody (references/release-process.md). A
+# substring test counted that link as credit, and it also counted `@alicebob`
+# and `mail@alice.dev` as credit for `@alice`.
+credited() { credit_mentioned "$1" "$2" && echo 1 || echo 0; }
+check "profile link is not a mention"          0 "$(credited 'Fixed by [@alice](https://github.com/alice) in #230.' @alice)"
+check "bare mention at line start counts"      1 "$(credited '@alice fixed the rotation.' @alice)"
+check "bare mention mid-sentence counts"       1 "$(credited 'Fixed by @alice in #230.' @alice)"
+check "bare mention before punctuation counts" 1 "$(credited 'Thanks (@alice), @bob.' @alice)"
+check "bare mention at end of body counts"     1 "$(credited 'Thanks @bob' @bob)"
+check "bare mention beside a link counts"      1 "$(credited '[@alice](https://github.com/alice)
+Also fixed by @alice.' @alice)"
+check "a longer login is not the shorter one"  0 "$(credited 'Fixed by @alicebob.' @alice)"
+check "a hyphenated login is not its prefix"   0 "$(credited 'Fixed by @alice-b.' @alice)"
+check "an e-mail address is not a mention"     0 "$(credited 'Reported to mail@alice.dev.' @alice)"
+
+# Structural: the credit loop must go through that predicate, or the tests above
+# pin a function the check never calls.
+callers=$(grep -v '^[[:space:]]*#' "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh" \
+          | grep -cF "credit_mentioned \"\$body\" \"\$p\"" || true)
+check "the credit loop calls credit_mentioned" 1 "$callers"
 check "single-line repo is unaffected"   v1.2.0 "$(previous_release_on_line v1.2.1 'v1.2.1
 v1.2.0
 v1.1.0')"
