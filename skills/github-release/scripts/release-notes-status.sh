@@ -62,12 +62,12 @@ body_has() { # <text> <grep-flag>... <pattern>
 
 # Is <@login> credited in a release body? Only a bare `@login` is a mention
 # there (references/release-process.md, "Crediting contributors"):
-# `[@login](https://github.com/login)` renders as a plain link, feeds no avatar
-# row and notifies nobody, so a body crediting that way is uncredited. A
-# substring test passed it, and also took `@alicebob` or `mail@alice.dev` as
-# credit for `@alice`. The mention therefore may not follow `[` or a word
-# character, and may not run on into a longer login. Code spans are not
-# excluded, and the match stays case-sensitive.
+# `[@login](https://github.com/login)` renders as a plain link, which notifies
+# nobody, so a body crediting that way is uncredited. A substring test passed
+# it, and also took `@alicebob` or `mail@alice.dev` as credit for `@alice`. The
+# mention therefore may not follow `[` or a word character, and may not run on
+# into a longer login. Code spans are not excluded, and the match stays
+# case-sensitive.
 # `<@login>` comes from `grep -oE '@[A-Za-z0-9-]+'`, so it is safe in a regex.
 credit_mentioned() { # <body> <@login>
   body_has "$1" -E "(^|[^[A-Za-z0-9_])$2([^A-Za-z0-9-]|\$)"
