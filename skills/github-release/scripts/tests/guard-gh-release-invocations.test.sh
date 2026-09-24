@@ -192,6 +192,23 @@ check 2 'api data flag only, quoted path' 'gh api "repos/o/r/releases/1" -f name
 check 2 'api --method=PATCH, quoted path' 'gh api --method=PATCH "repos/o/r/releases/1"'
 check 2 'api method in quotes' 'gh api repos/o/r/releases/1 -X "DELETE"'
 check 0 'api GET, quoted path' 'gh api "repos/o/r/releases?per_page=100" --paginate --jq .'
+# The call is read as argv. Before that, a flag value with a space in it ended
+# the flag list early, and the long data flags were not recognised.
+check 2 'api data value with a space before the path' 'gh api -f body="new notes" -X PATCH "repos/o/r/releases/1"'
+check 2 'api data value with a space, no method' 'gh api -f body="new notes" "repos/o/r/releases/1"'
+check 2 'api --raw-field creates a release' 'gh api repos/o/r/releases --raw-field tag_name=v1'
+check 2 'api --field=value' 'gh api "repos/o/r/releases/1" --field=name=v1'
+check 2 'api attached -f value' 'gh api "repos/o/r/releases/1" -fname=v1'
+check 2 'api attached -X value' 'gh api -XPATCH "repos/o/r/releases/1"'
+check 2 'api full URL' 'gh api -X PATCH https://api.github.com/repos/o/r/releases/1'
+# shellcheck disable=SC2016  # the guard must see "$M" unexpanded
+check 2 'api method from a variable' 'gh api -X "$M" repos/o/r/releases/1'
+check 2 'api unbalanced quote around a release path' 'gh api -X PATCH "repos/o/r/releases/1'
+check 0 'api GET with query fields' 'gh api -X GET "repos/o/r/releases" -f per_page=100'
+check 0 'api jq text that mentions a method' "gh api \"repos/o/r/releases\" --jq '.[] | select(.name==\"-X POST\")'"
+check 0 'api PATCH on a pull request' 'gh api -X PATCH "repos/o/r/pulls/1" -f title=x'
+check 0 'api PATCH on a repo named like releases' 'gh api -X PATCH "repos/o/releases-app/pulls/1" -f title=x'
+check 0 'api GET on the latest release' 'gh api repos/o/r/releases/latest'
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

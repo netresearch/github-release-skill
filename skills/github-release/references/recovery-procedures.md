@@ -340,10 +340,12 @@ lists files outside the repository (a CurseForge `displayName`, for
 example) may keep the project name; the GitHub release page shows the
 repository name already.
 
-**Recovery** (existing releases): the agent cannot do it. `guard-gh-release.py`
-blocks `gh release edit --title` and every mutating `gh api` call on a
-releases endpoint, with no override, and that is intended. Hand the
-maintainer a script instead, and let them run it with the `!` prefix:
+**Recovery** (existing releases): this is the maintainer's step, not the
+agent's. `guard-gh-release.py` blocks `gh release edit --title` and a
+mutating `gh api` call on a releases endpoint, with no override, and that is
+intended. It reads the command it is shown; a call wrapped in `bash -c "…"`
+or in a script is beyond it, so do not read its silence there as permission.
+Hand the maintainer a script instead, and let them run it with the `!` prefix:
 
 1. List the releases whose title is exactly `<Project> <tag>`:
    `gh api "repos/$R/releases?per_page=100" --paginate --jq '.[] | select(.name == "<Project> " + .tag_name) | "\(.id)\t\(.tag_name)"'`.
