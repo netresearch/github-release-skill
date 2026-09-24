@@ -159,8 +159,9 @@ if command -v gh &>/dev/null; then
     # An unpinned `gh run list --limit 1` returns the newest run of any
     # workflow on any branch, so a green feature branch passed a red main.
     head_sha=$(git rev-parse HEAD 2>/dev/null || true)
+    ci_limit=500
     ok='(.conclusion == "success" or .conclusion == "skipped" or .conclusion == "neutral")'
-    if ci_summary=$(gh run list --branch "$current_branch" --commit "$head_sha" --limit 100 \
+    if ci_summary=$(gh run list --branch "$current_branch" --commit "$head_sha" --limit "$ci_limit" \
             --json workflowName,status,conclusion \
             --jq "[length,
                    ([.[] | select(.status != \"completed\")] | length),
@@ -175,6 +176,9 @@ if command -v gh &>/dev/null; then
             check "WARN" "CI checks passing" "no workflow runs for ${where} — pushed yet?"
         elif [[ "$ci_pending" != 0 ]]; then
             check "WARN" "CI checks passing" "${ci_pending} of ${ci_total} run(s) for ${where} not finished"
+        elif (( ci_total >= ci_limit )); then
+            # The list may be cut at the limit, so an unseen run could be red.
+            check "WARN" "CI checks passing" "${ci_total} run(s) for ${where} — list may be truncated at ${ci_limit}"
         else
             check "PASS" "CI checks passing" "${ci_total} run(s) for ${where}"
         fi

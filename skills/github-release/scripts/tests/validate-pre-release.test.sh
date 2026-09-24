@@ -91,6 +91,12 @@ check "all runs of HEAD green passes" \
 check "a run still in progress is not a pass" \
   "WARN  CI checks passing" "$(run_ci "[$main_ok,$(run main "$head_sha" CI in_progress '')]")"
 
+# A list that fills the query limit may hide a red run beyond it.
+many=$(run main "$head_sha" CI completed success)
+for _ in $(seq 2 500); do many="$many,$(run main "$head_sha" CI completed success)"; done
+check "a run list cut at the limit is not a pass" \
+  "may be truncated" "$(run_ci "[$many,$main_red]")"
+
 # A failed lookup must not read as "there are no runs".
 check "a failed lookup says so" \
   "run lookup failed" "$(run_ci "[$main_ok]" 1)"

@@ -61,10 +61,11 @@ release branch:
   `gh secret list` shows repository secrets only. An organization secret with
   `visibility: selected` resolves empty in every repository not on its list,
   and only
-  `gh api "repos/{owner}/{repo}/actions/organization-secrets?per_page=100" --jq '[.secrets[].name]'`
+  `gh api --paginate "repos/{owner}/{repo}/actions/organization-secrets?per_page=100" --jq '.secrets[].name'`
   shows whether this repository is on it. If the name is in neither
-  listing, an org admin adds the repository to the organization secret's
-  selected repositories.
+  listing, an org admin first confirms the organization secret exists
+  (`gh api orgs/{owner}/actions/secrets/TYPO3_TER_ACCESS_TOKEN`) and then adds
+  the repository to its selected repositories.
 - A first release has no previous tag: the auto-generated notes say only
   "Initial release", so step 12's narrative rewrite is mandatory, and the
   install instructions must not show a bare `composer require`/`npm install`
