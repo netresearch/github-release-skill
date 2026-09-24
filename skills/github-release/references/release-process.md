@@ -204,14 +204,19 @@ This is the opposite of a `CHANGELOG.md` (or any rendered `.md` file in a repo),
 
 #### Preserve the CI-appended blocks mechanically — do not retype them
 
-The netresearch `release-go-app.yml` orchestrator appends `## Container image` and `## Verify your download` sections after `## Changes`. Replacing the whole body with your narrative destroys them (and the verify commands are non-trivial — see supply-chain-security.md on `--signer-workflow`). Capture the tail and re-append it:
+The netresearch `release-go-app.yml` orchestrator appends `## Container image` and `## Verify your download` sections after `## Changes`; the library and source-archive orchestrators — every TYPO3 extension release among them — start their CI blocks with `## Installation`, followed by blocks such as `## Publication status`, `## Security` and `## SBOM`. Replacing the whole body with your narrative destroys them (and the verify commands are non-trivial — see supply-chain-security.md on `--signer-workflow`). Capture the tail and re-append it:
 
 ```bash
-gh release view vX.Y.Z --repo owner/repo --json body --jq .body > /tmp/orig.md
-awk '/^## Container image/{f=1} f' /tmp/orig.md > /tmp/tail.md   # everything from the first CI block on
+# jq -j writes the body exactly as stored; `--jq .body` appends a newline the
+# stored body does not have, and the recipe would publish it
+gh release view vX.Y.Z --repo owner/repo --json body | jq -j .body > /tmp/orig.md
+# everything from the FIRST CI block on — whichever of them the body opens with
+awk '/^## (Installation|Container image|Verify your download)$/{f=1} f' /tmp/orig.md > /tmp/tail.md
 cat my-narrative.md /tmp/tail.md > /tmp/final.md                 # narrative replaces ONLY ## Changes
 gh release edit vX.Y.Z --repo owner/repo --notes-file /tmp/final.md
 ```
+
+Check `/tmp/tail.md` before the edit: an empty file means the body carries none of these headings, and the edit would drop whatever CI appended. Read the body and add its first CI heading to the pattern. Observed 2026-09-24 on six TYPO3 extension releases: the first CI block of each was `## Installation`, so the `## Container image` cut captured nothing, and the capture with `--jq .body` put one extra trailing newline into the first body published from it.
 
 Then re-check the emitted verify commands are correct for a reusable-workflow build (`--signer-workflow`, not `--repo` alone).
 
@@ -528,6 +533,22 @@ Measured in this fleet on 2026-09-20: `nr_passkeys_be` 1.0.0 removed two `RateLi
 methods after a grep that covered only its own repository. `nr_passkeys_fe` called both, at three
 sites. The broken pair was unreachable only because the consumer's `^0.12` constraint refused the
 new major — luck, not order.
+
+## A 0.x Minor Release: Every Consumer Pinned to the Previous Minor Refuses It
+
+On a 0.x version the caret stops at the minor: `^0.35` admits 0.35.9 and refuses 0.36.0. So a 0.x minor release of a package other packages depend on is, for Composer, a new major. An installation that should run it cannot resolve it while **any** package in its lock still requires `^0.35` — including consumers the release never touched, which then need a widened constraint **and a release of their own** before the installation can move. Their `main` does not count; an installation resolves released versions.
+
+List them before planning the release, from the lock of the installation that has to run it, not from memory:
+
+```bash
+# every locked package that requires the dependency, with its constraint
+jq -r --arg dep netresearch/nr-llm \
+  '.packages[] | select(.require[$dep]) | "\(.name) \(.version) \(.require[$dep])"' composer.lock
+```
+
+Every line whose constraint refuses the new minor is a release you owe first. Two checks per consumer before widening: its own `main` may already carry the widening unreleased, and the dependency's changelog and public API diff between the two tags decide whether the consumer needs more than the constraint — a new enum case breaks only code that matches the enum exhaustively.
+
+Observed 2026-09-23 on the TYPO3 demo: nr-llm 0.36.0 was released for the demo, and the demo bump then found four more packages pinned to `^0.34 || ^0.35` or `^0.35`. Three of them needed a release before the lock resolved; the fourth is installed from `dev-main` and needed only a merge.
 
 ## Prove an Unproven Pipeline With an `-rc` Tag First
 
