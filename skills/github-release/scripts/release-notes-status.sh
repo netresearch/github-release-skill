@@ -64,13 +64,15 @@ body_has() { # <text> <grep-flag>... <pattern>
 # there (references/release-process.md, "Crediting contributors"):
 # `[@login](https://github.com/login)` renders as a plain link, which notifies
 # nobody, so a body crediting that way is uncredited. A substring test passed
-# it, and also took `@alicebob` or `mail@alice.dev` as credit for `@alice`. The
-# mention therefore may not follow `[` or a word character, and may not run on
-# into a longer login. Code spans are not excluded, and the match stays
-# case-sensitive.
+# it, and also took `@alicebob` or `mail@alice.dev` as credit for `@alice`.
+# Inline links `[label](url)` are therefore removed first, label included, and
+# the mention may not follow `[` or a word character, nor run on into a longer
+# login. Code spans are not excluded, and the match stays case-sensitive.
 # `<@login>` comes from `grep -oE '@[A-Za-z0-9-]+'`, so it is safe in a regex.
 credit_mentioned() { # <body> <@login>
-  body_has "$1" -E "(^|[^[A-Za-z0-9_])$2([^A-Za-z0-9-]|\$)"
+  local unlinked
+  unlinked=$(sed -E 's/\[[^]]*\]\([^)]*\)//g' <<<"$1")
+  body_has "$unlinked" -E "(^|[^[A-Za-z0-9_])$2([^A-Za-z0-9-]|\$)"
 }
 
 # The sections the netresearch orchestrators append after `## Changes`, one per
