@@ -421,7 +421,7 @@ rm -f "$manif/repo/composer.json"
 
 remote=$(mktemp -d)
 trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote"' EXIT
-mkdir -p "$remote/bin" "$remote/plain" "$remote/other" "$remote/same"
+mkdir -p "$remote/bin" "$remote/plain" "$remote/other" "$remote/same" "$remote/alias"
 ln -sf "$jq_path" "$remote/bin/jq"
 cat >"$remote/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -436,18 +436,27 @@ path=""; for a in "$@"; do case "$a" in repos/*) path="$a" ;; esac; done
 case "$path" in
   repos/acme/remote/contents/ext_emconf.php)
     printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.1.0'];"; exit 0 ;;
+  repos/acme/remote/contents/composer.json)
+    printf '%s\n' '{"name": "acme/remote", "extra": {"typo3/cms": {"extension-key": "remote_ext"}}}'; exit 0 ;;
   repos/acme/remote/contents/*) echo '{"message":"Not Found"}'; exit 1 ;;
   repos/acme/remote)             echo "main"; exit 0 ;;
   repos/acme/remote/git/trees/*) exit 0 ;;
   repos/acme/remote/releases/latest) echo "v3.0.0"; exit 0 ;;
   repos/acme/remote/git/ref/tags/*)  exit 1 ;;
+  # acme/lib states no version anywhere: a composer library.
+  repos/acme/lib/contents/composer.json) printf '%s\n' '{"name": "acme/lib"}'; exit 0 ;;
+  repos/acme/lib/contents/*) echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/lib)                echo "main"; exit 0 ;;
+  repos/acme/lib/git/trees/*)    exit 0 ;;
+  repos/acme/lib/releases/latest) echo "v1.0.0"; exit 0 ;;
+  repos/acme/lib/git/ref/tags/*) exit 1 ;;
 esac
 exit 1
 STUB
 chmod +x "$remote/bin/gh"
-remote_run() { # remote_run <dir>
+remote_run() { # remote_run <dir> [extra args]
   (cd "$1" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
-     bash --noprofile --norc "$SCRIPT" -R acme/remote 2>&1)
+     bash --noprofile --norc "$SCRIPT" -R acme/remote "${@:2}" 2>&1)
 }
 
 # (a) not a checkout at all, and no version file here: the default branch is read.
@@ -473,6 +482,32 @@ same_out=$(remote_run "$remote/same")
 check  "the matching checkout's files are read"           "declared    : 3.2.0"$'\n' "$same_out"
 refute "without a remote read"                            "from the default branch" "$same_out"
 refute "and without calling it foreign"                   "checkout of another repository" "$same_out"
+
+# (d) the matching checkout behind an SSH host alias: the URL names no
+# github.com, so it cannot be ruled foreign -- local files as before.
+git -C "$remote/alias" init -q
+git -C "$remote/alias" remote add origin git@github.com-work:acme/remote.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.2.0'];" >"$remote/alias/ext_emconf.php"
+alias_out=$(remote_run "$remote/alias")
+check  "an SSH host alias remote keeps the local files"   "declared    : 3.2.0"$'\n' "$alias_out"
+refute "and is not called foreign"                        "checkout of another repository" "$alias_out"
+
+# (e) the package the registries are asked about belongs to the named
+# repository: never the foreign checkout's composer.json, and the fetched one
+# when there is none here.
+printf '%s\n' '{"name": "acme/other", "extra": {"typo3/cms": {"extension-key": "other_ext"}}}' >"$remote/other/composer.json"
+other_json=$(remote_run "$remote/other" --json)
+check  "a foreign checkout's package is not used"        '"package":"acme/remote"' "$other_json"
+check  "nor its extension key"                           '"extension_key":"remote_ext"' "$other_json"
+check  "outside a checkout the fetched package is used"  '"package":"acme/remote"' "$(remote_run "$remote/plain" --json)"
+# The same when the named repository states no version at all, so the version
+# comes from its release and the fetched files only supply the package.
+lib_run() { # lib_run <dir>
+  (cd "$1" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R acme/lib --json 2>&1)
+}
+check  "a versionless repository: not the foreign package" '"package":"acme/lib"' "$(lib_run "$remote/other")"
+check  "a versionless repository: the fetched package outside a checkout" '"package":"acme/lib"' "$(lib_run "$remote/plain")"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.

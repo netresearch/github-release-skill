@@ -180,12 +180,20 @@ src="."; version_source="file"; foreign_checkout=0
 if [ "$LOCAL_ONLY" = 0 ] && [ -n "$REPO_ARG" ]; then
   remotes=$(git remote -v 2>/dev/null | awk '{print $2}' | sort -u || true)
   if [ -n "$remotes" ]; then
-    foreign_checkout=1
+    # Foreign only when every remote is a GitHub URL and none names $REPO. A
+    # remote this cannot read -- an SSH host alias (git@github.com-work:...),
+    # a local path -- may well be $REPO, and reading its files is what the
+    # script did before -R looked at remotes at all.
     want=$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')
+    gh_remotes=0; matched=0; unknown=0
     while IFS= read -r url; do
       have=$(printf '%s' "$url" | sed -E 's#.*github\.com[:/]##; s#/+$##; s#\.git$##' | tr '[:upper:]' '[:lower:]')
-      case "$url" in *github.com[:/]*) [ "$have" = "$want" ] && foreign_checkout=0 ;; esac
+      case "$url" in
+        *github.com[:/]*) gh_remotes=1; [ "$have" = "$want" ] && matched=1 ;;
+        *) unknown=1 ;;
+      esac
     done <<<"$remotes"
+    [ "$gh_remotes" = 1 ] && [ "$matched" = 0 ] && [ "$unknown" = 0 ] && foreign_checkout=1
   fi
 fi
 
@@ -196,7 +204,14 @@ if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$REPO_ARG" ]; then
   trap 'rm -rf "$remote_dir"' EXIT
   fetch_version_files "$remote_dir"
   declared=$(cd "$remote_dir" && declared_in_cwd)
-  if [ -n "$declared" ]; then src="$remote_dir"; version_source="remote"; fi
+  [ -n "$declared" ] && version_source="remote"
+  # The package name and extension key follow the files that describe $REPO:
+  # never a foreign checkout's composer.json, and the fetched one when there is
+  # no local one -- a composer library often states no version, so a version
+  # found remotely is not the only case that needs the remote copy.
+  if [ -n "$declared" ] || [ "$foreign_checkout" = 1 ] || [ ! -f composer.json ]; then
+    src="$remote_dir"
+  fi
 fi
 [ "$foreign_checkout" = 1 ] && add_note "the current directory is a checkout of another repository; its version files were not read"
 
@@ -385,8 +400,9 @@ if [ "$JSON" = 1 ]; then
   jq -nc --arg repo "$REPO" --arg declared "$declared" --arg latest "$latest" \
      --arg tag "$tag_state" --arg wf "$wf_state" --arg notes "$notes_next" \
      --arg reg "${reg_missing# }" --arg next "$next" --arg note "$note" --arg cmd "$cmd" \
-     --arg vsrc "$version_source" \
+     --arg vsrc "$version_source" --arg pkg "$pkg" --arg extkey "$extkey" \
      '{repo:$repo, declared_version:$declared, version_source:$vsrc,
+       package:$pkg, extension_key:$extkey,
        latest_release:$latest, tag:$tag,
        workflow:$wf, notes:$notes, registries_missing:$reg, next:$next,
        note:$note, cmd:$cmd}'
