@@ -11,6 +11,14 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-24
+
+### Fixed
+
+- `release-status.sh` reads the top-level version of `composer.json` and `package.json` (a `package.json` marked private is skipped, as in `validate-pre-release.sh`). A repository stating its version only there, such as netresearch/assetpicker, was treated as versionless
+- `release-status.sh` finds a tag with and without the `v` prefix, the latest release's spelling first, and suggests a missing tag in the spelling the repository already uses. It looked only for `v2.0.1` and reported the bare tag `2.0.1` absent, which also sent the Packagist check to the wrong version
+- a leading `v` in the declared version (`"version": "v2.0.1"`, which Composer allows) no longer makes the tag lookup ask for `vv2.0.1`
+
 ## [1.2.0] - 2026-09-24
 
 ### Changed
@@ -177,7 +185,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...v1.1.0
 [1.0.4]: https://github.com/netresearch/github-release-skill/compare/v1.0.3...v1.0.4
