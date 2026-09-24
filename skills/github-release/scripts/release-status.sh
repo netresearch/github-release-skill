@@ -144,6 +144,10 @@ if [ -z "$declared" ]; then
   done < <(find . -maxdepth 2 -name '*.toc' -type f 2>/dev/null | sort)
 fi
 
+# composer.json allows "version": "v2.0.1". Every tag candidate below is built
+# from $declared, so a prefix left in would look for vv2.0.1.
+declared="${declared#v}"
+
 # A repository may state its version nowhere -- an application deployed from a
 # tag rather than installed from a registry has no manifest to bump. Reporting
 # "prepare-release -- no version file found" for one of those answers a question

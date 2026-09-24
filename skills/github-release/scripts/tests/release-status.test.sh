@@ -400,6 +400,13 @@ printf '%s\n' '{"name": "acme/lib", "version": "3.2.1"}' >"$manif/repo/composer.
 check  "reads the top-level composer.json version" "declared    : 3.2.1" "$(local_run)"
 printf '%s\n' '{"name": "acme/lib"}' >"$manif/repo/composer.json"
 check  "a composer.json without version is not a version file" "declared    : <none>" "$(local_run)"
+# composer.json allows a leading v; the tag lookup must not become vv2.0.1.
+printf '%s\n' '{"name": "acme/lib", "version": "v2.0.1"}' >"$manif/repo/composer.json"
+cv_out=$(manif_run 2.0.1 "2.0.0 2.0.1" -R acme/manif)
+check  "a v-prefixed composer version is read without the v" "declared    : 2.0.1"$'\n' "$cv_out"
+check  "and its bare tag is found"                          "tag         : annotated" "$cv_out"
+refute "and no vv-tag is looked for or suggested"           "vv2.0.1" "$cv_out"
+refute "and the tag is not reported absent"                 "tag         : absent" "$cv_out"
 rm -f "$manif/repo/composer.json"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
