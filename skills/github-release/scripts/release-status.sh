@@ -410,7 +410,7 @@ else
   echo "${REPO:-<repository not identified>}"
   case "$version_source" in
     release) vnote='  (from the latest release; no version file in the tree)' ;;
-    remote)  vnote="  (from the default branch of $REPO; the current directory is not its checkout)" ;;
+    remote)  vnote="  (from the default branch of $REPO; no version file read in the current directory)" ;;
     *)       vnote='' ;;
   esac
   printf '  declared    : %s%s\n' "${declared:-<none>}" "$vnote"
