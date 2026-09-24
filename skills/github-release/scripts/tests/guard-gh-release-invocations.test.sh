@@ -228,6 +228,16 @@ check 2 'api -iX DELETE' 'gh api -iX DELETE repos/o/r/releases/1'
 check 2 'api -iXDELETE' 'gh api -iXDELETE repos/o/r/releases/1'
 check 2 'api -if creates a release' 'gh api -if tag_name=v1 repos/o/r/releases'
 check 0 'api -i on a release read' 'gh api -i repos/o/r/releases/latest'
+# A shell comment is cut the way bash cuts it: words after it never reach gh.
+check 2 'api DELETE with a comment naming GET' 'gh api repos/o/r/releases/1 -X DELETE # -X GET'
+check 2 'api data with a comment naming GET' 'gh api repos/o/r/releases -f tag_name=v1 # -X GET'
+check 0 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
+check 2 'api method flag without a value' 'gh api repos/o/r/releases/1 -X DELETE -X'
+check 2 'api numeric repositories route' 'gh api repositories/123/releases/1 -X DELETE'
+# shellcheck disable=SC2016  # the guard must see the expansion unexpanded
+check 2 'create after a ${...} assignment with a blank' 'a=${X:-foo bar} gh release create v1.2.3'
+# shellcheck disable=SC2016
+check 2 'create in a ${ cmd; } substitution' 'echo ${ gh release create v1.2.3; }'
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

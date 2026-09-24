@@ -104,7 +104,26 @@ GH_API_RE = re.compile(INVOCATION_PREFIX + r"gh\s+api(?=\s|$)")
 # "repos/$R/releases/$ID", "repos/$GITHUB_REPOSITORY/releases". A repository
 # literally named "releases" is therefore read as a release path too, which
 # errs toward blocking.
-_RELEASE_PATH_RE = re.compile(r"repos/(?:[^/\s]+/){1,2}releases(?:[/?#]|$)")
+# The numeric route "repositories/<id>/releases" reaches the same releases.
+_RELEASE_PATH_RE = re.compile(
+    r"(?:repos/(?:[^/\s]+/){1,2}|repositories/[^/\s]+/)releases(?:[/?#]|$)"
+)
+
+# A shell comment: an unquoted "#" that begins a word. Everything after it is
+# text the shell never passes on. A "#" inside a word ("a#b", "releases/1#x")
+# is part of that word.
+_COMMENT_START = re.compile(
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<comment>(?:^|(?<=\s))#)"""
+)
+
+
+def _without_comment(args: str) -> str:
+    """Cut a command's arguments at a real shell comment."""
+    for match in _COMMENT_START.finditer(args):
+        if match.group("comment") is not None:
+            return args[: match.start()]
+    return args
+
 
 # gh api flags that take a value, from `gh api --help` (gh 2.101.0). The value
 # is consumed so it cannot be read as the endpoint.
@@ -139,11 +158,11 @@ def _gh_api_mutates_release(args: str):
     the method is GET or HEAD (then the fields become query parameters).
     """
     try:
-        # No comments=True: shlex would then treat a "#" inside a word as a
-        # comment, which bash does not ("-H X-A:a#b -X DELETE" lost its
-        # method). A real trailing comment is kept as words and can only make
-        # the guard stricter.
-        words = shlex.split(args)
+        # The comment is cut the way bash cuts it, before splitting. shlex's
+        # own comments=True treats a "#" inside a word as a comment ("-H
+        # X-A:a#b -X DELETE" lost its method), and keeping a comment's words
+        # let "# -X GET" override the real method.
+        words = shlex.split(_without_comment(args))
     except ValueError:
         # Unbalanced quotes: the shell will not run this as written, but a
         # release path in it is reason enough not to guess.
@@ -188,7 +207,7 @@ def _gh_api_mutates_release(args: str):
         if upper in _SAFE_METHODS:
             return None
         # A mutating method, or one the guard cannot read ("$M").
-        return upper if upper in _MUTATING_METHODS else method
+        return upper if upper in _MUTATING_METHODS else (method or "UNREADABLE")
     return "POST" if has_data else None
 
 
