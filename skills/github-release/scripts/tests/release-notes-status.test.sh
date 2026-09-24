@@ -116,6 +116,9 @@ v1.1.0')"
 credited() { credit_mentioned "$1" "$2" && echo 1 || echo 0; }
 check "profile link is not a mention"          0 "$(credited 'Fixed by [@alice](https://github.com/alice) in #230.' @alice)"
 check "a mention inside a link label is not"   0 "$(credited 'Fixed [by @alice](https://github.com/alice).' @alice)"
+check "a reference-style link is not a mention" 0 "$(credited '[@alice][1] fixed it.
+
+[1]: https://github.com/alice' @alice)"
 check "bare mention after a PR link counts"    1 "$(credited '([#43](https://github.com/o/r/pull/43) by @alice)' @alice)"
 check "bare mention at line start counts"      1 "$(credited '@alice fixed the rotation.' @alice)"
 check "bare mention mid-sentence counts"       1 "$(credited 'Fixed by @alice in #230.' @alice)"
