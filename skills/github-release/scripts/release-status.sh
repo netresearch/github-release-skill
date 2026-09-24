@@ -165,7 +165,7 @@ fetch_version_files() {
         mkdir -p "$dir/$(dirname "$f")"
         gh api -H 'Accept: application/vnd.github.raw+json' "repos/$REPO/contents/$f" \
           >"$dir/$f" 2>/dev/null || rm -f "$dir/$f"
-      done
+      done || true   # a failed listing leaves the root files above in use
 }
 
 # Where the version files are read from. `-R owner/repo` names a repository,
@@ -350,7 +350,13 @@ stale=0
 if [ -n "$declared" ] && [ -n "$latest" ] && [ "$declared" != "${latest#v}" ]; then
   if printf '%s\n%s\n' "$declared" "${latest#v}" | sort -V | head -1 | grep -qx "$declared"; then
     stale=1
-    add_note "working tree declares v$declared but $latest is already released -- fetch before trusting this"
+    if [ "$version_source" = "remote" ]; then
+      # The files came from the named repository, so no local fetch changes
+      # them: its default branch lags the release.
+      add_note "the default branch of $REPO declares v$declared but $latest is already released -- its version files lag the release"
+    else
+      add_note "working tree declares v$declared but $latest is already released -- fetch before trusting this"
+    fi
   fi
 fi
 
@@ -371,7 +377,8 @@ elif [ "$declared" = "${latest#v}" ] && [ "$tag_state" = "annotated" ] && [ "$no
     add_note "$tag_ref released, notes rewritten, registries serving it"
   fi
 elif [ "$stale" = 1 ]; then
-  next="prepare-release"; cmd="git fetch origin && git switch --detach origin/main   # then re-run"
+  next="prepare-release"
+  [ "$version_source" = "remote" ] || cmd="git fetch origin && git switch --detach origin/main   # then re-run"
 elif [ "$tag_state" = "absent" ]; then
   if [ "$declared" = "${latest#v}" ]; then
     next="prepare-release"; add_note "version files already on the released $tag_ref"

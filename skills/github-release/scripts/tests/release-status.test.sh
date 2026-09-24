@@ -450,6 +450,22 @@ case "$path" in
   repos/acme/lib/git/trees/*)    exit 0 ;;
   repos/acme/lib/releases/latest) echo "v1.0.0"; exit 0 ;;
   repos/acme/lib/git/ref/tags/*) exit 1 ;;
+  # acme/old: its default branch lags the latest release.
+  repos/acme/old/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '1.0.0'];"; exit 0 ;;
+  repos/acme/old/contents/*)     echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/old)                echo "main"; exit 0 ;;
+  repos/acme/old/git/trees/*)    exit 0 ;;
+  repos/acme/old/releases/latest) echo "v2.0.0"; exit 0 ;;
+  repos/acme/old/git/ref/tags/*) exit 1 ;;
+  # acme/tree: the tree listing fails; the root manifest must still count.
+  repos/acme/tree/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '1.2.0'];"; exit 0 ;;
+  repos/acme/tree/contents/*)    echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/tree)               echo "main"; exit 0 ;;
+  repos/acme/tree/git/trees/*)   echo '{"message":"Server Error"}'; exit 1 ;;
+  repos/acme/tree/releases/latest) echo "v1.1.0"; exit 0 ;;
+  repos/acme/tree/git/ref/tags/*) exit 1 ;;
 esac
 exit 1
 STUB
@@ -508,6 +524,20 @@ lib_run() { # lib_run <dir>
 }
 check  "a versionless repository: not the foreign package" '"package":"acme/lib"' "$(lib_run "$remote/other")"
 check  "a versionless repository: the fetched package outside a checkout" '"package":"acme/lib"' "$(lib_run "$remote/plain")"
+
+named_run() { # named_run <repo> <dir>
+  (cd "$2" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R "$1" 2>&1)
+}
+# (f) a default branch that lags the latest release is not a stale worktree:
+# the switch advice would act on the current directory, not on the named repo.
+old_out=$(named_run acme/old "$remote/plain")
+check  "a lagging default branch is named as such"       "default branch of acme/old declares v1.0.0" "$old_out"
+refute "and gets no worktree switch"                     "switch --detach" "$old_out"
+
+# (g) the .toc tree listing fails: the root manifest fetched before it counts.
+tree_out=$(named_run acme/tree "$remote/plain")
+check  "a failed tree listing keeps the root manifest"   "declared    : 1.2.0" "$tree_out"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
