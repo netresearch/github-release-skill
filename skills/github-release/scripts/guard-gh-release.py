@@ -24,6 +24,7 @@ Exit codes:
 
 import json
 import re
+import shlex
 import sys
 
 # Both guards share one invocation parser; sys.path[0] is this directory when
@@ -87,26 +88,144 @@ GH_RELEASE_RE = re.compile(INVOCATION_PREFIX + r"gh\s+release\s+(\S+)")
 ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 
 # gh api calls to release endpoints with mutating methods.
-# Matches patterns like:
-#   gh api repos/owner/repo/releases -X POST
-#   gh api /repos/owner/repo/releases --method DELETE
-#   gh api repos/owner/repo/releases/123 -X PATCH
-GH_API_RELEASE_RE = re.compile(
-    INVOCATION_PREFIX
-    + r"""
-    gh\s+api\s+                      # gh api
-    (?:(?:-\w+|--\w[\w-]*)(?:\s+(?:"[^"]*"|'[^']*'|\S+))?\s+)*  # optional flags (e.g. -X POST, -H "...")
-    /?repos/[^\s]+/releases          # release endpoint path
-    """,
-    re.VERBOSE,
+#
+# The call is read as the argv the shell will hand to gh, not matched as text.
+# Two regexes did this before, and each shape they did not foresee was a way
+# through: a quoted endpoint path ("repos/$R/releases/$ID"), a flag value with
+# a space in it (-f body="new notes"), the long form --raw-field, --field=x.
+# Their flags group also backtracked exponentially on a run of dash-words,
+# which a 2-second hook timeout turns into a question of what the harness does
+# on timeout. shlex splits the words the way the shell does, in linear time.
+GH_API_RE = re.compile(INVOCATION_PREFIX + r"gh\s+api(?=\s|$)")
+
+# A release endpoint anywhere in a word: a bare or leading-slash path, a full
+# URL, or a path whose quoting shlex could not resolve ($'...'). Owner and
+# repository may sit in one segment, because a variable often holds both:
+# "repos/$R/releases/$ID", "repos/$GITHUB_REPOSITORY/releases". A repository
+# literally named "releases" is therefore read as a release path too, which
+# errs toward blocking.
+# The numeric route "repositories/<id>/releases" reaches the same releases.
+_RELEASE_PATH_RE = re.compile(
+    r"(?:repos/(?:[^/\s]+/){1,2}|repositories/[^/\s]+/)releases(?:[/?#]|$)"
 )
 
-MUTATING_METHOD_RE = re.compile(
-    r"""
-    (?:-X|--method)\s*(POST|PUT|PATCH|DELETE)
-    """,
-    re.VERBOSE | re.IGNORECASE,
+# A shell comment: an unquoted "#" that begins a word. Everything after it is
+# text the shell never passes on. A "#" inside a word ("a#b", "releases/1#x")
+# is part of that word.
+_COMMENT_START = re.compile(
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<comment>(?:^|(?<=\s))#)"""
 )
+
+
+def _without_comment(args: str) -> str:
+    """Cut a command's arguments at a real shell comment."""
+    for match in _COMMENT_START.finditer(args):
+        if match.group("comment") is not None:
+            return args[: match.start()]
+    return args
+
+
+# gh api flags that take a value, from `gh api --help` (gh 2.101.0). The value
+# is consumed so it cannot be read as the endpoint.
+_VALUE_FLAGS = {
+    "-X": "method",
+    "--method": "method",
+    "-f": "data",
+    "--raw-field": "data",
+    "-F": "data",
+    "--field": "data",
+    "--input": "data",
+    "-H": None,
+    "--header": None,
+    "-q": None,
+    "--jq": None,
+    "-t": None,
+    "--template": None,
+    "--hostname": None,
+    "--cache": None,
+    "-p": None,
+    "--preview": None,
+}
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_SAFE_METHODS = {"GET", "HEAD"}
+
+
+def _gh_api_mutates_release(args: str):
+    """Return the method name if a gh api call mutates a release, else None.
+
+    `args` is the text after `gh api`. The call is judged twice, with and
+    without a trailing shell comment cut off, and it mutates if either reading
+    says so. Cutting is needed: kept, a comment's words override the real
+    method ("-X DELETE # -X GET"). Cutting alone is not safe: the cutter is a
+    text scan, and a "#" bash does not treat as a comment -- inside ${V/ #/},
+    or after a $'...' string with an escaped quote -- made it drop a real
+    "-X DELETE". Judging both ways, a mistake in either reading can only block.
+    A method or path that appears only in a comment therefore blocks too, which
+    is the safe direction. So does a release read whose trailing comment holds
+    an apostrophe ("# don't mutate"): the uncut reading sees an unclosed quote
+    and cannot parse it. Narrowing that was measured to reopen a 2 -> 0 path,
+    so the block stays; drop the apostrophe or the comment.
+    """
+    return _judge_gh_api(_without_comment(args)) or _judge_gh_api(args)
+
+
+def _judge_gh_api(args: str):
+    """One reading of a gh api call; see _gh_api_mutates_release.
+
+    gh sends POST when a field or an input body is present and no method is
+    given, so data alone is a mutation unless the method is GET or HEAD (then
+    the fields become query parameters).
+    """
+    try:
+        # No comments=True: shlex would treat a "#" inside a word as a
+        # comment, which bash does not ("-H X-A:a#b -X DELETE").
+        words = shlex.split(args)
+    except ValueError:
+        # Unbalanced quotes: the shell will not run this as written, but a
+        # release path in it is reason enough not to guess.
+        return "UNPARSEABLE" if _RELEASE_PATH_RE.search(args) else None
+    method = None
+    has_data = False
+    positionals = []
+    i = 0
+    while i < len(words):
+        word = words[i]
+        name, value = None, None
+        if word.startswith("--"):
+            name, _, attached = word.partition("=")
+            value = attached if "=" in word else None
+        elif word.startswith("-") and len(word) > 1:
+            # A shorthand group, read as pflag reads it: boolean letters
+            # ("-i") are skipped, and the first letter that takes a value ends
+            # the group -- the rest of the word is its value ("-iXDELETE",
+            # "-if tag_name=v1").
+            for j in range(1, len(word)):
+                if "-" + word[j] in _VALUE_FLAGS:
+                    name = "-" + word[j]
+                    rest = word[j + 1 :]
+                    value = rest.removeprefix("=") or None
+                    break
+        else:
+            positionals.append(word)
+        if name in _VALUE_FLAGS:
+            if value is None:
+                i += 1
+                value = words[i] if i < len(words) else ""
+            kind = _VALUE_FLAGS[name]
+            if kind == "method":
+                method = value
+            elif kind == "data":
+                has_data = True
+        i += 1
+    if not any(_RELEASE_PATH_RE.search(w) for w in positionals):
+        return None
+    if method is not None:
+        upper = method.upper()
+        if upper in _SAFE_METHODS:
+            return None
+        # A mutating method, or one the guard cannot read ("$M").
+        return upper if upper in _MUTATING_METHODS else (method or "UNREADABLE")
+    return "POST" if has_data else None
 
 
 # Flags for gh release edit that modify metadata other than notes.
@@ -277,18 +396,12 @@ def _check_invocation(cmd: str) -> None:
             )
 
     # --- Check gh api calls to release endpoints ---
-    if GH_API_RELEASE_RE.match(cmd):
-        # If no explicit method flag, gh api defaults to GET for bare calls,
-        # but POST when -f/--field or --input is present. We block if a
-        # mutating method is specified OR if data-sending flags are present.
-        has_mutating_method = MUTATING_METHOD_RE.search(cmd)
-        has_data_flags = re.search(r"\s(-f|--field|-F|--json-field|--input)\s", cmd)
-        if has_mutating_method or has_data_flags:
-            method = ""
-            if has_mutating_method:
-                method = has_mutating_method.group(1).upper()
+    api = GH_API_RE.match(cmd)
+    if api:
+        method = _gh_api_mutates_release(cmd[api.end() :])
+        if method:
             block(
-                f"Direct API call to release endpoint{' with ' + method + ' method' if method else ''} "
+                f"Direct API call to release endpoint with {method} method "
                 f"bypasses the CI release pipeline. All mutating operations on "
                 f"releases must go through CI.",
                 "Use the CI release workflow to create or modify releases. "

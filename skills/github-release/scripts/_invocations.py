@@ -17,6 +17,12 @@ import re
 # splitting it: a commit message holding a ";" is one invocation, not two. The
 # separator set carries the grouping constructs, so an invocation inside a
 # subshell, a brace group or a command substitution is still seen (issue #112).
+# A brace separates only as a word of its own, as the shell's reserved word
+# does: "{" or "}" with a blank or another separator on both sides. Inside a
+# word it is text -- "repos/{owner}/{repo}/releases", "${R}", "{a,b}" -- and
+# splitting there cut a gh api path in pieces the checks never saw. "${" with
+# a blank after it opens bash 5.3's ${ cmd; } command substitution, so it
+# separates as well.
 #
 # The escapes are not decoration. A double-quoted argument may contain \", and
 # reading that as the closing quote shifts every quote after it by one, which
@@ -24,7 +30,7 @@ import re
 # separator outside quotes is likewise literal text, not a separator: the shell
 # passes it to the command rather than ending it.
 QUOTED_SPAN_OR_SEPARATOR = re.compile(
-    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<sep>[;&|\n(){}]+)"""
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<sep>[;&|\n()]+|\$\{(?=\s)|(?<![^\s;&|()])[{}](?![^\s;&|()]))"""
 )
 
 
@@ -37,7 +43,14 @@ QUOTED_SPAN_OR_SEPARATOR = re.compile(
 # unrelated argument, e.g. echo "run git tag v1.2.3 to tag".
 INVOCATION_PREFIX = (
     r"(?:(?:then|else|elif|do|if|while|until|sudo|command|time|exec|env|nohup)\s+"
-    r"|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
+    # The value of an assignment may hold a ${...} with blanks inside
+    # ("a=${X:-foo bar} git tag v1"); \S* stopped at the blank and the prefix
+    # failed, hiding the command. Quoted spans and escaped characters carry
+    # blanks the same way ('A="x y" gh release create', "A=x\ y git tag").
+    # Each alternative starts with a different character, so the pattern
+    # cannot backtrack.
+    r"|[A-Za-z_][A-Za-z0-9_]*="
+    r"""(?:"(?:\\.|[^"\\])*"|'[^']*'|\$\{[^}]*\}|\\.|[^\s$"'\\]|\$(?!\{))*\s+)*"""
 )
 
 

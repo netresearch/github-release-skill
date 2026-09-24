@@ -160,6 +160,20 @@ check 0 'the command name inside a commit message' 'git commit -m "git tag v1.2.
 check 2 'lightweight tag in a subshell' '(git tag v1.2.3)'
 check 2 'lightweight tag in a subshell after a listing' 'git tag -l && (git tag v1.2.3)'
 check 2 'lightweight tag in a brace group' '{ git tag v1.2.3; }'
+check 2 'lightweight tag in a brace group, no blank before }' '{ git tag v1.2.3;}'
+# A brace inside a word is text. An assignment whose ${...} holds a blank
+# still counts as a prefix, and bash 5.3's ${ cmd; } still opens a command.
+# shellcheck disable=SC2016  # the guard must see the expansions unexpanded
+check 2 'lightweight tag after a ${...} assignment with a blank' 'a=${X:-foo bar} git tag v1.2.3'
+# shellcheck disable=SC2016
+check 2 'lightweight tag after a ${//} assignment' 'a=${X// /_} git tag v1.2.3'
+check 2 'lightweight tag after a double-quoted assignment with a blank' 'a="x y" git tag v1.2.3'
+check 2 'lightweight tag after a single-quoted assignment with a blank' "a='x y' git tag v1.2.3"
+check 2 'lightweight tag after an escaped blank in an assignment' 'a=x\ y git tag v1.2.3'
+check 0 'signed tag after a quoted assignment with a blank' 'a="x y" git tag -s v1.2.3 -m v1.2.3'
+# shellcheck disable=SC2016
+check 2 'lightweight tag in a ${ cmd; } substitution' 'echo ${ git tag v1.2.3; }'
+check 0 'braces inside words do not make a command' 'echo {a,b} x}{ git-tag'
 # The single quotes are the point: the guard has to receive the substitution
 # as literal text, exactly as the harness would hand it over.
 # shellcheck disable=SC2016

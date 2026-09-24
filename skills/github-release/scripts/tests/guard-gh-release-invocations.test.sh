@@ -183,6 +183,73 @@ check 2 'api DELETE on its own line' \
   'echo hi
 gh api repos/o/r/releases/1 -X DELETE'
 check 0 'api GET on releases' 'gh api repos/o/r/releases'
+# A quoted endpoint path is how a script with variables writes it
+# ("repos/$R/releases/$ID"), and the path pattern used to require the path to
+# start right after the flags, so every quoted form skipped the check.
+check 2 'api PATCH, path in double quotes' 'gh api -X PATCH "repos/o/r/releases/1" -f name=v1'
+check 2 'api PATCH, path in single quotes' "gh api 'repos/o/r/releases/1' -X PATCH -f name=v1"
+check 2 'api data flag only, quoted path' 'gh api "repos/o/r/releases/1" -f name=v1'
+check 2 'api --method=PATCH, quoted path' 'gh api --method=PATCH "repos/o/r/releases/1"'
+check 2 'api method in quotes' 'gh api repos/o/r/releases/1 -X "DELETE"'
+check 0 'api GET, quoted path' 'gh api "repos/o/r/releases?per_page=100" --paginate --jq .'
+# The call is read as argv. Before that, a flag value with a space in it ended
+# the flag list early, and the long data flags were not recognised.
+check 2 'api data value with a space before the path' 'gh api -f body="new notes" -X PATCH "repos/o/r/releases/1"'
+check 2 'api data value with a space, no method' 'gh api -f body="new notes" "repos/o/r/releases/1"'
+check 2 'api --raw-field creates a release' 'gh api repos/o/r/releases --raw-field tag_name=v1'
+check 2 'api --field=value' 'gh api "repos/o/r/releases/1" --field=name=v1'
+check 2 'api attached -f value' 'gh api "repos/o/r/releases/1" -fname=v1'
+check 2 'api attached -X value' 'gh api -XPATCH "repos/o/r/releases/1"'
+check 2 'api full URL' 'gh api -X PATCH https://api.github.com/repos/o/r/releases/1'
+# shellcheck disable=SC2016  # the guard must see "$M" unexpanded
+check 2 'api method from a variable' 'gh api -X "$M" repos/o/r/releases/1'
+check 2 'api unbalanced quote around a release path' 'gh api -X PATCH "repos/o/r/releases/1'
+check 0 'api GET with query fields' 'gh api -X GET "repos/o/r/releases" -f per_page=100'
+check 0 'api jq text that mentions a method' "gh api \"repos/o/r/releases\" --jq '.[] | select(.name==\"-X POST\")'"
+check 0 'api PATCH on a pull request' 'gh api -X PATCH "repos/o/r/pulls/1" -f title=x'
+check 0 'api PATCH on a repo named like releases' 'gh api -X PATCH "repos/o/releases-app/pulls/1" -f title=x'
+check 0 'api GET on the latest release' 'gh api repos/o/r/releases/latest'
+# Owner and repository in one variable, as scripts and workflows write them.
+# The first case is the command references/recovery-procedures.md prints.
+# shellcheck disable=SC2016  # the guard must see the variables unexpanded
+check 2 'api PATCH, owner/repo in one variable (recovery doc)' 'gh api -X PATCH "repos/$R/releases/$ID" -f name="$TAG"'
+# shellcheck disable=SC2016
+check 2 'api PATCH, $GITHUB_REPOSITORY' 'gh api -X PATCH repos/$GITHUB_REPOSITORY/releases/$ID -f name=x'
+# shellcheck disable=SC2016
+check 2 'api data, ${R} in braces' 'gh api "repos/${R}/releases" -f tag_name=v1'
+# gh fills in {owner}/{repo} itself; the braces are part of the word.
+check 2 'api DELETE, {owner}/{repo} placeholders' 'gh api -X DELETE repos/{owner}/{repo}/releases/1'
+check 2 'api data, {owner}/{repo} placeholders' 'gh api repos/{owner}/{repo}/releases -f tag_name=v1'
+# A "#" inside a word is not a comment in bash.
+check 2 'api "#" inside a header value' 'gh api -H X-A:a#b -X DELETE repos/o/r/releases/1'
+check 2 'api "#" at the end of the path' 'gh api repos/o/r/releases/1#x -X DELETE'
+# Shorthand groups, read the way pflag reads them.
+check 2 'api -iX DELETE' 'gh api -iX DELETE repos/o/r/releases/1'
+check 2 'api -iXDELETE' 'gh api -iXDELETE repos/o/r/releases/1'
+check 2 'api -if creates a release' 'gh api -if tag_name=v1 repos/o/r/releases'
+check 0 'api -i on a release read' 'gh api -i repos/o/r/releases/latest'
+# A shell comment is cut the way bash cuts it: words after it never reach gh.
+check 2 'api DELETE with a comment naming GET' 'gh api repos/o/r/releases/1 -X DELETE # -X GET'
+check 2 'api data with a comment naming GET' 'gh api repos/o/r/releases -f tag_name=v1 # -X GET'
+# The call is also judged without the comment cut, so a release path that
+# appears only in a comment blocks. That is the safe direction: the cutter is a
+# text scan, and a "#" bash does not read as a comment must never cost a real
+# method (the two cases below).
+check 2 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
+# shellcheck disable=SC2016  # the guard must see the expansion unexpanded
+check 2 'api "#" inside a ${...} expansion' 'gh api repos/o/r/releases/1 -H X-A:${V/ #/} -X DELETE'
+check 2 "api \"#\" after a \$'...' string with an escaped quote" "gh api repos/o/r/releases/1 -H \$'X-A: a\\'b' -H 'X-B: #c' -X DELETE"
+check 2 'api method flag without a value' 'gh api repos/o/r/releases/1 -X DELETE -X'
+check 2 'api numeric repositories route' 'gh api repositories/123/releases/1 -X DELETE'
+# shellcheck disable=SC2016  # the guard must see the expansion unexpanded
+check 2 'create after a ${...} assignment with a blank' 'a=${X:-foo bar} gh release create v1.2.3'
+check 2 'create after a double-quoted assignment with a blank' 'A="x y" gh release create v1.2.3'
+check 2 'create after a single-quoted assignment with a blank' "A='x y' gh release create v1.2.3"
+check 2 'create after an escaped blank in an assignment' 'A=x\ y gh release create v1.2.3'
+check 2 'api DELETE after a quoted assignment with a blank' 'A="x y" gh api -X DELETE repos/o/r/releases/1'
+check 0 'view after a quoted assignment with a blank' 'A="x y" gh release view v1.2.3'
+# shellcheck disable=SC2016
+check 2 'create in a ${ cmd; } substitution' 'echo ${ gh release create v1.2.3; }'
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

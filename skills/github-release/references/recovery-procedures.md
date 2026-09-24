@@ -325,6 +325,48 @@ See `ter-republish.md` for the TYPO3-specific pattern using a
    release notes, re-run only downstream publishers, never the full
    release workflow."
 
+## Release Titles Differ From the Tag
+
+**Symptom**: Releases carry a title such as `QuickRoute v1.21.0` while the
+convention here is the bare tag (`gh release create … --title "vX.Y.Z"`),
+and the maintainer wants the existing ones renamed.
+
+**Cause**: The release workflow sets its own `--title`. The pattern
+`--title "<Project> $TAG"` tends to arrive with a hand-written packaging
+step and is copied from release to release without a reason.
+
+**Prevention**: Set `--title "$TAG"` in the workflow. A store upload that
+lists files outside the repository (a CurseForge `displayName`, for
+example) may keep the project name; the GitHub release page shows the
+repository name already.
+
+**Recovery** (existing releases): this is the maintainer's step, not the
+agent's. `guard-gh-release.py` blocks `gh release edit --title` and a
+mutating `gh api` call on a releases endpoint, with no override, and that is
+intended. It reads the command it is shown; a call wrapped in `bash -c "…"`
+or in a script is beyond it, so do not read its silence there as permission.
+Hand the maintainer a script instead, and let them run it with the `!` prefix:
+
+1. List the releases whose title is exactly `<Project> <tag>`:
+   `gh api "repos/$R/releases?per_page=100" --paginate --jq '.[] | select(.name == "<Project> " + .tag_name) | "\(.id)\t\(.tag_name)"'`.
+2. Dry run by default: print each planned rename and change nothing.
+   Rename only on `--apply`, and only titles that match exactly.
+3. Per release: `gh api -X PATCH "repos/$R/releases/$ID" -f name="$TAG"`,
+   then read `.name` back and count a mismatch as a failure. Only the title
+   changes; tag, notes and assets stay.
+4. Run the dry run yourself first and show its output with the `--apply`
+   command. The guard sees only the script call, not the `gh` calls inside
+   it, so it would let `--apply` through as well: leaving `--apply` to the
+   maintainer is your part, not something the guard enforces.
+
+Measured on CybotTM/wow-quickroute (2026-09-23): 20 of 30 releases carried
+the prefixed title, none marked `immutable`; all 20 were renamed and read
+back without a failure. Afterwards check that no release has a title
+different from its tag:
+`gh api "repos/$R/releases?per_page=100" --paginate --jq '.[] | select(.name != .tag_name) | .tag_name'`
+must print nothing. A release with an empty `name` shows up here too;
+GitHub displays its tag as the title, so it needs no rename.
+
 ## Mis-Tagged SemVer Release (Scope Larger Than Version Bump Implies)
 
 **Symptom**: A release was tagged (and published, and consumed by TER /
