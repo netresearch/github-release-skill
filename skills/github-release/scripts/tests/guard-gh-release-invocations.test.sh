@@ -243,6 +243,11 @@ check 2 'api method flag without a value' 'gh api repos/o/r/releases/1 -X DELETE
 check 2 'api numeric repositories route' 'gh api repositories/123/releases/1 -X DELETE'
 # shellcheck disable=SC2016  # the guard must see the expansion unexpanded
 check 2 'create after a ${...} assignment with a blank' 'a=${X:-foo bar} gh release create v1.2.3'
+check 2 'create after a double-quoted assignment with a blank' 'A="x y" gh release create v1.2.3'
+check 2 'create after a single-quoted assignment with a blank' "A='x y' gh release create v1.2.3"
+check 2 'create after an escaped blank in an assignment' 'A=x\ y gh release create v1.2.3'
+check 2 'api DELETE after a quoted assignment with a blank' 'A="x y" gh api -X DELETE repos/o/r/releases/1'
+check 0 'view after a quoted assignment with a blank' 'A="x y" gh release view v1.2.3'
 # shellcheck disable=SC2016
 check 2 'create in a ${ cmd; } substitution' 'echo ${ gh release create v1.2.3; }'
 

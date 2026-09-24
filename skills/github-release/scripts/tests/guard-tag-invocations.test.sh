@@ -167,6 +167,10 @@ check 2 'lightweight tag in a brace group, no blank before }' '{ git tag v1.2.3;
 check 2 'lightweight tag after a ${...} assignment with a blank' 'a=${X:-foo bar} git tag v1.2.3'
 # shellcheck disable=SC2016
 check 2 'lightweight tag after a ${//} assignment' 'a=${X// /_} git tag v1.2.3'
+check 2 'lightweight tag after a double-quoted assignment with a blank' 'a="x y" git tag v1.2.3'
+check 2 'lightweight tag after a single-quoted assignment with a blank' "a='x y' git tag v1.2.3"
+check 2 'lightweight tag after an escaped blank in an assignment' 'a=x\ y git tag v1.2.3'
+check 0 'signed tag after a quoted assignment with a blank' 'a="x y" git tag -s v1.2.3 -m v1.2.3'
 # shellcheck disable=SC2016
 check 2 'lightweight tag in a ${ cmd; } substitution' 'echo ${ git tag v1.2.3; }'
 check 0 'braces inside words do not make a command' 'echo {a,b} x}{ git-tag'

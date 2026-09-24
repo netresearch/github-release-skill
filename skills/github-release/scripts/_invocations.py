@@ -45,9 +45,12 @@ INVOCATION_PREFIX = (
     r"(?:(?:then|else|elif|do|if|while|until|sudo|command|time|exec|env|nohup)\s+"
     # The value of an assignment may hold a ${...} with blanks inside
     # ("a=${X:-foo bar} git tag v1"); \S* stopped at the blank and the prefix
-    # failed, hiding the command. The alternatives do not overlap, so the
-    # pattern cannot backtrack.
-    r"|[A-Za-z_][A-Za-z0-9_]*=(?:\$\{[^}]*\}|[^\s$]|\$(?!\{))*\s+)*"
+    # failed, hiding the command. Quoted spans and escaped characters carry
+    # blanks the same way ('A="x y" gh release create', "A=x\ y git tag").
+    # Each alternative starts with a different character, so the pattern
+    # cannot backtrack.
+    r"|[A-Za-z_][A-Za-z0-9_]*="
+    r"""(?:"(?:\\.|[^"\\])*"|'[^']*'|\$\{[^}]*\}|\\.|[^\s$"'\\]|\$(?!\{))*\s+)*"""
 )
 
 
