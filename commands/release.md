@@ -56,8 +56,16 @@ release branch:
   inputs for every 404, with a comment to drop them once published.
 - **TER preflight hard-fails without a token**: the netresearch
   `release-typo3-extension.yml` orchestrator exits with an error when
-  `skip-ter` is false and `TYPO3_TER_ACCESS_TOKEN` resolves empty — check
-  `gh secret list` before leaving TER enabled.
+  `skip-ter` is false and `TYPO3_TER_ACCESS_TOKEN` resolves empty. Before
+  leaving TER enabled, check both places the token can come from.
+  `gh secret list` shows repository secrets only. An organization secret with
+  `visibility: selected` resolves empty in every repository not on its list,
+  and only
+  `gh api --paginate "repos/{owner}/{repo}/actions/organization-secrets?per_page=100" --jq '.secrets[].name'`
+  shows whether this repository is on it. If the name is in neither
+  listing, an org admin first confirms the organization secret exists
+  (`gh api orgs/{owner}/actions/secrets/TYPO3_TER_ACCESS_TOKEN`) and then adds
+  the repository to its selected repositories.
 - A first release has no previous tag: the auto-generated notes say only
   "Initial release", so step 12's narrative rewrite is mandatory, and the
   install instructions must not show a bare `composer require`/`npm install`
