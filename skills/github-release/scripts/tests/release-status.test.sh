@@ -409,6 +409,136 @@ refute "and no vv-tag is looked for or suggested"           "vv2.0.1" "$cv_out"
 refute "and the tag is not reported absent"                 "tag         : absent" "$cv_out"
 rm -f "$manif/repo/composer.json"
 
+# ---------------------------------------------------------------------------
+# -R names a repository the current directory is not a checkout of
+# ---------------------------------------------------------------------------
+# netresearch/t3x-nr-llm, 2026-09-24: `release-status.sh -R … --watch` was run
+# from a parent directory right after the v0.37.1 tag push. No version file
+# there, so the script fell back to the latest release, v0.37.0, watched that
+# release's finished run and reported ok. The stub serves acme/remote: its
+# default branch declares 3.1.0 in ext_emconf.php, its latest release is
+# v3.0.0. A raw contents request for any other file is a 404.
+
+remote=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote"' EXIT
+mkdir -p "$remote/bin" "$remote/plain" "$remote/other" "$remote/same" "$remote/alias"
+ln -sf "$jq_path" "$remote/bin/jq"
+cat >"$remote/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "run list")     echo "none"; exit 0 ;;
+  "release view") exit 1 ;;
+esac
+[ "$1" = api ] || exit 1
+path=""; for a in "$@"; do case "$a" in repos/*) path="$a" ;; esac; done
+case "$path" in
+  repos/acme/remote/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.1.0'];"; exit 0 ;;
+  repos/acme/remote/contents/composer.json)
+    printf '%s\n' '{"name": "acme/remote", "extra": {"typo3/cms": {"extension-key": "remote_ext"}}}'; exit 0 ;;
+  repos/acme/remote/contents/*) echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/remote)             echo "main"; exit 0 ;;
+  repos/acme/remote/git/trees/*) exit 0 ;;
+  repos/acme/remote/releases/latest) echo "v3.0.0"; exit 0 ;;
+  repos/acme/remote/git/ref/tags/*)  exit 1 ;;
+  # acme/lib states no version anywhere: a composer library.
+  repos/acme/lib/contents/composer.json) printf '%s\n' '{"name": "acme/lib"}'; exit 0 ;;
+  repos/acme/lib/contents/*) echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/lib)                echo "main"; exit 0 ;;
+  repos/acme/lib/git/trees/*)    exit 0 ;;
+  repos/acme/lib/releases/latest) echo "v1.0.0"; exit 0 ;;
+  repos/acme/lib/git/ref/tags/*) exit 1 ;;
+  # acme/old: its default branch lags the latest release.
+  repos/acme/old/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '1.0.0'];"; exit 0 ;;
+  repos/acme/old/contents/*)     echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/old)                echo "main"; exit 0 ;;
+  repos/acme/old/git/trees/*)    exit 0 ;;
+  repos/acme/old/releases/latest) echo "v2.0.0"; exit 0 ;;
+  repos/acme/old/git/ref/tags/*) exit 1 ;;
+  # acme/tree: the tree listing fails; the root manifest must still count.
+  repos/acme/tree/contents/ext_emconf.php)
+    printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '1.2.0'];"; exit 0 ;;
+  repos/acme/tree/contents/*)    echo '{"message":"Not Found"}'; exit 1 ;;
+  repos/acme/tree)               echo "main"; exit 0 ;;
+  repos/acme/tree/git/trees/*)   echo '{"message":"Server Error"}'; exit 1 ;;
+  repos/acme/tree/releases/latest) echo "v1.1.0"; exit 0 ;;
+  repos/acme/tree/git/ref/tags/*) exit 1 ;;
+esac
+exit 1
+STUB
+chmod +x "$remote/bin/gh"
+remote_run() { # remote_run <dir> [extra args]
+  (cd "$1" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R acme/remote "${@:2}" 2>&1)
+}
+
+# (a) not a checkout at all, and no version file here: the default branch is read.
+plain_out=$(remote_run "$remote/plain")
+check  "-R outside a checkout reads the default branch"   "declared    : 3.1.0" "$plain_out"
+check  "and says where the version came from"             "from the default branch of acme/remote" "$plain_out"
+refute "and does not fall back to the previous release"   "declared    : 3.0.0" "$plain_out"
+
+# (b) a checkout of ANOTHER repository with its own version file: not read.
+git -C "$remote/other" init -q
+git -C "$remote/other" remote add origin https://github.com/acme/other.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '9.9.9'];" >"$remote/other/ext_emconf.php"
+other_out=$(remote_run "$remote/other")
+refute "a foreign checkout's version file is not read"    "9.9.9" "$other_out"
+check  "the named repository's version is read instead"   "declared    : 3.1.0" "$other_out"
+check  "and the foreign checkout is named in the verdict" "checkout of another repository" "$other_out"
+
+# (c) the matching checkout (SSH remote, different case): local files as before.
+git -C "$remote/same" init -q
+git -C "$remote/same" remote add origin git@github.com:Acme/Remote.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.2.0'];" >"$remote/same/ext_emconf.php"
+same_out=$(remote_run "$remote/same")
+check  "the matching checkout's files are read"           "declared    : 3.2.0"$'\n' "$same_out"
+refute "without a remote read"                            "from the default branch" "$same_out"
+refute "and without calling it foreign"                   "checkout of another repository" "$same_out"
+
+# (d) the matching checkout behind an SSH host alias: the URL names no
+# github.com, so it cannot be ruled foreign -- local files as before.
+git -C "$remote/alias" init -q
+git -C "$remote/alias" remote add origin git@github.com-work:acme/remote.git
+printf '%s\n' '<?php' "\$EM_CONF['x'] = ['version' => '3.2.0'];" >"$remote/alias/ext_emconf.php"
+alias_out=$(remote_run "$remote/alias")
+check  "an SSH host alias remote keeps the local files"   "declared    : 3.2.0"$'\n' "$alias_out"
+refute "and is not called foreign"                        "checkout of another repository" "$alias_out"
+
+# (e) the package the registries are asked about belongs to the named
+# repository: never the foreign checkout's composer.json, and the fetched one
+# when there is none here.
+printf '%s\n' '{"name": "acme/other", "extra": {"typo3/cms": {"extension-key": "other_ext"}}}' >"$remote/other/composer.json"
+other_json=$(remote_run "$remote/other" --json)
+check  "a foreign checkout's package is not used"        '"package":"acme/remote"' "$other_json"
+check  "nor its extension key"                           '"extension_key":"remote_ext"' "$other_json"
+check  "outside a checkout the fetched package is used"  '"package":"acme/remote"' "$(remote_run "$remote/plain" --json)"
+# The same when the named repository states no version at all, so the version
+# comes from its release and the fetched files only supply the package.
+lib_run() { # lib_run <dir>
+  (cd "$1" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R acme/lib --json 2>&1)
+}
+check  "a versionless repository: not the foreign package" '"package":"acme/lib"' "$(lib_run "$remote/other")"
+check  "a versionless repository: the fetched package outside a checkout" '"package":"acme/lib"' "$(lib_run "$remote/plain")"
+
+named_run() { # named_run <repo> <dir>
+  (cd "$2" && env -i PATH="$remote/bin:/usr/bin:/bin" HOME="$remote" \
+     bash --noprofile --norc "$SCRIPT" -R "$1" 2>&1)
+}
+# (f) a default branch that lags the latest release is not a stale worktree:
+# the switch advice would act on the current directory, not on the named repo.
+old_out=$(named_run acme/old "$remote/plain")
+check  "a lagging default branch is named as such"       "default branch of acme/old declares v1.0.0" "$old_out"
+refute "and gets no worktree switch"                     "switch --detach" "$old_out"
+
+# (g) the .toc tree listing fails: the root manifest fetched before it counts.
+tree_out=$(named_run acme/tree "$remote/plain")
+check  "a failed tree listing keeps the root manifest"   "declared    : 1.2.0" "$tree_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
