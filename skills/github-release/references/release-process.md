@@ -95,8 +95,9 @@ fixes and new checkpoints make one minor release, not four. A patch release
 needs at least one meaningful fix; formatting alone, such as a trailing
 newline, waits for the next real release. If the previous release went out
 less than an hour ago, add the new change to the next one instead of cutting
-another. The green-CI precondition is already enforced by
-`scripts/validate-pre-release.sh` ("CI checks passing").
+another. The green-CI precondition is checked by
+`scripts/validate-pre-release.sh` ("CI checks passing"): a failed run of HEAD
+fails it, while unfinished or missing runs only warn.
 
 ### Phase 2: Review and Merge
 
