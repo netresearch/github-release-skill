@@ -161,7 +161,10 @@ def _gh_api_mutates_release(args: str):
     or after a $'...' string with an escaped quote -- made it drop a real
     "-X DELETE". Judging both ways, a mistake in either reading can only block.
     A method or path that appears only in a comment therefore blocks too, which
-    is the safe direction.
+    is the safe direction. So does a release read whose trailing comment holds
+    an apostrophe ("# don't mutate"): the uncut reading sees an unclosed quote
+    and cannot parse it. Narrowing that was measured to reopen a 2 -> 0 path,
+    so the block stays; drop the apostrophe or the comment.
     """
     return _judge_gh_api(_without_comment(args)) or _judge_gh_api(args)
 
