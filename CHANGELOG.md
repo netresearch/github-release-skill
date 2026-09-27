@@ -11,6 +11,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-27
+
 ### Changed
 
 - `references/release-process.md` has a Phase 1 subsection "A release is a milestone — batch related changes into one": related changes go into one release, formatting alone does not justify a patch release, and a change arriving less than an hour after the previous release waits for the next one. It also says what `validate-pre-release.sh` checks for the green-CI precondition: a failed run of HEAD fails, unfinished or missing runs only warn
@@ -199,7 +201,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/netresearch/github-release-skill/compare/v1.0.4...v1.1.0
