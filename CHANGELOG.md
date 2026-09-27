@@ -11,6 +11,20 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `references/release-process.md` has a Phase 1 subsection "A release is a milestone — batch related changes into one": related changes go into one release, formatting alone does not justify a patch release, and a change arriving less than an hour after the previous release waits for the next one. It also says what `validate-pre-release.sh` checks for the green-CI precondition: a failed run of HEAD fails, unfinished or missing runs only warn
+- `references/release-process.md`, "Crediting contributors", asks for the bare `@login` in `CHANGELOG.md` as well. The section is copied into the release body, where `[@login](https://github.com/login)` arrives as a plain link, which is not a mention and notifies nobody. A profile link stays fine in `README.md` and `CONTRIBUTING.md`, which are never copied into a release body
+- the TER preflight of `/release` (`commands/release.md`) checks both places `TYPO3_TER_ACCESS_TOKEN` can come from. `gh secret list` shows repository secrets only, and an organization secret with `visibility: selected` resolves empty in every repository not on its list; the step now also lists the repository's organization secrets with `gh api --paginate "repos/{owner}/{repo}/actions/organization-secrets?per_page=100"`, and has an org admin confirm the organization secret exists before adding the repository to its selected repositories
+
+### Fixed
+
+- `release-status.sh -R owner/repo` run outside that repository's checkout reads the version files from the named repository's default branch (through the contents API, `.toc` manifests one level deep through the git trees API) before it falls back to the latest release. It read only the current directory: run from a parent directory right after a tag push, it took the previous release's version, and `--watch` waited on that release's finished run and answered `NEXT: ok`. The output names the source, `--json` reports `version_source: remote` together with `package` and `extension_key`, and `SKILL.md` says so under "Start Here"
+- `release-status.sh -R` no longer reads a checkout of a different repository, whose files describe another project and were read without any note. A git checkout counts as foreign when every remote is a GitHub URL and none names the repository (compared case-insensitively, so a fork with an `upstream` remote still matches); a remote that names no `github.com`, such as an SSH host alias, keeps the local files in use
+- `release-status.sh` reports a default branch whose version files lag the latest release as such, and gives the stale-worktree `git switch` advice only for local files, since it acts on the current directory. A failed git trees request no longer ends the script
+- `validate-pre-release.sh` grades every CI run of HEAD on the current branch (`gh run list --branch … --commit …`) instead of the newest run of any workflow on any branch, so a red `main` no longer passes because a feature branch is green. Any unsuccessful completed run fails the check; unfinished or absent runs, a list that fills the 500-run limit, and a failed lookup warn
+- `release-notes-status.sh` counts only a bare `@login` as credit. A contributor credited only through a link such as `[@login](https://github.com/login)` or `[by @login](url)`, or matched only inside `@alicebob` or `mail@alice.dev`, is now reported as missing; a bare mention next to a link, as in `([#43](url) by @login)`, still counts
+
 ## [1.2.1] - 2026-09-24
 
 ### Fixed
