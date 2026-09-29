@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for how the tag guard splits a command into invocations — no network.
 #
 # Pins issue #105 and the bypass found alongside it. The guard used to collapse

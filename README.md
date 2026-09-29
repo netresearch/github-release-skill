@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # github-release-skill
 
 Claude Code skill plugin for safe, automated GitHub releases with supply chain security.

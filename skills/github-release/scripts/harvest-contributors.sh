@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # harvest-contributors.sh — list who contributed WHAT in a release range, as a
 # LOOKUP for crediting contributors INLINE at each change. It reports code authors
 # (merged-PR authors) and issue reporters (authors of the issues those PRs closed).

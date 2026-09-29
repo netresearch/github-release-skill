@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # validate-reusable-workflows.sh - Verify reusable workflow refs in release
 # workflows actually resolve at their pinned SHA/ref.

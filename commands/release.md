@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: release
 description: "Full release orchestration: detect ecosystem, bump versions, create PR, tag, and trigger CI release"
 ---

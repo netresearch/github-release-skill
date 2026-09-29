@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # release-notes-status.sh - Is a PUBLISHED release's body actually finished?
 #
 # The pre-release scripts stop at "CI checks passing" and the guards only block
