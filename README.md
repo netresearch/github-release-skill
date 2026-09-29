@@ -99,6 +99,8 @@ This repository follows the Netresearch organisation policies:
 - [Secret management](https://github.com/netresearch/.github/blob/main/SECURITY.md#secret-management): how CI and release credentials are stored, accessed and rotated.
 - [Access roster](https://github.com/netresearch/.github/blob/main/docs/access-roster.md): who holds administrative access to this repository and the organisation.
 
+The security assurance case for this skill (threat model, trust boundaries, countermeasures and limits) is in [docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
+
 Checks that run on pull requests in this repository:
 
 - Every pull request: Skill Validation (`lint.yml` and `validate.yml`: skill structure, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff, checkpoint schema; `validate.yml` runs ShellCheck at style severity), Eval Validation (`eval-validate.yml`) and Script Tests (`script-tests.yml`, every `skills/github-release/scripts/tests/*.test.sh`).

@@ -18,6 +18,7 @@ skills/github-release/
   scripts/                    Guard hooks + utility scripts
   templates/                  CI workflow templates
 commands/                     /release, /release-prepare, /release-status
+docs/SECURITY-ASSURANCE.md    Security assurance case (threats, trust boundaries, limits)
 ```
 
 ## Release Process (for this skill itself)
