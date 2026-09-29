@@ -656,6 +656,17 @@ check  "maintenance, detached: compared with its line" "latest rel  : v3.0.4" "$
 check  "maintenance, detached: to be tagged"           "NEXT: signed-tag" "$m_det"
 refute "maintenance, detached: no advice to switch to main" "origin/main" "$m_det"
 
+# (d2) a local branch with another name that tracks origin/TYPO3_13: the advice
+# names the upstream, where the tag belongs.
+mg "$maint/repo" remote add origin "file://$maint/nowhere"
+mg "$maint/repo" update-ref refs/remotes/origin/TYPO3_13 TYPO3_13
+mg "$maint/repo" switch -q -c work TYPO3_13
+mg "$maint/repo" config branch.work.remote origin
+mg "$maint/repo" config branch.work.merge refs/heads/TYPO3_13
+m_up=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "maintenance, tracking branch: the upstream is named" "verify HEAD==origin/TYPO3_13 first" "$m_up"
+refute "maintenance, tracking branch: not the local name"   "origin/work" "$m_up"
+
 # (e) the release list cannot be read: the newest tag of the line reachable from
 # HEAD stands in for it.
 mg "$maint/repo" switch -q TYPO3_13

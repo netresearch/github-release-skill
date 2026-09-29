@@ -265,7 +265,16 @@ if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; the
           add_note "tag $latest is not in the local repository, so a maintenance branch cannot be told from a stale worktree -- git fetch --tags"
         elif ! git merge-base --is-ancestor HEAD "$latest_commit" 2>/dev/null; then
           maint_line="$d_major"
-          maint_branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || true)
+          # The branch the tag belongs on: the upstream when one is set (a local
+          # branch may be named differently), else origin/<local branch>.
+          # for-each-ref prints nothing without an upstream, where `rev-parse
+          # @{u}` can print the literal `@{u}` along with its error.
+          head_ref=$(git symbolic-ref -q HEAD 2>/dev/null || true)
+          maint_branch=""
+          if [ -n "$head_ref" ]; then
+            maint_branch=$(git for-each-ref --format='%(upstream:short)' "$head_ref" 2>/dev/null || true)
+            [ -n "$maint_branch" ] || maint_branch="origin/${head_ref#refs/heads/}"
+          fi
           line_latest=""
           if rels=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
                       --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' 2>/dev/null); then
@@ -432,7 +441,7 @@ elif [ "$stale" = 1 ]; then
   if [ "$version_source" = "remote" ]; then
     :
   elif [ -n "$maint_line" ]; then
-    cmd="git fetch origin && git switch --detach origin/${maint_branch:-<maintenance branch>}   # then re-run"
+    cmd="git fetch origin && git switch --detach ${maint_branch:-origin/<maintenance branch>}   # then re-run"
   else
     cmd="git fetch origin && git switch --detach origin/main   # then re-run"
   fi
@@ -442,7 +451,7 @@ elif [ "$tag_state" = "absent" ]; then
   else
     next="signed-tag"
     tip="origin/main"
-    [ -n "$maint_line" ] && tip="origin/${maint_branch:-<maintenance branch>}"
+    [ -n "$maint_line" ] && tip="${maint_branch:-origin/<maintenance branch>}"
     cmd="git tag -s $tag_ref -m $tag_ref && git push origin $tag_ref   # verify HEAD==$tip first"
     add_note "$tag_ref prepared but not tagged"
   fi
