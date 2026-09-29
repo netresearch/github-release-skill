@@ -60,8 +60,6 @@ while IFS= read -r subject; do
     fi
 done <<< "$commits"
 
-total=$((breaking + feat + fix + other))
-
 # Determine bump level
 if ((breaking > 0)); then
     if ((major == 0)); then
