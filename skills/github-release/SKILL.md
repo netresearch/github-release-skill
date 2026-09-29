@@ -29,7 +29,8 @@ Where the repository has a workflow that publishes the release, that workflow do
 `scripts/release-status.sh -R owner/repo` reports the phase and a computed
 `NEXT`, exiting 0 only when finished; after a tag push, `--watch` waits for
 the tag's publishing workflow first. Outside that repository's checkout,
-`-R` reads the version files from its default branch.
+`-R` reads the version files from its default branch. On a maintenance
+branch it compares with the newest release of that branch's major line.
 `scripts/release-notes-status.sh` checks the published body.
 
 ## Release Flow
