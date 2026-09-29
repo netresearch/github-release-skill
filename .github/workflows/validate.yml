@@ -12,3 +12,7 @@ jobs:
   validate:
     name: Skill Validation
     uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
+    with:
+      # Same level as the shellcheck pre-commit hook (its default, style).
+      # lint.yml runs the same validator at the template default, error.
+      shellcheck-severity: style
