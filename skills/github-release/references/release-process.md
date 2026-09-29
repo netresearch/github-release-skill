@@ -439,9 +439,9 @@ to a public class, method or setting needs a new major. Put that sentence in the
 not only in a commit message, and set the state that carries it in the ecosystem's own metadata —
 for a TYPO3 extension `'state' => 'stable'` in `ext_emconf.php`, which is a separate field from
 the version and is easy to leave at `beta` while every version surface says 1.0.0. An agent skill
-repository has no class or method surface; its public interface is the skill names, the trigger
-descriptions, and the arguments and output of its shipped scripts, and that is what the sentence
-names. For a fleet sweep the skill-repo driver's `STABILIZE` rows seed it into the changelog
+repository has no class or method surface; its public interface is the skill names, slash-command
+names, the trigger descriptions, guard-hook behaviour, and the arguments and output of its shipped
+scripts, and that is what the sentence names. For a fleet sweep the skill-repo driver's `STABILIZE` rows seed it into the changelog
 (skill-repo-skill, `references/release-discipline.md`).
 
 **2. Every deprecated API the release removes has its consumers migrated first.** See the next
