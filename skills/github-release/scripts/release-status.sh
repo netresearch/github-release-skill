@@ -243,6 +243,13 @@ fi
 # when the declared major version is below the released one. The line's latest
 # release is the newest published release with the same major version; where the
 # release list cannot be read, the newest tag of that line reachable from HEAD.
+# A shallow clone is not judged: its cut-off history makes any commit look
+# unrelated to the tag. `v3.0.4` and `3.0.5` are ordered by the number, not by
+# the prefix, which `sort -V` alone compares first.
+newest_of_line() { # newest_of_line <major>: tag names on stdin
+  grep -E "^v?${1}\.[0-9]+\.[0-9]+\$" | sed -E 's/^v?(.*)$/\1 &/' \
+    | sort -V -k1,1 | tail -1 | cut -d' ' -f2
+}
 latest_overall="$latest"; maint_line=""; maint_branch=""
 if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; then
   d_major="${declared%%.*}"; l_major="${latest#v}"; l_major="${l_major%%.*}"
@@ -252,6 +259,8 @@ if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; the
       if [ "$d_major" -lt "$l_major" ]; then
         if ! git rev-parse --git-dir >/dev/null 2>&1; then
           :   # not a checkout: no commit graph to tell the two apart
+        elif [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
+          add_note "shallow clone, so a maintenance branch cannot be told from a stale worktree -- git fetch --unshallow"
         elif ! latest_commit=$(git rev-parse -q --verify "refs/tags/$latest^{commit}" 2>/dev/null); then
           add_note "tag $latest is not in the local repository, so a maintenance branch cannot be told from a stale worktree -- git fetch --tags"
         elif ! git merge-base --is-ancestor HEAD "$latest_commit" 2>/dev/null; then
@@ -260,12 +269,10 @@ if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; the
           line_latest=""
           if rels=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
                       --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' 2>/dev/null); then
-            line_latest=$(printf '%s\n' "$rels" | grep -E "^v?${d_major}\.[0-9]+\.[0-9]+\$" \
-                          | sort -V | tail -1 || true)
+            line_latest=$(printf '%s\n' "$rels" | newest_of_line "$d_major" || true)
           fi
           if [ -z "$line_latest" ]; then
-            line_latest=$(git tag --merged HEAD 2>/dev/null | grep -E "^v?${d_major}\.[0-9]+\.[0-9]+\$" \
-                          | sort -V | tail -1 || true)
+            line_latest=$(git tag --merged HEAD 2>/dev/null | newest_of_line "$d_major" || true)
           fi
           latest="$line_latest"
           add_note "maintenance line ${d_major}.x: compared with ${line_latest:-no ${d_major}.x release}, not with $latest_overall"

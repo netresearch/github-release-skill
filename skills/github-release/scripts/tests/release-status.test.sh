@@ -695,6 +695,21 @@ mkdir -p "$maint/plain"; mver "$maint/plain" 3.0.5
 m_plain=$(maint_run "$maint/plain" v4.0.0 "v4.0.0" "v4.0.0")
 refute "not a checkout: no fetch advice"         "git fetch --tags" "$m_plain"
 
+# (k) a line released under both spellings: 3.0.5 is newer than v3.0.4, although
+# `sort -V` alone orders the bare name first.
+mg "$maint/repo" switch -q t13-old
+m_mixed=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 3.0.5 v4.0.0" "v4.0.0 3.0.5 v3.0.4 v3.0.0")
+check  "mixed spellings: the newest of the line by number" "latest rel  : 3.0.5" "$m_mixed"
+check  "mixed spellings: the older checkout is stale"      "declares v3.0.4 but 3.0.5 is already released" "$m_mixed"
+
+# (l) a shallow clone: both tags resolve, the history between them is cut off,
+# so the commit graph cannot tell a maintenance branch from a stale worktree.
+git clone -q --depth 1 --branch TYPO3_13 "file://$maint/repo" "$maint/shallow" >/dev/null 2>&1
+git -C "$maint/shallow" fetch -q --depth 1 origin tag v4.0.0 >/dev/null 2>&1
+m_shallow=$(maint_run "$maint/shallow" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "shallow clone: asks for the history"     "git fetch --unshallow" "$m_shallow"
+refute "shallow clone: not judged a maintenance branch" "maintenance line" "$m_shallow"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
