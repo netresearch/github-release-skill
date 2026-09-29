@@ -539,6 +539,162 @@ refute "and gets no worktree switch"                     "switch --detach" "$old
 tree_out=$(named_run acme/tree "$remote/plain")
 check  "a failed tree listing keeps the root manifest"   "declared    : 1.2.0" "$tree_out"
 
+# ---------------------------------------------------------------------------
+# A maintenance branch is compared with its own line, not the newest release
+# ---------------------------------------------------------------------------
+# netresearch/t3x-nr-textdb (issue #173): v3.0.5 was prepared on the
+# maintenance branch TYPO3_13 after v4.0.0 had been released from main. The
+# script compared 3.0.5 with the latest release 4.0.0, called the tree stale
+# and advised `git switch --detach origin/main`. The fixture is a real git
+# repository: main and TYPO3_13 diverge after 3.0.0, v3.0.4 is tagged on
+# TYPO3_13, v4.0.0 on main. The stub serves releases/latest from STUB_LATEST,
+# the release list from STUB_RELEASES (through the --jq filter the script
+# passes), and treats every name in STUB_TAGS as an annotated tag with a
+# successful Release run and a finished release body.
+
+maint=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote" "$maint"' EXIT
+mkdir -p "$maint/bin" "$maint/repo" "$maint/notags"
+ln -sf "$jq_path" "$maint/bin/jq"
+cat >"$maint/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "release view")
+    found=""; for t in ${STUB_TAGS:-}; do [ "$t" = "$3" ] && found=1; done
+    [ -n "$found" ] || exit 1
+    case "$*" in
+      *isDraft*) echo "false" ;;
+      *body*)    echo "Translations are imported in batches." ;;
+    esac
+    exit 0 ;;
+  "run list")
+    branch=""; shift 2
+    while [ $# -gt 0 ]; do
+      case "$1" in --branch) branch="$2"; shift 2 ;; *) shift ;; esac
+    done
+    for t in ${STUB_TAGS:-}; do
+      [ "$t" = "$branch" ] && { echo "completed/success"; exit 0; }
+    done
+    echo "none"; exit 0 ;;
+esac
+[ "$1" = api ] || exit 1
+path=""; filter="."; prev=""
+for a in "$@"; do
+  case "$a" in repos/*) path="$a" ;; esac
+  [ "$prev" = "--jq" ] && filter="$a"
+  prev="$a"
+done
+case "$path" in
+  */releases/latest)
+    [ -n "${STUB_LATEST:-}" ] && { echo "$STUB_LATEST"; exit 0; }
+    echo '{"message":"Not Found"}'; exit 1 ;;
+  */releases\?*)
+    [ -n "${STUB_RELEASES_FAIL:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
+    printf '%s\n' ${STUB_RELEASES:-} \
+      | jq -R '{tag_name: ., draft: false, prerelease: false}' | jq -s . | jq -r "$filter"
+    exit 0 ;;
+  */git/ref/tags/*)
+    for t in ${STUB_TAGS:-}; do
+      [ "$t" = "${path##*/git/ref/tags/}" ] && { echo "tag"; exit 0; }
+    done
+    exit 1 ;;
+esac
+exit 1
+STUB
+chmod +x "$maint/bin/gh"
+
+mg() { git -C "$1" -c user.name=t -c user.email=t@example.org -c commit.gpgsign=false \
+         -c tag.gpgsign=false "${@:2}" >/dev/null 2>&1; }
+mver() { printf '%s\n' '<?php' "\$EM_CONF['textdb'] = ['version' => '$2'];" >"$1/ext_emconf.php"; }
+mg "$maint/repo" init -q -b main
+mver "$maint/repo" 3.0.0; mg "$maint/repo" add -A; mg "$maint/repo" commit -qm 3.0.0
+mg "$maint/repo" tag -a v3.0.0 -m v3.0.0
+mg "$maint/repo" branch TYPO3_13
+mver "$maint/repo" 4.0.0; mg "$maint/repo" commit -qam 4.0.0
+mg "$maint/repo" tag -a v4.0.0 -m v4.0.0
+mg "$maint/repo" switch -q TYPO3_13
+mver "$maint/repo" 3.0.4; mg "$maint/repo" commit -qam 3.0.4
+mg "$maint/repo" tag -a v3.0.4 -m v3.0.4
+mver "$maint/repo" 3.0.5; mg "$maint/repo" commit -qam 3.0.5
+
+# maint_run <dir> <STUB_LATEST> <STUB_TAGS> <STUB_RELEASES> [VAR=value...]
+maint_run() {
+  local dir="$1" latest="$2" tags="$3" rels="$4"; shift 4
+  (cd "$dir" && env -i PATH="$maint/bin:/usr/bin:/bin" HOME="$maint" \
+     STUB_LATEST="$latest" STUB_TAGS="$tags" STUB_RELEASES="$rels" "$@" \
+     bash --noprofile --norc "$SCRIPT" -R acme/textdb 2>&1)
+}
+
+# (a) the issue's case: 3.0.5 prepared on TYPO3_13, v4.0.0 is the latest release.
+m_prep=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "maintenance: compared with the newest release of its line" "latest rel  : v3.0.4" "$m_prep"
+check  "maintenance: the prepared version is to be tagged"         "NEXT: signed-tag" "$m_prep"
+check  "maintenance: the tag is suggested for the branch tip"      "verify HEAD==origin/TYPO3_13 first" "$m_prep"
+check  "maintenance: the verdict names the line"                   "maintenance line 3.x" "$m_prep"
+refute "maintenance: not called a stale worktree"                  "already released -- fetch" "$m_prep"
+refute "maintenance: no advice to switch to main"                  "origin/main" "$m_prep"
+
+# (b) the same branch after v3.0.5 is released and its notes are finished.
+m_done=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v3.0.5 v4.0.0" "v4.0.0 v3.0.5 v3.0.4 v3.0.0")
+check  "maintenance: a finished maintenance release is ok" "NEXT: ok" "$m_done"
+check  "maintenance: against v3.0.5, not v4.0.0"           "latest rel  : v3.0.5" "$m_done"
+
+# (c) a maintenance worktree behind its own line is stale on that line, and the
+# advice points at the branch it is on, not at main.
+mg "$maint/repo" switch -q -c t13-old v3.0.4
+m_stale=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v3.0.5 v4.0.0" "v4.0.0 v3.0.5 v3.0.4 v3.0.0")
+check  "maintenance: behind its own line is stale"  "declares v3.0.4 but v3.0.5 is already released" "$m_stale"
+refute "maintenance: stale, still no switch to main" "origin/main" "$m_stale"
+
+# (d) detached HEAD at the maintenance tip: the line is found from the commit
+# graph, the branch name is not needed.
+mg "$maint/repo" switch -q --detach TYPO3_13
+m_det=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "maintenance, detached: compared with its line" "latest rel  : v3.0.4" "$m_det"
+check  "maintenance, detached: to be tagged"           "NEXT: signed-tag" "$m_det"
+refute "maintenance, detached: no advice to switch to main" "origin/main" "$m_det"
+
+# (e) the release list cannot be read: the newest tag of the line reachable from
+# HEAD stands in for it.
+mg "$maint/repo" switch -q TYPO3_13
+m_local=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "" STUB_RELEASES_FAIL=1)
+check  "maintenance, no release list: the reachable tag is used" "latest rel  : v3.0.4" "$m_local"
+check  "maintenance, no release list: to be tagged"             "NEXT: signed-tag" "$m_local"
+
+# (f) main at the newest line is unaffected.
+mg "$maint/repo" switch -q main
+m_main=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "main at the newest line: ok"                "NEXT: ok" "$m_main"
+check  "main at the newest line: the latest release" "latest rel  : v4.0.0" "$m_main"
+refute "main at the newest line: no maintenance note" "maintenance line" "$m_main"
+
+# (g) a checkout of main from before the release is still a stale worktree:
+# its HEAD is an ancestor of v4.0.0, so it is not a maintenance branch.
+mg "$maint/repo" switch -q --detach v3.0.0
+m_old=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.0.4 v3.0.0")
+check  "stale main: still stale"              "declares v3.0.0 but v4.0.0 is already released" "$m_old"
+check  "stale main: still told to switch"     "git switch --detach origin/main" "$m_old"
+refute "stale main: not a maintenance branch" "maintenance line" "$m_old"
+
+# (h) a repository without any tag or release: the prepared version is tagged.
+mg "$maint/notags" init -q -b main
+mver "$maint/notags" 1.0.0; mg "$maint/notags" add -A; mg "$maint/notags" commit -qm 1.0.0
+m_none=$(maint_run "$maint/notags" "" "" "")
+check  "no tags: the first version is to be tagged" "NEXT: signed-tag" "$m_none"
+check  "no tags: under a v-name"                    "git tag -s v1.0.0 -m v1.0.0" "$m_none"
+refute "no tags: not a maintenance branch"          "maintenance line" "$m_none"
+
+# (i) the latest release's tag is not in the local repository: the commit graph
+# cannot answer, and the verdict says how to make it answer.
+m_notag=$(maint_run "$maint/notags" v4.0.0 "v4.0.0" "v4.0.0")
+check  "latest tag not local: asks for the tags" "git fetch --tags" "$m_notag"
+# (j) outside a git checkout there is no commit graph, and no fetch advice.
+mkdir -p "$maint/plain"; mver "$maint/plain" 3.0.5
+m_plain=$(maint_run "$maint/plain" v4.0.0 "v4.0.0" "v4.0.0")
+refute "not a checkout: no fetch advice"         "git fetch --tags" "$m_plain"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }

@@ -230,6 +230,50 @@ if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$latest" ]; then
   version_source="release"
 fi
 
+# --- a maintenance branch is measured against its own line --------------------
+# The latest release of the repository is the newest line's. A maintenance
+# branch declares an older major version by design, and comparing it with that
+# release called it a stale worktree and advised switching to main
+# (netresearch/t3x-nr-textdb TYPO3_13, 3.0.5 after 4.0.0; issue #173).
+#
+# What tells the two apart is the commit graph, not the version: a checkout of
+# main from before the release is an ancestor of the latest release's tag, a
+# maintenance branch has commits that tag does not contain. Only local files
+# are judged this way -- the current directory must be the checkout -- and only
+# when the declared major version is below the released one. The line's latest
+# release is the newest published release with the same major version; where the
+# release list cannot be read, the newest tag of that line reachable from HEAD.
+latest_overall="$latest"; maint_line=""; maint_branch=""
+if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; then
+  d_major="${declared%%.*}"; l_major="${latest#v}"; l_major="${l_major%%.*}"
+  case "$d_major$l_major" in
+    *[!0-9]* | "") ;;
+    *)
+      if [ "$d_major" -lt "$l_major" ]; then
+        if ! git rev-parse --git-dir >/dev/null 2>&1; then
+          :   # not a checkout: no commit graph to tell the two apart
+        elif ! latest_commit=$(git rev-parse -q --verify "refs/tags/$latest^{commit}" 2>/dev/null); then
+          add_note "tag $latest is not in the local repository, so a maintenance branch cannot be told from a stale worktree -- git fetch --tags"
+        elif ! git merge-base --is-ancestor HEAD "$latest_commit" 2>/dev/null; then
+          maint_line="$d_major"
+          maint_branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || true)
+          line_latest=""
+          if rels=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
+                      --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' 2>/dev/null); then
+            line_latest=$(printf '%s\n' "$rels" | grep -E "^v?${d_major}\.[0-9]+\.[0-9]+\$" \
+                          | sort -V | tail -1 || true)
+          fi
+          if [ -z "$line_latest" ]; then
+            line_latest=$(git tag --merged HEAD 2>/dev/null | grep -E "^v?${d_major}\.[0-9]+\.[0-9]+\$" \
+                          | sort -V | tail -1 || true)
+          fi
+          latest="$line_latest"
+          add_note "maintenance line ${d_major}.x: compared with ${line_latest:-no ${d_major}.x release}, not with $latest_overall"
+        fi
+      fi ;;
+  esac
+fi
+
 pkg=$(jq -r '.name // empty' "$src/composer.json" 2>/dev/null || true)
 extkey=$(jq -r '.extra["typo3/cms"]["extension-key"] // empty' "$src/composer.json" 2>/dev/null || true)
 
@@ -378,13 +422,21 @@ elif [ "$declared" = "${latest#v}" ] && [ "$tag_state" = "annotated" ] && [ "$no
   fi
 elif [ "$stale" = 1 ]; then
   next="prepare-release"
-  [ "$version_source" = "remote" ] || cmd="git fetch origin && git switch --detach origin/main   # then re-run"
+  if [ "$version_source" = "remote" ]; then
+    :
+  elif [ -n "$maint_line" ]; then
+    cmd="git fetch origin && git switch --detach origin/${maint_branch:-<maintenance branch>}   # then re-run"
+  else
+    cmd="git fetch origin && git switch --detach origin/main   # then re-run"
+  fi
 elif [ "$tag_state" = "absent" ]; then
   if [ "$declared" = "${latest#v}" ]; then
     next="prepare-release"; add_note "version files already on the released $tag_ref"
   else
     next="signed-tag"
-    cmd="git tag -s $tag_ref -m $tag_ref && git push origin $tag_ref   # verify HEAD==origin/main first"
+    tip="origin/main"
+    [ -n "$maint_line" ] && tip="origin/${maint_branch:-<maintenance branch>}"
+    cmd="git tag -s $tag_ref -m $tag_ref && git push origin $tag_ref   # verify HEAD==$tip first"
     add_note "$tag_ref prepared but not tagged"
   fi
 elif [ "$tag_state" = "lightweight" ]; then
@@ -408,9 +460,11 @@ if [ "$JSON" = 1 ]; then
      --arg tag "$tag_state" --arg wf "$wf_state" --arg notes "$notes_next" \
      --arg reg "${reg_missing# }" --arg next "$next" --arg note "$note" --arg cmd "$cmd" \
      --arg vsrc "$version_source" --arg pkg "$pkg" --arg extkey "$extkey" \
+     --arg overall "$latest_overall" --arg line "$maint_line" \
      '{repo:$repo, declared_version:$declared, version_source:$vsrc,
        package:$pkg, extension_key:$extkey,
-       latest_release:$latest, tag:$tag,
+       latest_release:$latest, latest_release_overall:$overall,
+       maintenance_line:$line, tag:$tag,
        workflow:$wf, notes:$notes, registries_missing:$reg, next:$next,
        note:$note, cmd:$cmd}'
 else
@@ -421,7 +475,8 @@ else
     *)       vnote='' ;;
   esac
   printf '  declared    : %s%s\n' "${declared:-<none>}" "$vnote"
-  printf '  latest rel  : %s\n' "${latest:-<none>}"
+  printf '  latest rel  : %s%s\n' "${latest:-<none>}" \
+    "$([ -n "$maint_line" ] && echo "  (newest ${maint_line}.x release; $latest_overall overall)")"
   printf '  tag         : %s\n' "${tag_state:-n/a}"
   [ -n "$wf_state" ] && printf '  workflow    : %s%s\n' "$wf_state" \
     "$([ "$wf_state" = none ] && echo "  (no run found for $tag_ref)")"
