@@ -96,7 +96,9 @@ The shared workflow produces identical output between the tag-triggered
 2. Finds matching release — `v1.1.1` or `1.1.1`
 3. Fetches the release body via `gh release view`
 4. Strips HTML, truncates to ~1900 chars using codepoint-aware slicing
-5. Calls `tailor ter:publish --comment "$COMMENT" "$VERSION"`
+5. Calls `tailor ter:publish --comment="$COMMENT" "$VERSION"` — with
+   `=`, so a comment starting with `-` stays the value instead of being
+   parsed as an option
 
 TER accepts re-uploads of the same version number — the upload comment
 simply gets overwritten. This is the documented behaviour of the

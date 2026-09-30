@@ -67,8 +67,14 @@ in `env:` is taken literally), and pass `github.ref` straight to
   run: |
     test "$VERSION" = "$(php -r '$EM_CONF=[]; include "ext_emconf.php"; echo $EM_CONF[basename(__DIR__)]["version"];')" \
       || { echo "::error::tag $TAG vs ext_emconf.php mismatch"; exit 1; }
-    tailor ter:publish --comment "..." "$VERSION"
+    tailor ter:publish --comment="$COMMENT" "$VERSION"
 ```
+
+Attach the comment with `=`. Passed as a separate word
+(`--comment "$COMMENT"`), a comment that starts with `-` — a Markdown
+bullet, or `git log --format='- %s'` output — is parsed as an option,
+and the upload aborts with `The "- " option does not exist.` Set
+`COMMENT` through `env:`, never via `${{ }}` inside `run:`.
 
 `actions/checkout` wants the raw ref so it can find the tag; the
 `ext_emconf.php` comparison and the `tailor ter:publish` argument want
