@@ -20,7 +20,7 @@ The repository ships no server component and no container image. It stores nothi
 
 ## Security requirements
 
-1. The guard hooks block the release operations they name in their headers — a `gh release create` that can create the tag, `gh release delete`, a `gh release edit` beyond the notes, a mutating `gh api` call on a release endpoint, a lightweight version tag, and the deletion of a version tag or a force-push that names `refs/tags/v*` or uses `--tags` — and let every other command through.
+1. The guard hooks block the release operations they name in their headers — a `gh release create` that can create the tag, `gh release delete`, a `gh release edit` beyond the notes, a mutating `gh api` call on a release endpoint, a lightweight version tag, and the deletion of a version tag or a force-push that names `refs/tags/v*` or uses `--tags` — in the spellings the guards recognise (see "What a user cannot expect"), and let every other command through.
 2. The guards never execute the command they judge.
 3. The helper scripts and the checkpoints only read: they change no remote state and send no write request to GitHub.
 4. Nothing committed to this repository contains a secret.
@@ -65,7 +65,7 @@ Which of these checks must pass before a pull request can merge is set in the br
 ## What a user cannot expect
 
 - The guards are a guard rail against mistakes, not a security boundary. They read the command text; a command assembled at run time — from a variable, a script file, or a pipeline such as `echo vX.Y.Z | xargs git tag` (documented in `guard-lightweight-tag.py`) — is not seen. They run only when the skill is installed as a Claude Code plugin; the npm installation does not load them (README.md).
-- The tag guard recognises a force-push only by `refs/tags/v*` or `--tags` together with `-f`, `--force` or `--force-with-lease`; a force-push that names the tag without `refs/tags/` (`git push -f origin vX.Y.Z`) or uses a `+` refspec is not blocked.
+- The tag guard matches the literal spelling of a command: `tag` or `push` directly after `git`, and a force-push only as `refs/tags/v*` or `--tags` together with `-f`, `--force` or `--force-with-lease` as separate arguments. Other spellings are not blocked, among them options before the subcommand (`git -C <dir> tag vX.Y.Z`, `git -c … push`), bundled short flags (`git push -fq …`), a tag named without `refs/tags/` (`git push -f origin vX.Y.Z`) and a `+` refspec. The release guard likewise needs `release` directly after `gh`: `gh -R <repo> release delete …` is not blocked.
 - A guard that cannot read its input allows the command: empty or unreadable stdin exits 0 (`main` in both guards; `tests/guard-payload-shape.test.sh`).
 - The skill gives guidance; the agent runs `gh` and `git` with the user's token, and a token with the necessary rights can do anything the references describe. Review what an agent proposes to run.
 - The templates are examples to adapt. `release-typo3.yml` and `ter-publish.yml` call `netresearch/typo3-ci-workflows` reusables at `@main`, not at a commit SHA.
