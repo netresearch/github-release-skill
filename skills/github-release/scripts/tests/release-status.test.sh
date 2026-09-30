@@ -781,6 +781,8 @@ refute "an older --tag is not called stale"            "fetch before trusting" "
 # Usage errors exit 2 and say why.
 tagarg_run --tag >/dev/null; st=$?
 check "--tag without a value exits 2" "status=2" "status=$st"
+tagarg_run --tag "" >/dev/null; st=$?
+check "an empty --tag exits 2" "status=2" "status=$st"
 bad_out=$(tagarg_run --tag 'v1;rm'); st=$?
 check "a malformed --tag exits 2" "status=2" "status=$st"
 check  "a malformed --tag is named"                    "is not a tag name" "$bad_out"

@@ -41,7 +41,7 @@ while [ $# -gt 0 ]; do
     -R|--repo) REPO="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
     --watch) WATCH=1; shift ;;
-    --tag) [ $# -ge 2 ] || { echo "--tag needs a tag name" >&2; exit 2; }; TAG_ARG="$2"; shift 2 ;;
+    --tag) { [ $# -ge 2 ] && [ -n "$2" ]; } || { echo "--tag needs a tag name" >&2; exit 2; }; TAG_ARG="$2"; shift 2 ;;
     -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
     *) shift ;;
   esac
