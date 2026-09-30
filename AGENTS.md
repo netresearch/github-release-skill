@@ -12,8 +12,8 @@ AI agent skill plugin for safe GitHub releases.
 hooks/hooks.json              PreToolUse guards (blocks gh release, lightweight tags)
 skills/github-release/
   SKILL.md                    Core skill instructions (<500 words)
-  checkpoints.yaml            Automated validation (11 mechanical + 3 LLM reviews)
-  evals/evals.json            30 evaluation scenarios
+  checkpoints.yaml            Automated validation (16 mechanical + 4 LLM reviews)
+  evals/evals.json            41 evaluation scenarios
   references/                 Extended documentation
   scripts/                    Guard hooks + utility scripts
   templates/                  CI workflow templates

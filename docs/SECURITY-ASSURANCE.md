@@ -20,7 +20,7 @@ The repository ships no server component and no container image. It stores nothi
 
 ## Security requirements
 
-1. The guard hooks block the release operations they name in their headers — a `gh release create` that can create the tag, `gh release delete`, a `gh release edit` beyond the notes, a mutating `gh api` call on a release endpoint, a lightweight version tag, and the deletion or force-push of a version tag — and let every other command through.
+1. The guard hooks block the release operations they name in their headers — a `gh release create` that can create the tag, `gh release delete`, a `gh release edit` beyond the notes, a mutating `gh api` call on a release endpoint, a lightweight version tag, and the deletion of a version tag or a force-push that names `refs/tags/v*` or uses `--tags` — and let every other command through.
 2. The guards never execute the command they judge.
 3. The helper scripts and the checkpoints only read: they change no remote state and send no write request to GitHub.
 4. Nothing committed to this repository contains a secret.
@@ -40,7 +40,7 @@ The repository ships no server component and no container image. It stores nothi
 | --- | --- | --- |
 | An agent runs `gh release create` without an existing tag, which creates an unsigned lightweight tag and, under immutable releases, burns the tag name | Blocked unless the last `--verify-tag` occurrence is on; `--verify-tag=false`, a repeated flag, a flag inside a quoted argument or behind a shell comment do not count | `guard-gh-release.py` (`_verify_tag_is_on`, `_strip_quoted`); `tests/guard-gh-release-invocations.test.sh` |
 | An agent deletes or rewrites a published release outside CI | `gh release delete`, unknown `gh release` subcommands and every `gh release edit` flag other than the notes flags are blocked; `gh api` calls on release endpoints with POST, PUT, PATCH, DELETE, an unreadable method, or data flags without GET/HEAD are blocked | `guard-gh-release.py` (`_check_invocation`, `_judge_gh_api`); `tests/guard-gh-release-invocations.test.sh` |
-| An agent creates an unsigned version tag, or deletes or force-pushes one | `git tag v*` without `-s`, `-a`, `-m` or `-F` is blocked, as are `git tag -d v*`, `git push --delete … v*`, `git push … :refs/tags/v*` and force-pushes of version tags (bare major pointers such as `v4` excepted) | `guard-lightweight-tag.py`; `tests/guard-tag-invocations.test.sh` |
+| An agent creates an unsigned version tag, or deletes or force-pushes one | `git tag v*` without `-s`, `-a`, `-m` or `-F` is blocked, as are `git tag -d v*`, `git push --delete … v*`, `git push … :refs/tags/v*` and force-pushes that name `refs/tags/v*` or use `--tags` (bare major pointers such as `v4` excepted) | `guard-lightweight-tag.py`; `tests/guard-tag-invocations.test.sh` |
 | A guarded command hides inside a larger Bash call — on its own line, in a loop, a subshell, behind `sudo` or an env assignment | Each call is split into its invocations first, with quoting, escapes and heredoc bodies handled, and every invocation is judged on its own | `_invocations.py` (`split_invocations`, `strip_heredoc_bodies`, `INVOCATION_PREFIX`); both invocation test files |
 | The payload shape changes and the guards silently stop working | The command is read from `tool_input.command`, with a top-level `command` as fallback | `parse_command` in both guards; `tests/guard-payload-shape.test.sh` |
 | Crafted input makes a guard hang past its 2-second hook timeout (CWE-1333) | `gh api` arguments are split with `shlex` in linear time instead of backtracking regexes | `guard-gh-release.py` (`_judge_gh_api`); `hooks/hooks.json` (`timeout: 2`) |
@@ -65,6 +65,7 @@ Which of these checks must pass before a pull request can merge is set in the br
 ## What a user cannot expect
 
 - The guards are a guard rail against mistakes, not a security boundary. They read the command text; a command assembled at run time — from a variable, a script file, or a pipeline such as `echo vX.Y.Z | xargs git tag` (documented in `guard-lightweight-tag.py`) — is not seen. They run only when the skill is installed as a Claude Code plugin; the npm installation does not load them (README.md).
+- The tag guard recognises a force-push only by `refs/tags/v*` or `--tags` together with `-f`, `--force` or `--force-with-lease`; a force-push that names the tag without `refs/tags/` (`git push -f origin vX.Y.Z`) or uses a `+` refspec is not blocked.
 - A guard that cannot read its input allows the command: empty or unreadable stdin exits 0 (`main` in both guards; `tests/guard-payload-shape.test.sh`).
 - The skill gives guidance; the agent runs `gh` and `git` with the user's token, and a token with the necessary rights can do anything the references describe. Review what an agent proposes to run.
 - The templates are examples to adapt. `release-typo3.yml` and `ter-publish.yml` call `netresearch/typo3-ci-workflows` reusables at `@main`, not at a commit SHA.
