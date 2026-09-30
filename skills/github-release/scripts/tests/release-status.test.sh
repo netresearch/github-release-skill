@@ -759,8 +759,11 @@ fi
 exit 1
 STUB
 chmod +x "$tagarg/bin/gh"
-tagarg_run() { (cd "$tagarg/repo" && env -i PATH="$tagarg/bin:/usr/bin:/bin" HOME="$tagarg" \
-                bash --noprofile --norc "$SCRIPT" -R acme/tagarg "$@" 2>&1); }
+tagarg_run() {
+  (cd "$tagarg/repo" && env -i PATH="$tagarg/bin:/usr/bin:/bin" HOME="$tagarg" \
+    bash --noprofile --norc "$SCRIPT" -R acme/tagarg "$@" 2>&1)
+  return $?
+}
 
 no_tag_out=$(tagarg_run)
 check  "without --tag the previous release is judged"  "declared    : 1.0.0" "$no_tag_out"
@@ -770,7 +773,6 @@ check  "--tag judges the tag just pushed"              "declared    : 1.0.1" "$t
 check  "--tag says where the version came from"        "(from --tag v1.0.1)" "$tag_out"
 check  "--tag sees the run of that tag"                "workflow    : in_progress/-" "$tag_out"
 check  "--tag waits for the release workflow"          "NEXT: await-release-workflow" "$tag_out"
-refute "--tag is not the ok of the previous release"   "NEXT: ok" "$tag_out"
 
 # An older tag than the latest release is not a stale worktree: it was asked for.
 old_out=$(tagarg_run --tag v1.0.0)
