@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for release-notes-status.sh body classification — no network.
 #
 # Pins the two shapes that must be recognised as "not finished", because both

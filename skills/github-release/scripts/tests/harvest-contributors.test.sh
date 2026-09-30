@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for harvest-contributors.sh pure helpers — no network.
 #
 # Pins the regression fixed alongside it: PR numbers must come ONLY from the

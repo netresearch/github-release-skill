@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for check-changelog-links.py against THIS repository's CHANGELOG.
 #
 # The script existed and nothing ran it, so the file it validates drifted: a

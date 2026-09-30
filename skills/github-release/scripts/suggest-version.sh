@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # suggest-version.sh - Analyze git log since last version tag and suggest next semver version.
 #
@@ -59,8 +61,6 @@ while IFS= read -r subject; do
         ((other++)) || true
     fi
 done <<< "$commits"
-
-total=$((breaking + feat + fix + other))
 
 # Determine bump level
 if ((breaking > 0)); then
