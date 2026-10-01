@@ -147,10 +147,37 @@ check 2 'creation behind --omit-empty' 'git tag --omit-empty v1.2.3'
 check 0 'list: --format with -l' "git tag -l --format='%(refname)' 'v1.*'"
 check 0 'list: --sort with --list' "git tag --list --sort=-v:refname 'v1.*'"
 check 0 'list: --column with -l' "git tag -l --column 'v1.*'"
+check 0 'list: --no-column with -l' "git tag -l --no-column 'v1.*'"
 check 0 'list: -i with -l' "git tag -i -l 'v1.*'"
+check 0 'list: --ignore-case with --list' "git tag --ignore-case --list 'v1.*'"
 check 0 'list: --omit-empty with -l' "git tag -l --omit-empty --format='%(refname)' 'v1.*'"
 # ... and the annotated forms behind those flags stay allowed.
 check 0 'signed tag behind --sort' 'git tag --sort=-v:refname -s v1.2.3 -m release'
+# Deletion is a mode of its own: -d next to --sort still deletes (measured).
+check 2 'deletion behind --sort' 'git tag -d --sort=refname v1.2.3'
+
+# --- options are read as words, not found in the raw text (PR #180) ---------
+# A flag spelled inside a quoted value or after a shell comment is not an
+# option. Unless a comment says otherwise, each blocked case below creates
+# v1.2.3 as a lightweight tag in git 2.55.0.
+check 2 'list flag inside a --format value' "git tag --format='%(refname) -l ' v1.2.3"
+check 2 'list flag at the end of a --format value' "git tag --format='%(refname) -l' v1.2.3"
+check 2 'verify flag inside a --format value' "git tag --format=' -v ' v1.2.3"
+check 2 'list flag after a shell comment' 'git tag v1.2.3 # -l'
+check 2 'list flag as the separate value of --format' 'git tag --format -l v1.2.3'
+# git rejects this one ("unknown field name: l"); -l is --sort's value, so the
+# guard reads a creation, which errs toward blocking.
+check 2 'list flag as the separate value of --sort' 'git tag --sort -l v1.2.3'
+# A version-looking text inside an option value is not a tag name.
+check 0 'format string starting with v1, no name' "git tag --format='v1 %(refname:short)'"
+check 0 'version pattern behind a comment of a listing' 'git tag -l # v1.2.3'
+check 0 'list flag inside a tag message' "git tag -m 'x -l' v1.2.3"
+check 0 'combined short flags -sm' 'git tag -sm release v1.2.3'
+check 0 'attached short message' 'git tag -mrelease v1.2.3'
+check 0 'option list ended by --' 'git tag -s -m release -- v1.2.3'
+check 2 'name after -- is still a name' 'git tag -- v1.2.3'
+# Unbalanced quotes do not parse; a version token in them blocks.
+check 2 'unbalanced quote with a version token' "git tag v1.2.3 'oops"
 check 0 'verify' 'git tag -v v1.2.3'
 
 # --- the bypass: every invocation is judged, not just the first -------------
