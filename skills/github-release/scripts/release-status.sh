@@ -22,6 +22,12 @@
 #   ./release-status.sh [-R owner/repo]
 #   ./release-status.sh -R owner/repo --json
 #   ./release-status.sh -R owner/repo --watch   # wait for the tag's workflow, then report
+#   ./release-status.sh -R owner/repo --tag v1.2.3 --watch
+#
+# --tag names the release to judge. Without it the version comes from the files,
+# and where there are none from the LATEST RELEASE -- so in a repository without a
+# version file a tag pushed a minute ago is invisible and the verdict is about
+# the previous release. --tag takes the version from the tag you just pushed.
 #
 # --watch waits only while the tag exists and its publishing workflow has not
 # completed: it prints each state change to stderr and then gives the normal
@@ -31,18 +37,28 @@
 # Exit: 0 = ok, 1 = action needed, 2 = usage/lookup error.
 set -euo pipefail
 
-REPO=""; JSON=0; WATCH=0
+REPO=""; JSON=0; WATCH=0; TAG_ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -R|--repo) REPO="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
     --watch) WATCH=1; shift ;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    --tag) { [ $# -ge 2 ] && [ -n "$2" ]; } || { echo "--tag needs a tag name" >&2; exit 2; }; TAG_ARG="$2"; shift 2 ;;
+    -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
     *) shift ;;
   esac
 done
 
 command -v jq >/dev/null || { echo "jq required" >&2; exit 2; }
+case "$TAG_ARG" in
+  # A leading hyphen is a valid ref but reads as an option to every `gh ... "$tag"`
+  # below: `gh release view --help` succeeds without any release existing.
+  -* | *[!A-Za-z0-9._-]*) echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2 ;;
+esac
+# The allowlist admits `..` and `.lock`; git knows which names are not refs.
+if [ -n "$TAG_ARG" ] && command -v git >/dev/null && ! git check-ref-format "refs/tags/$TAG_ARG" >/dev/null 2>&1; then
+  echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2
+fi
 
 # `gh` is not a precondition, it is a capability. Six of six recorded agent
 # trials in a sandbox without it got `exit 2` and one unusable fact, when the
@@ -66,6 +82,7 @@ if [ -z "$REPO" ]; then
 fi
 LOCAL_ONLY=0
 if [ "$HAVE_GH" = 0 ]; then
+  [ -z "$TAG_ARG" ] || { echo "--tag needs gh (authenticated): a tag can only be judged against the forge" >&2; exit 2; }
   LOCAL_ONLY=1
   add_note_pending="no gh (or not authenticated): local phase only, nothing about tags, workflow, release body or registries"
 fi
@@ -232,6 +249,13 @@ if [ -z "$declared" ] && [ "$LOCAL_ONLY" = 0 ] && [ -n "$latest" ]; then
   version_source="release"
 fi
 
+# An explicit tag outranks every other source of the version. It is the release
+# being judged, whatever the files or the latest release say.
+if [ -n "$TAG_ARG" ]; then
+  declared="${TAG_ARG#v}"
+  version_source="tag"
+fi
+
 # --- a maintenance branch is measured against its own line --------------------
 # The latest release of the repository is the newest line's. A maintenance
 # branch declares an older major version by design, and comparing it with that
@@ -310,8 +334,11 @@ fi
 # every later lookup uses, and the one a missing tag is suggested under.
 tag_state=""
 tag_ref="v$declared"
+tag_alt=""
 if [ -n "$declared" ] && [ "$LOCAL_ONLY" = 0 ]; then
-  if [ -n "$latest" ] && [ "${latest#v}" = "$latest" ]; then
+  if [ -n "$TAG_ARG" ]; then
+    tag_ref="$TAG_ARG"; tag_alt="$TAG_ARG"
+  elif [ -n "$latest" ] && [ "${latest#v}" = "$latest" ]; then
     tag_ref="$declared"; tag_alt="v$declared"
   else
     tag_alt="$declared"
@@ -373,8 +400,14 @@ if [ "$tag_state" = "annotated" ]; then
 fi
 
 # --- phase 5: is the published body finished? --------------------------------
-notes_next=""
+# One lookup answers both questions -- does the release exist, and may its body
+# be read -- so a failed call cannot say "exists" to one and "absent" to the other.
+notes_next=""; release_found=0; release_exists=1
 if [ -n "$declared" ] && gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
+  release_found=1
+fi
+[ "$tag_state" = "annotated" ] && [ "$release_found" = 0 ] && release_exists=0
+if [ "$release_found" = 1 ]; then
   if [ -x "$HERE/release-notes-status.sh" ]; then
     notes_next=$("$HERE/release-notes-status.sh" -R "$REPO" "$tag_ref" --json 2>/dev/null | jq -r .next 2>/dev/null || echo "")
   fi
@@ -409,7 +442,7 @@ fi
 # A stale worktree declares an older version than the latest release, which
 # would otherwise read as "ok" for a version released long ago. Fetch first.
 stale=0
-if [ -n "$declared" ] && [ -n "$latest" ] && [ "$declared" != "${latest#v}" ]; then
+if [ "$version_source" != "tag" ] && [ -n "$declared" ] && [ -n "$latest" ] && [ "$declared" != "${latest#v}" ]; then
   if printf '%s\n%s\n' "$declared" "${latest#v}" | sort -V | head -1 | grep -qx "$declared"; then
     stale=1
     if [ "$version_source" = "remote" ]; then
@@ -463,10 +496,21 @@ elif [ -n "$wf_state" ] && [ "${wf_state%%/*}" != "completed" ] && [ "$wf_state"
   next="await-release-workflow"; add_note "publishing workflow is $wf_state"
 elif [ -n "$wf_state" ] && [ "$wf_state" = "completed/failure" ]; then
   next="await-release-workflow"; add_note "publishing workflow FAILED -- read its annotations before re-running"
+elif [ "$release_exists" = 0 ]; then
+  # The tag is pushed and its run is done or absent, but no release carries the
+  # name: nothing was published, so this is not finished.
+  next="await-release-workflow"
+  add_note "no release exists for $tag_ref yet (workflow ${wf_state:-unknown}) -- read the run before re-running"
 elif [ -n "$notes_next" ] && [ "$notes_next" != "ok" ]; then
   next="rewrite-release-notes"
   cmd="release-notes-status.sh -R $REPO $tag_ref   # then gh release edit --notes-file"
   add_note "release body: $notes_next"
+elif [ "$release_found" = 1 ] && [ -z "$notes_next" ] && [ -x "$HERE/release-notes-status.sh" ]; then
+  # The release exists but its body could not be judged -- the helper failed or
+  # printed nothing. A failed lookup is not a finished body.
+  next="rewrite-release-notes"
+  cmd="release-notes-status.sh -R $REPO $tag_ref   # no verdict was read; run it by hand"
+  add_note "release body: release-notes-status.sh gave no verdict"
 elif [ -n "$reg_missing" ]; then
   next="verify-publication"; add_note "not served yet by:$reg_missing"
 else
@@ -490,6 +534,7 @@ else
   case "$version_source" in
     release) vnote='  (from the latest release; no version file in the tree)' ;;
     remote)  vnote="  (from the default branch of $REPO; no version file read in the current directory)" ;;
+    tag)     vnote="  (from --tag $TAG_ARG)" ;;
     *)       vnote='' ;;
   esac
   printf '  declared    : %s%s\n' "${declared:-<none>}" "$vnote"

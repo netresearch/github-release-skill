@@ -32,12 +32,11 @@ Where the repository has a workflow that publishes the release, that workflow do
 `NEXT`, exiting 0 only when finished; after a tag push, `--watch` waits for
 the tag's publishing workflow first. That holds where a file states the
 version. A repository that states it nowhere takes it from the latest release,
-which until the workflow has created the release is still the previous one:
-`--watch` then reports that release as current and exits `ok` at once (measured
-on netresearch/timetracker, v6.4.1, 2026-09-30). Wait on the tag's own run
-there (`gh run list -R owner/repo --branch vX.Y.Z`, then
-`gh run watch -R owner/repo <id>`; without `-R` both need the checkout) and run
-the script once the release exists. Outside that repository's checkout,
+which until the workflow has created the release is still the previous one, so
+`--watch` would report that release as current and exit `ok` at once (measured
+on netresearch/timetracker, v6.4.1, 2026-09-30). Name the tag you pushed:
+`release-status.sh -R owner/repo --tag vX.Y.Z --watch`.
+Outside that repository's checkout,
 `-R` reads the version files from its default branch. On a maintenance
 branch it compares with the newest release of that branch's major line.
 `scripts/release-notes-status.sh` checks the published body.

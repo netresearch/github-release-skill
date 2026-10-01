@@ -723,6 +723,107 @@ m_shallow=$(maint_run "$maint/shallow" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "v4.0.0 v3.
 check  "shallow clone: asks for the history"     "git fetch --unshallow" "$m_shallow"
 refute "shallow clone: not judged a maintenance branch" "maintenance line" "$m_shallow"
 
+# ---------------------------------------------------------------------------
+# --tag: judge the tag just pushed, not the previous release
+# ---------------------------------------------------------------------------
+# A repository without a version file takes its version from the LATEST RELEASE.
+# Right after `git push origin v1.0.1` that is still v1.0.0, so the verdict was
+# about v1.0.0 (ok) and --watch returned at once. --tag names the release.
+
+tagarg=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote" "$maint" "$tagarg"' EXIT
+mkdir -p "$tagarg/bin" "$tagarg/repo"
+ln -sf "$jq_path" "$tagarg/bin/jq"
+cat >"$tagarg/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# acme/tagarg: released v1.0.0 (or the tag named in a `latest` file beside this
+# stub), tag v1.0.1 pushed annotated, its run in progress.
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/tagarg"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "release view")
+    echo "$3" >>"$(dirname "$0")/views"
+    # With a `flaky` file beside the stub only the first lookup answers.
+    if [ -e "$(dirname "$0")/flaky" ] && [ "$(wc -l <"$(dirname "$0")/views")" -gt 1 ]; then exit 1; fi
+    [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
+  "run list")
+    case "$*" in
+      *"--branch v1.0.1"*) cat "$(dirname "$0")/wf" 2>/dev/null || echo "in_progress/-" ;;
+      *"--branch v1.0.0"*) echo "completed/success" ;;
+      *) echo none ;;
+    esac
+    exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)     cat "$(dirname "$0")/latest" 2>/dev/null || echo v1.0.0; exit 0 ;;
+    */git/ref/tags/v1.0.0|*/git/ref/tags/v1.0.1) echo "tag"; exit 0 ;;
+    */git/ref/tags/*)      exit 1 ;;
+    */contents/*)          exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$tagarg/bin/gh"
+tagarg_run() {
+  (cd "$tagarg/repo" && env -i PATH="$tagarg/bin:/usr/bin:/bin" HOME="$tagarg" \
+    bash --noprofile --norc "$SCRIPT" -R acme/tagarg "$@" 2>&1)
+  return $?
+}
+
+no_tag_out=$(tagarg_run)
+check  "without --tag the previous release is judged"  "declared    : 1.0.0" "$no_tag_out"
+
+tag_out=$(tagarg_run --tag v1.0.1)
+check  "--tag judges the tag just pushed"              "declared    : 1.0.1" "$tag_out"
+check  "--tag says where the version came from"        "(from --tag v1.0.1)" "$tag_out"
+check  "--tag sees the run of that tag"                "workflow    : in_progress/-" "$tag_out"
+check  "--tag waits for the release workflow"          "NEXT: await-release-workflow" "$tag_out"
+
+# The tag's run is done, but nothing was published under the name: not finished.
+echo completed/success >"$tagarg/bin/wf"
+unpub_out=$(tagarg_run --tag v1.0.1)
+refute "a finished run without a release is not ok"    "NEXT: ok" "$unpub_out"
+check  "a finished run without a release is named"     "no release exists for v1.0.1" "$unpub_out"
+check  "a finished run without a release stays open"   "NEXT: await-release-workflow" "$unpub_out"
+rm -f "$tagarg/bin/wf"
+
+# Existence and body are read through ONE lookup of the release: with two calls a
+# transient failure of the second left "exists" standing and the body unchecked.
+rm -f "$tagarg/bin/views"
+tagarg_run --tag v1.0.1 >/dev/null
+check  "the release is looked up once" "views=1" "views=$(wc -l <"$tagarg/bin/views" | tr -d ' ')"
+
+# An older tag than the latest release is not a stale worktree: it was asked for.
+# The latest release is v1.0.1 here, newer than the tag that is judged; without
+# --tag the same tree is called stale.
+echo v1.0.1 >"$tagarg/bin/latest"
+old_out=$(tagarg_run --tag v1.0.0)
+refute "an older --tag is not called stale"            "fetch before trusting" "$old_out"
+check  "an older --tag still judges that tag"          "declared    : 1.0.0" "$old_out"
+# The release exists, but the body lookups of release-notes-status.sh fail: an
+# unreadable body is not a finished one.
+rm -f "$tagarg/bin/views"; : >"$tagarg/bin/flaky"
+flaky_out=$(tagarg_run --tag v1.0.0)
+check  "an unreadable body keeps the verdict open"     "gave no verdict" "$flaky_out"
+refute "an unreadable body is not ok"                  "NEXT: ok" "$flaky_out"
+rm -f "$tagarg/bin/flaky"
+rm -f "$tagarg/bin/latest"
+
+# Usage errors exit 2 and say why.
+tagarg_run --tag >/dev/null; st=$?
+check "--tag without a value exits 2" "status=2" "status=$st"
+tagarg_run --tag "" >/dev/null; st=$?
+check "an empty --tag exits 2" "status=2" "status=$st"
+bad_out=$(tagarg_run --tag 'v1;rm'); st=$?
+check "a malformed --tag exits 2" "status=2" "status=$st"
+tagarg_run --tag --help >/dev/null; st=$?
+check "a --tag with a leading hyphen exits 2" "status=2" "status=$st"
+tagarg_run --tag .. >/dev/null; st=$?
+check "a --tag that is no git ref exits 2" "status=2" "status=$st"
+check  "a malformed --tag is named"                    "is not a tag name" "$bad_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
