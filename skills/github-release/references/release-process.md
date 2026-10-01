@@ -12,11 +12,11 @@ The complete flow from "create a release" to "release published on GitHub."
 `gh release create` without `--verify-tag` does the following harmful things:
 
 1. **Creates a lightweight tag** if the tag doesn't exist — lightweight tags have no signature, no author metadata, and cannot be retroactively converted to annotated tags.
-2. **Burns the tag name permanently** — since GitHub immutable releases (GA Oct 2025), once a release uses a tag name, that name can never be reused. Not even `gh release delete` followed by `git push --delete origin vX.Y.Z` recovers it. GitHub returns: `"tag_name was used by an immutable release"`.
+2. **Burns the tag name permanently where immutable releases are on** — in a repository with the setting switched on (GA Oct 2025; it is per repository, see `immutable-releases.md`), once a release is published under a tag name, that name can never be reused. Not even `gh release delete` followed by `git push --delete origin vX.Y.Z` recovers it. GitHub returns: `"tag_name was used by an immutable release"`.
 3. **Bypasses CI** — no provenance attestation, no SBOM, no artifact signing. The release is created directly with whatever you attach manually.
 4. **Skips version file bumps** — source code still shows the old version.
 
-`--verify-tag` removes the first two: gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation can only publish against a tag that was pushed on purpose — and `guard-lightweight-tag.py` is what makes sure that tag was annotated and signed. Points 3 and 4 are not about the flag at all: they are about whether a workflow is doing the work, and they are why the flag is an exemption rather than a licence.
+`--verify-tag` removes the first, and for the second it means the name can only be burned for a tag that was pushed on purpose (publishing an immutable release burns the name either way): gh's own help (2.100.0) reads *"Abort in case the git tag doesn't already exist in the remote repository"*, so the invocation can only publish against a tag that was pushed on purpose — and `guard-lightweight-tag.py` is what makes sure that tag was annotated and signed. Points 3 and 4 are not about the flag at all: they are about whether a workflow is doing the work, and they are why the flag is an exemption rather than a licence.
 
 So the hooks block `gh release create` only without `--verify-tag` (and `--verify-tag=false` counts as without), and `gh release delete` always. `gh release edit` is allowed only for `--notes`/`--notes-file` flags (release description overhaul). Reading `--help` is allowed for any subcommand.
 

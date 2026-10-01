@@ -207,7 +207,7 @@ llm_reviews:
         With --verify-tag against an already-pushed signed tag it is allowed, and is the
         correct step in a repository whose workflows only listen on release: published.
       - gh release delete (doesn't fix immutable tag burning)
-      - gh release edit (immutable releases can't be edited)
+      - gh release edit other than --notes/--notes-file (tag and assets of an immutable release cannot be changed)
       - git tag without -s or -a flag for version tags
       - git push --delete for tags
       - git push origin :refs/tags/

@@ -187,7 +187,7 @@ publish on tag push" in `immutable-releases.md` instead.
    git push origin vX.Y.Z
    ```
 
-**Recovery if a release WAS published**: The tag name is burned. Follow the "Burned Tag Name" procedure above.
+**Recovery if a release WAS published**: If its `immutable` field is `true` the tag name is burned; follow the "Burned Tag Name" procedure above. If it is `false` (the repository setting was off) the name is not burned, but treat the tag as consumed anyway (see `immutable-releases.md`).
 
 ## Missing CI Release Workflow
 
@@ -381,8 +381,8 @@ changes that should have warranted a minor or major bump per SemVer.
 section over many months. The person cutting the release didn't audit
 the full scope before picking a version increment.
 
-**Recovery**: The tag cannot be recalled — it's already immutable on
-GitHub and downstream consumers (Composer / npm / pip lockfiles, TER)
+**Recovery**: The tag cannot be recalled — it is already published on
+GitHub (immutable where the setting is on) and downstream consumers (Composer / npm / pip lockfiles, TER)
 already reference it. The only honest recovery is documentation:
 
 1. **Do NOT delete the tag.** Consumers who pinned to it would get
