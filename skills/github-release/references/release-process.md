@@ -159,6 +159,7 @@ thing; where it did, rewrite the entry to the state that ships, or drop it when
 nothing of it survives. One way to find candidates:
 
 ```bash
+PREVIOUS_TAG=$(git describe --tags --abbrev=0)   # set here too: at prep time the block above has not run
 # files changed by more than one commit in the range — entries about them may describe an intermediate state
 git log --first-parent --name-only --pretty=format: "$PREVIOUS_TAG"..HEAD | sort | uniq -c | sort -rn | awk '$1 > 1'
 ```
