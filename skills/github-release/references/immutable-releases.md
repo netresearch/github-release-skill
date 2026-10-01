@@ -5,33 +5,63 @@
 
 ## What Are Immutable Releases?
 
-GitHub immutable releases became generally available in October 2025. Once a release is **published**, it becomes permanently immutable:
+GitHub immutable releases became generally available in October 2025. In a repository that has the setting switched on, a release becomes permanently immutable once it is **published**:
 
-- The release **cannot be deleted**
-- The release **cannot be edited** (title, body, assets are locked)
-- The associated **tag name is permanently burned**
+- The **tag is locked** to its commit: it cannot be moved or deleted while the release exists
+- The **assets cannot be modified or deleted**
+- The **tag name is permanently burned**: the release itself can still be deleted, which lifts the tag lock, but the name can never be used for a release again, not even in a recreated repository
+- A release attestation is generated automatically
+- **Title and release notes stay editable**, as do the pre-release and latest flags: `gh release edit --notes-file` succeeded on a published release whose `immutable` field was `true` (netresearch/ldap-manager v1.8.0, 2026-09-29), and GitHub documents it ([About immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases))
 
-Immutability applies to all repositories on GitHub.com and GitHub Enterprise Cloud. Self-hosted GitHub Enterprise Server may have different behavior depending on version.
+**The setting is opt-in per repository, not global.** A release published while it is off stays mutable for good, because immutability is decided at publication and cannot be applied afterwards. Measured on 2026-09-30 across the netresearch organisation: 123 of 127 repositories with releases had it off, and the organisation-level `enforced_repositories` was `none`. Self-hosted GitHub Enterprise Server may behave differently depending on version.
+
+### Check and enable
+
+```bash
+# Repository setting. Only enabled:false means releases are mutable; a 404 can also mean
+# no access or a wrong repository, so investigate it instead of reading it as "off"
+gh api repos/OWNER/REPO/immutable-releases --jq .enabled
+# Per release, the authoritative answer
+gh api repos/OWNER/REPO/releases/tags/vX.Y.Z --jq .immutable
+# Organisation enforcement: none | all | selected
+gh api orgs/ORG/settings/immutable-releases --jq .enforced_repositories
+# Turn it on for one repository (affects releases published from then on)
+gh api -X PUT repos/OWNER/REPO/immutable-releases
+```
+
+Enable it before the first release of a repository, and read the `immutable` field of the release afterwards instead of assuming. Before switching it on for a repository, check that its release workflow attaches every asset **before** publishing: a step that uploads to an already published release fails.
+
+| Shared workflow | Order | Immutable-safe |
+|---|---|---|
+| `release-go-app`, `release-source-archive`, typo3-ci-workflows `release-typo3-extension` | draft, upload all assets, then publish | yes |
+| `release-composer-package` | one `softprops/action-gh-release` call with all assets | yes |
+| `golib-create-release` | one `softprops/action-gh-release` call with all assets, input `draft` (default `true`) | yes with the default: a person publishes the draft afterwards. With `draft: false`, and for the `-rc`/`-alpha`/`-beta` tags it marks as pre-release, whether the assets are attached before publication depends on the pinned action version, so read the first run before relying on it |
+| `node-release`, `python-release` | `gh release create` with all files in one call | yes; the `node-release` re-run path (`gh release upload --clobber` on an existing release) fails |
+| `gh-release-image` | creates the release, then `gh release upload` | only when the caller passes no `files` |
 
 ## When Does Immutability Take Effect?
+
+With the repository setting on:
 
 | Release State | Mutable? | Tag Name Burned? |
 |--------------|----------|-----------------|
 | **Draft** | Yes — can edit, delete, change assets | No — tag name is reserved but not burned |
-| **Published** | No — fully immutable | Yes — permanently, no recovery |
-| **Pre-release** (published) | No — fully immutable | Yes — permanently, no recovery |
+| **Published** | No — tag and assets locked while the release exists; notes stay editable; the release can be deleted | Yes — permanently, no recovery |
+| **Pre-release** (published) | No — same as published | Yes — permanently, no recovery |
+
+With the setting off, a published release stays mutable and its tag name is not burned.
 
 Key distinction: **draft releases are still mutable**. This is why the draft-first pattern is critical.
 
 ## Tag Name Burning
 
-When a release is published against a tag name, that tag name is **permanently consumed**. This is the most dangerous aspect of immutable releases.
+In a repository with the setting on, when a release is published as an immutable release against a tag name, that tag name is **permanently consumed**. This is the most dangerous aspect of immutable releases. With the setting off, publishing burns nothing.
 
 ### What "burned" means
 
 - The tag name (e.g., `v1.0.0`) can never be used for another release on this repository
 - Deleting the Git tag (`git push --delete origin v1.0.0`) does not free the name
-- Deleting the release (if it were possible) would not free the name
+- Deleting the release lifts the tag lock but does not free the name either
 - **GitHub Support cannot recover burned tag names** — this is by design for supply chain integrity
 
 ### The error message
@@ -44,15 +74,15 @@ When you attempt to create a release with a burned tag name:
 
 This error is permanent and unrecoverable for that tag name in that repository.
 
-### How tag names get burned accidentally
+### How tag names get burned accidentally (repositories with the setting on)
 
-1. **`gh release create v1.0.0`** — with no `--verify-tag` it creates a lightweight tag AND publishes immediately (not as draft). The tag name is instantly burned. With `--verify-tag` gh aborts instead of creating the tag, so only a tag you pushed yourself can be burned.
+1. **`gh release create v1.0.0`** — with no `--verify-tag` it creates a lightweight tag AND publishes immediately (not as draft). In a repository with the setting on, the tag name is instantly burned. With `--verify-tag` gh aborts instead of creating the tag, so only a tag you pushed yourself can be burned.
 2. **Publishing too early** — clicking "Publish" on a draft before verifying contents. Once published, there is no "unpublish."
 3. **CI workflow that auto-publishes** — if the workflow creates a non-draft release, the tag is burned on first run. A failed re-run cannot reuse it.
 
 ## Why `gh release delete` Doesn't Fix It
 
-`gh release delete` can only delete **draft** releases. Published releases cannot be deleted due to immutability. Even if you could delete the release object, the tag name remains burned — the burning is tied to the publication event, not the release object's existence.
+Deleting a published immutable release does not undo the burn. It lifts the lock on the tag, so the tag can then be deleted, but the name stays consumed: the burning is tied to the publication event, not to the release object's existence. `gh release delete` is additionally blocked by this skill's hook, and a draft is the only state in which deleting and recreating is free.
 
 ## The Only Recovery: New Version Number
 
@@ -83,7 +113,7 @@ See `recovery-procedures.md` for detailed recovery steps.
 
 ## When Moving a Tag IS Safe
 
-Tag-name burning is tied to **release publication**, not to the tag push itself. A tag pushed to the remote is *not* automatically burned. Burning happens only when `gh release create` (or the equivalent REST/GraphQL API call, or the Release workflow's create-release step) actually creates the release object — `--verify-tag` does not change that: it governs whether the *tag* can be created, not whether publishing burns the name.
+Tag-name burning is tied to **release publication in a repository with the setting on**, not to the tag push itself. A tag pushed to the remote is *not* automatically burned. Burning happens only when a release is actually published as immutable (`gh release create`, the REST/GraphQL API or the Release workflow's create-release step) — `--verify-tag` does not change that: it governs whether the *tag* can be created, not whether publishing burns the name. With the setting off nothing is burned, but a published release is still a signal to consumers and registries, so the hard rule below applies either way.
 
 This means: **if a release workflow fails before the create-release step runs** — e.g., a broken reusable-workflow reference, a failing build, a failing SBOM step, a failing signing step — the tag name is still available to re-use. The workflow never reached the publication event, so the tag name is not burned.
 
@@ -94,32 +124,40 @@ registries publish on tag push" below before applying the safe move flow.
 ### Verify before moving
 
 Always confirm the tag name is not burned before deleting and re-pushing.
-Burning is tied to **publication** — a draft release does *not* burn the tag
-name, so the check has to distinguish draft from published.
-
-The safest programmatic check uses `--json isDraft`:
+Burning is tied to **publication as an immutable release** — a draft release
+does *not* burn the tag name, and neither does a published release in a
+repository with the setting off, so the check has to read both `draft` and
+`immutable`:
 
 ```bash
-STATE=$(gh release view "vX.Y.Z" --json isDraft 2>/dev/null || echo "notfound")
-if [[ "$STATE" == "notfound" ]] || [[ "$STATE" == *'"isDraft":true'* ]]; then
-    echo "Safe to move (no release OR draft only — tag name not burned)"
+if STATE=$(gh api "repos/OWNER/REPO/releases/tags/vX.Y.Z" --jq '"\(.draft) \(.immutable)"' 2>/dev/null); then
+    case "$STATE" in
+      "true "*)      echo "Draft only — tag name not burned" ;;
+      "false true")  echo "BURNED — immutable release; bump the version instead" ;;
+      "false false") echo "Published but mutable — name not burned; still do not move a tag consumers or registries may have seen" ;;
+      *)             echo "Unexpected answer: $STATE" ;;
+    esac
 else
-    echo "BURNED — release is published; bump the version instead"
+    # A failed read is not "no release": a 404 can also mean no access or a wrong repository.
+    echo "No release found, or the read failed — check the repository and your access first"
 fi
 ```
 
 Interpretation:
 
-- `notfound` (gh returns non-zero, typically "release not found") → the tag
-  name is **unburned** and safe to move.
-- `{"isDraft":true}` → a **draft** release exists. The tag name is
+- No release (the read succeeds as a 404 on a repository you can access) →
+  the tag name is **unburned** and safe to move.
+- `draft` is `true` → a **draft** release exists. The tag name is
   **unburned** (GitHub reserves the name but does not lock it until
   publication), so the tag is still safe to move. If you do move it, delete
   the stale draft first (`gh release delete vX.Y.Z`) so the re-triggered
   workflow can recreate it cleanly.
-- `{"isDraft":false}` → a **published** release exists. The tag name is
-  **burned**. Do not move it; bump the version instead (see "The Only
-  Recovery" above).
+- `draft` is `false` and `immutable` is `true` → a **published immutable**
+  release exists. The tag name is **burned**. Do not move it; bump the
+  version instead (see "The Only Recovery" above).
+- `draft` is `false` and `immutable` is `false` → a **published, mutable**
+  release exists (setting off at publication). The name is not burned, but
+  treat the tag as consumed anyway.
 
 ### Wrong tag already pushed: registries publish on tag push
 
@@ -254,16 +292,17 @@ git tag -s vX.Y.Z -m "vX.Y.Z" <new-sha>
 git push origin vX.Y.Z
 ```
 
-The re-push triggers the release workflow again against the corrected commit. If the workflow now succeeds, it creates the release and the tag name is burned from that point forward.
+The re-push triggers the release workflow again against the corrected commit. If the workflow now succeeds, it creates the release; in a repository with the setting on, the tag name is burned from that point forward.
 
 ### Hard rule
 
-**Never move a tag after a successful (published) release.** Once
-`gh release view vX.Y.Z --json isDraft` returns `{"isDraft":false}`, the tag
-name is off-limits — see "The Only Recovery: New Version Number" above. A
-draft release (`{"isDraft":true}`) does *not* burn the tag name; the top of
-"When Moving a Tag IS Safe" explains why, and the verification step above
-tells you how to distinguish the two.
+**Never move a tag after a successful (published) release.** Once the
+verification step above reports a published release (`draft` is `false`), the
+tag is off-limits: with `immutable` true the name is burned, and with it
+false the tag has still been published to consumers and registries — see "The
+Only Recovery: New Version Number" above. A draft release (`draft` true) does
+*not* burn the tag name; the top of "When Moving a Tag IS Safe" explains why,
+and the verification step above tells you how to distinguish the cases.
 
 ### Real-world example: t3x-nr-vault v0.5.0
 
@@ -287,5 +326,5 @@ The mechanical checkpoint `GR-12` (`validate-reusable-workflows.sh`) catches thi
 | Date | Event |
 |------|-------|
 | 2025-06 | Immutable releases announced in beta |
-| 2025-10 | General availability — all repos affected |
-| 2025-10+ | Tag name burning enforced retroactively on all published releases |
+| 2025-10 | General availability — a per-repository (or organisation-enforced) setting |
+| 2025-10+ | Tag name burning applies to releases published while the setting is on |
