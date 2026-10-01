@@ -157,7 +157,69 @@ def _is_version_name(word: str) -> bool:
     A leading "$" is what shlex leaves of ANSI-C quoting: bash turns
     $'v1.2.3' into v1.2.3, shlex into $v1.2.3.
     """
-    return bool(re.search(r"(?:^\$?|/)v\d", word.strip()))
+    word = word.strip()
+    return bool(re.match(r"\$?v\d", word) or re.search(r"/v\d", word))
+
+
+def _long_option_modes(name: str) -> set:
+    """The modes a long option sets: list, verify, delete, annotate."""
+    modes = set()
+    if name in _LIST_OPTIONS:
+        modes.add("list")
+    if name in _ANNOTATING_OPTIONS:
+        modes.add("annotate")
+    if name == "--verify":
+        modes.add("verify")
+    if name == "--delete":
+        modes.add("delete")
+    return modes
+
+
+# What each short option letter sets; a letter missing here sets nothing.
+_SHORT_MODES = {
+    "l": "list",
+    "n": "list",
+    "v": "verify",
+    "d": "delete",
+    **dict.fromkeys(_SHORT_ANNOTATING_LETTERS, "annotate"),
+}
+
+
+def _read_short_group(word: str, modes: set) -> int:
+    """Record the modes of a short group such as -sa; return 1 if it consumes
+    the next word as a value, else 0."""
+    for j in range(1, len(word)):
+        letter = word[j]
+        if letter in _SHORT_MODES:
+            modes.add(_SHORT_MODES[letter])
+        if letter == "n":
+            return 0
+        if letter in _SHORT_VALUE_LETTERS:
+            return 1 if j == len(word) - 1 else 0
+    return 0
+
+
+def _scan_tag_words(words: list):
+    """Split "git tag" words into the modes their options set and the names."""
+    modes = set()
+    names = []
+    options_done = False
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if options_done or word == "-" or not word.startswith("-"):
+            names.append(word)
+        elif word == "--":
+            options_done = True
+        elif word.startswith("--"):
+            name, eq, _ = word.partition("=")
+            modes |= _long_option_modes(name)
+            if name in _VALUE_OPTIONS and not eq:
+                i += 1
+        else:
+            i += _read_short_group(word, modes)
+        i += 1
+    return modes, names
 
 
 def _judge_tag_args(args: str):
@@ -175,48 +237,16 @@ def _judge_tag_args(args: str):
         # version token in it is reason enough not to guess.
         return "lightweight" if has_version_tag_arg(args) else None
 
-    listing = verify = delete = annotated = False
-    names = []
-    options_done = False
-    i = 0
-    while i < len(words):
-        word = words[i]
-        if options_done or word == "-" or not word.startswith("-"):
-            names.append(word)
-        elif word == "--":
-            options_done = True
-        elif word.startswith("--"):
-            name, eq, _ = word.partition("=")
-            if name in _VALUE_OPTIONS and not eq:
-                i += 1
-            listing |= name in _LIST_OPTIONS
-            verify |= name == "--verify"
-            delete |= name == "--delete"
-            annotated |= name in _ANNOTATING_OPTIONS
-        else:
-            for j in range(1, len(word)):
-                letter = word[j]
-                if letter == "n":
-                    listing = True
-                    break
-                listing |= letter == "l"
-                verify |= letter == "v"
-                delete |= letter == "d"
-                annotated |= letter in _SHORT_ANNOTATING_LETTERS
-                if letter in _SHORT_VALUE_LETTERS:
-                    if j == len(word) - 1:
-                        i += 1
-                    break
-        i += 1
+    modes, names = _scan_tag_words(words)
 
     has_version = any(_is_version_name(name) for name in names)
     # Deletion first: "git tag -d --sort=refname vX" deletes, while -d next to
     # a list-mode option makes git refuse to run at all.
-    if delete:
+    if "delete" in modes:
         return "delete" if has_version else None
-    if listing or verify:
+    if modes & {"list", "verify"}:
         return None
-    if has_version and not annotated:
+    if has_version and "annotate" not in modes:
         return "lightweight"
     return None
 
