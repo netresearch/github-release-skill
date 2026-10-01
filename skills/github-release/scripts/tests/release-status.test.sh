@@ -745,7 +745,7 @@ case "$1 $2" in
   "release view") [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
   "run list")
     case "$*" in
-      *"--branch v1.0.1"*) echo "in_progress/-" ;;
+      *"--branch v1.0.1"*) cat "$(dirname "$0")/wf" 2>/dev/null || echo "in_progress/-" ;;
       *"--branch v1.0.0"*) echo "completed/success" ;;
       *) echo none ;;
     esac
@@ -776,6 +776,14 @@ check  "--tag judges the tag just pushed"              "declared    : 1.0.1" "$t
 check  "--tag says where the version came from"        "(from --tag v1.0.1)" "$tag_out"
 check  "--tag sees the run of that tag"                "workflow    : in_progress/-" "$tag_out"
 check  "--tag waits for the release workflow"          "NEXT: await-release-workflow" "$tag_out"
+
+# The tag's run is done, but nothing was published under the name: not finished.
+echo completed/success >"$tagarg/bin/wf"
+unpub_out=$(tagarg_run --tag v1.0.1)
+refute "a finished run without a release is not ok"    "NEXT: ok" "$unpub_out"
+check  "a finished run without a release is named"     "no release exists for v1.0.1" "$unpub_out"
+check  "a finished run without a release stays open"   "NEXT: await-release-workflow" "$unpub_out"
+rm -f "$tagarg/bin/wf"
 
 # An older tag than the latest release is not a stale worktree: it was asked for.
 # The latest release is v1.0.1 here, newer than the tag that is judged; without

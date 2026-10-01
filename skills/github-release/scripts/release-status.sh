@@ -398,7 +398,10 @@ if [ "$tag_state" = "annotated" ]; then
 fi
 
 # --- phase 5: is the published body finished? --------------------------------
-notes_next=""
+notes_next=""; release_exists=1
+if [ "$tag_state" = "annotated" ] && ! gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
+  release_exists=0
+fi
 if [ -n "$declared" ] && gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
   if [ -x "$HERE/release-notes-status.sh" ]; then
     notes_next=$("$HERE/release-notes-status.sh" -R "$REPO" "$tag_ref" --json 2>/dev/null | jq -r .next 2>/dev/null || echo "")
@@ -488,6 +491,11 @@ elif [ -n "$wf_state" ] && [ "${wf_state%%/*}" != "completed" ] && [ "$wf_state"
   next="await-release-workflow"; add_note "publishing workflow is $wf_state"
 elif [ -n "$wf_state" ] && [ "$wf_state" = "completed/failure" ]; then
   next="await-release-workflow"; add_note "publishing workflow FAILED -- read its annotations before re-running"
+elif [ "$release_exists" = 0 ]; then
+  # The tag is pushed and its run is done or absent, but no release carries the
+  # name: nothing was published, so this is not finished.
+  next="await-release-workflow"
+  add_note "no release exists for $tag_ref yet (workflow ${wf_state:-unknown}) -- read the run before re-running"
 elif [ -n "$notes_next" ] && [ "$notes_next" != "ok" ]; then
   next="rewrite-release-notes"
   cmd="release-notes-status.sh -R $REPO $tag_ref   # then gh release edit --notes-file"
