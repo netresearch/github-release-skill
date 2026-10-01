@@ -34,7 +34,8 @@ Enable it before the first release of a repository, and read the `immutable` fie
 | Shared workflow | Order | Immutable-safe |
 |---|---|---|
 | `release-go-app`, `release-source-archive`, typo3-ci-workflows `release-typo3-extension` | draft, upload all assets, then publish | yes |
-| `release-composer-package`, `golib-create-release` | one `softprops/action-gh-release` call with all assets | yes |
+| `release-composer-package` | one `softprops/action-gh-release` call with all assets | yes |
+| `golib-create-release` | one `softprops/action-gh-release` call with all assets, input `draft` (default `true`) | yes with the default: a person publishes the draft afterwards. With `draft: false`, and for the `-rc`/`-alpha`/`-beta` tags it marks as pre-release, whether the assets are attached before publication depends on the pinned action version, so read the first run before relying on it |
 | `node-release`, `python-release` | `gh release create` with all files in one call | yes; the `node-release` re-run path (`gh release upload --clobber` on an existing release) fails |
 | `gh-release-image` | creates the release, then `gh release upload` | only when the caller passes no `files` |
 
@@ -54,7 +55,7 @@ Key distinction: **draft releases are still mutable**. This is why the draft-fir
 
 ## Tag Name Burning
 
-When a release is published against a tag name, that tag name is **permanently consumed**. This is the most dangerous aspect of immutable releases.
+In a repository with the setting on, when a release is published as an immutable release against a tag name, that tag name is **permanently consumed**. This is the most dangerous aspect of immutable releases. With the setting off, publishing burns nothing.
 
 ### What "burned" means
 
@@ -75,7 +76,7 @@ This error is permanent and unrecoverable for that tag name in that repository.
 
 ### How tag names get burned accidentally (repositories with the setting on)
 
-1. **`gh release create v1.0.0`** — with no `--verify-tag` it creates a lightweight tag AND publishes immediately (not as draft). The tag name is instantly burned. With `--verify-tag` gh aborts instead of creating the tag, so only a tag you pushed yourself can be burned.
+1. **`gh release create v1.0.0`** — with no `--verify-tag` it creates a lightweight tag AND publishes immediately (not as draft). In a repository with the setting on, the tag name is instantly burned. With `--verify-tag` gh aborts instead of creating the tag, so only a tag you pushed yourself can be burned.
 2. **Publishing too early** — clicking "Publish" on a draft before verifying contents. Once published, there is no "unpublish."
 3. **CI workflow that auto-publishes** — if the workflow creates a non-draft release, the tag is burned on first run. A failed re-run cannot reuse it.
 
