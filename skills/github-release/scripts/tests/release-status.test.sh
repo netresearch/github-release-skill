@@ -731,12 +731,13 @@ refute "shallow clone: not judged a maintenance branch" "maintenance line" "$m_s
 # about v1.0.0 (ok) and --watch returned at once. --tag names the release.
 
 tagarg=$(mktemp -d)
-trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$tagarg"' EXIT
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote" "$maint" "$tagarg"' EXIT
 mkdir -p "$tagarg/bin" "$tagarg/repo"
 ln -sf "$jq_path" "$tagarg/bin/jq"
 cat >"$tagarg/bin/gh" <<'STUB'
 #!/usr/bin/env bash
-# acme/tagarg: released v1.0.0, tag v1.0.1 pushed annotated, its run in progress.
+# acme/tagarg: released v1.0.0 (or the tag named in a `latest` file beside this
+# stub), tag v1.0.1 pushed annotated, its run in progress.
 case "$1 $2" in
   "auth status")  exit 0 ;;
   "repo view")    echo "acme/tagarg"; exit 0 ;;
@@ -752,7 +753,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
-    */releases/latest)     echo "v1.0.0"; exit 0 ;;
+    */releases/latest)     cat "$(dirname "$0")/latest" 2>/dev/null || echo v1.0.0; exit 0 ;;
     */git/ref/tags/v1.0.0|*/git/ref/tags/v1.0.1) echo "tag"; exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
     */contents/*)          exit 1 ;;
@@ -777,8 +778,13 @@ check  "--tag sees the run of that tag"                "workflow    : in_progres
 check  "--tag waits for the release workflow"          "NEXT: await-release-workflow" "$tag_out"
 
 # An older tag than the latest release is not a stale worktree: it was asked for.
+# The latest release is v1.0.1 here, newer than the tag that is judged; without
+# --tag the same tree is called stale.
+echo v1.0.1 >"$tagarg/bin/latest"
 old_out=$(tagarg_run --tag v1.0.0)
 refute "an older --tag is not called stale"            "fetch before trusting" "$old_out"
+check  "an older --tag still judges that tag"          "declared    : 1.0.0" "$old_out"
+rm -f "$tagarg/bin/latest"
 
 # Usage errors exit 2 and say why.
 tagarg_run --tag >/dev/null; st=$?
