@@ -79,6 +79,12 @@ bullet, or `git log --format='- %s'` output — is parsed as an option,
 and the upload aborts with `The "- " option does not exist.` Set
 `COMMENT` through `env:`, never via `${{ }}` inside `run:`.
 
+Never let `COMMENT` be empty. tailor substitutes `Updated extension
+to <version>` only when `--comment` is absent; `--comment=""` is a
+value, so an empty list of commit subjects ships an empty upload
+comment. Give it a fallback before the call:
+`COMMENT="${COMMENT:-Updated extension to $VERSION}"`.
+
 `actions/checkout` wants the raw ref so it can find the tag; the
 `ext_emconf.php` comparison and the `tailor ter:publish` argument want
 the bare version. Conflating them produces the same `configured version
