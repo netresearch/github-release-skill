@@ -51,7 +51,9 @@ done
 
 command -v jq >/dev/null || { echo "jq required" >&2; exit 2; }
 case "$TAG_ARG" in
-  *[!A-Za-z0-9._-]*) echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2 ;;
+  # A leading hyphen is a valid ref but reads as an option to every `gh ... "$tag"`
+  # below: `gh release view --help` succeeds without any release existing.
+  -* | *[!A-Za-z0-9._-]*) echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2 ;;
 esac
 # The allowlist admits `..` and `.lock`; git knows which names are not refs.
 if [ -n "$TAG_ARG" ] && command -v git >/dev/null && ! git check-ref-format "refs/tags/$TAG_ARG" >/dev/null 2>&1; then
