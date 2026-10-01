@@ -266,7 +266,8 @@ def check_tag_invocation(segment: str) -> None:
     The segment can span lines: a quoted multi-line -m message stays inside
     one invocation, so the arguments are captured with DOTALL. Without it the
     capture stopped at the first newline of the message, and the cut-off,
-    unbalanced quote blocked every annotated tag with a multi-line message.
+    unbalanced quote blocked an annotated tag with a multi-line message
+    whenever the version stood before that newline.
     """
     tag_match = re.match(
         INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment, flags=re.DOTALL
