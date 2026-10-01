@@ -5,21 +5,48 @@
 
 ## What Are Immutable Releases?
 
-GitHub immutable releases became generally available in October 2025. Once a release is **published**, it becomes permanently immutable:
+GitHub immutable releases became generally available in October 2025. In a repository that has the setting switched on, a release becomes permanently immutable once it is **published**:
 
 - The release **cannot be deleted**
-- The release **cannot be edited** (title, body, assets are locked)
+- The tag and the **assets are locked**
 - The associated **tag name is permanently burned**
+- The **release notes stay editable**: `gh release edit --notes-file` succeeded on a published release whose `immutable` field was `true` (netresearch/ldap-manager v1.8.0, 2026-09-29)
 
-Immutability applies to all repositories on GitHub.com and GitHub Enterprise Cloud. Self-hosted GitHub Enterprise Server may have different behavior depending on version.
+**The setting is opt-in per repository, not global.** A release published while it is off stays mutable for good, because immutability is decided at publication and cannot be applied afterwards. Measured on 2026-09-30 across the netresearch organisation: 123 of 127 repositories with releases had it off, and the organisation-level `enforced_repositories` was `none`. Self-hosted GitHub Enterprise Server may behave differently depending on version.
+
+### Check and enable
+
+```bash
+# Repository setting (404 or enabled:false means releases are mutable)
+gh api repos/OWNER/REPO/immutable-releases --jq .enabled
+# Per release, the authoritative answer
+gh api repos/OWNER/REPO/releases/tags/vX.Y.Z --jq .immutable
+# Organisation enforcement: none | all | selected
+gh api orgs/ORG/settings/immutable-releases --jq .enforced_repositories
+# Turn it on for one repository (affects releases published from then on)
+gh api -X PUT repos/OWNER/REPO/immutable-releases
+```
+
+Enable it before the first release of a repository, and read the `immutable` field of the release afterwards instead of assuming. Before switching it on for a repository, check that its release workflow attaches every asset **before** publishing: a step that uploads to an already published release fails.
+
+| Shared workflow | Order | Immutable-safe |
+|---|---|---|
+| `release-go-app`, `release-source-archive`, typo3-ci-workflows `release-typo3-extension` | draft, upload all assets, then publish | yes |
+| `release-composer-package`, `golib-create-release` | one `softprops/action-gh-release` call with all assets | yes |
+| `node-release`, `python-release` | `gh release create` with all files in one call | yes; the `node-release` re-run path (`gh release upload --clobber` on an existing release) fails |
+| `gh-release-image` | creates the release, then `gh release upload` | only when the caller passes no `files` |
 
 ## When Does Immutability Take Effect?
+
+With the repository setting on:
 
 | Release State | Mutable? | Tag Name Burned? |
 |--------------|----------|-----------------|
 | **Draft** | Yes — can edit, delete, change assets | No — tag name is reserved but not burned |
-| **Published** | No — fully immutable | Yes — permanently, no recovery |
-| **Pre-release** (published) | No — fully immutable | Yes — permanently, no recovery |
+| **Published** | No — tag and assets locked, not deletable; notes stay editable | Yes — permanently, no recovery |
+| **Pre-release** (published) | No — same as published | Yes — permanently, no recovery |
+
+With the setting off, a published release stays mutable and its tag name is not burned.
 
 Key distinction: **draft releases are still mutable**. This is why the draft-first pattern is critical.
 
@@ -287,5 +314,5 @@ The mechanical checkpoint `GR-12` (`validate-reusable-workflows.sh`) catches thi
 | Date | Event |
 |------|-------|
 | 2025-06 | Immutable releases announced in beta |
-| 2025-10 | General availability — all repos affected |
-| 2025-10+ | Tag name burning enforced retroactively on all published releases |
+| 2025-10 | General availability — a per-repository (or organisation-enforced) setting |
+| 2025-10+ | Tag name burning applies to releases published while the setting is on |
