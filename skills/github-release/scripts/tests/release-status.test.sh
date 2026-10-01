@@ -742,7 +742,7 @@ case "$1 $2" in
   "auth status")  exit 0 ;;
   "repo view")    echo "acme/tagarg"; exit 0 ;;
   "pr list")      echo "null"; exit 0 ;;
-  "release view") [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
+  "release view") echo "$3" >>"$(dirname "$0")/views"; [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
   "run list")
     case "$*" in
       *"--branch v1.0.1"*) cat "$(dirname "$0")/wf" 2>/dev/null || echo "in_progress/-" ;;
@@ -784,6 +784,12 @@ refute "a finished run without a release is not ok"    "NEXT: ok" "$unpub_out"
 check  "a finished run without a release is named"     "no release exists for v1.0.1" "$unpub_out"
 check  "a finished run without a release stays open"   "NEXT: await-release-workflow" "$unpub_out"
 rm -f "$tagarg/bin/wf"
+
+# Existence and body are read through ONE lookup of the release: with two calls a
+# transient failure of the second left "exists" standing and the body unchecked.
+rm -f "$tagarg/bin/views"
+tagarg_run --tag v1.0.1 >/dev/null
+check  "the release is looked up once" "views=1" "views=$(wc -l <"$tagarg/bin/views" | tr -d ' ')"
 
 # An older tag than the latest release is not a stale worktree: it was asked for.
 # The latest release is v1.0.1 here, newer than the tag that is judged; without

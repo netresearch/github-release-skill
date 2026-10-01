@@ -398,11 +398,14 @@ if [ "$tag_state" = "annotated" ]; then
 fi
 
 # --- phase 5: is the published body finished? --------------------------------
-notes_next=""; release_exists=1
-if [ "$tag_state" = "annotated" ] && ! gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
-  release_exists=0
-fi
+# One lookup answers both questions -- does the release exist, and may its body
+# be read -- so a failed call cannot say "exists" to one and "absent" to the other.
+notes_next=""; release_found=0; release_exists=1
 if [ -n "$declared" ] && gh release view "$tag_ref" --repo "$REPO" >/dev/null 2>&1; then
+  release_found=1
+fi
+[ "$tag_state" = "annotated" ] && [ "$release_found" = 0 ] && release_exists=0
+if [ "$release_found" = 1 ]; then
   if [ -x "$HERE/release-notes-status.sh" ]; then
     notes_next=$("$HERE/release-notes-status.sh" -R "$REPO" "$tag_ref" --json 2>/dev/null | jq -r .next 2>/dev/null || echo "")
   fi
