@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Split a Bash tool call into the individual invocations it runs.
 
 Shared by the PreToolUse guards in this directory. It lived in

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for detect-ecosystem.sh skill-version extraction — no network.
 #
 # Pins the regression fixed alongside it: the Netresearch skill layout nests the

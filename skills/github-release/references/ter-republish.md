@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # TER Re-Publishing Without Re-Tagging
 
 This reference covers TYPO3-specific recovery when the TYPO3 Extension

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pre-push hook: reject lightweight version tags
-while read local_ref local_sha remote_ref remote_sha; do
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
   if [[ "$remote_ref" == refs/tags/v* ]]; then
     tag="${remote_ref#refs/tags/}"
     obj_type=$(git cat-file -t "$tag" 2>/dev/null)

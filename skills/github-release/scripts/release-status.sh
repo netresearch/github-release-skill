@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # release-status.sh - Where is this repo in the release lifecycle, and what is
 # the next valid action?
 #

@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: release-prepare
 description: "Prepare a release: bump versions and create PR, but don't tag (user tags manually)"
 ---

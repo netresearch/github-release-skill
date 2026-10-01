@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for how the gh-release guard splits a command into invocations — no network.
 #
 # The sibling tag guard learned this the hard way (issue #105): a Bash call

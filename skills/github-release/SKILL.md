@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: github-release
 description: "Use when creating releases, version bumps, tagging, release health checks, or when user says 'release', 'tag', 'version bump'. A version lives in every file that states it: a TYPO3 extension carries it in ext_emconf.php, composer.json, Documentation/guides.xml, the changelog page under Documentation/ and CHANGELOG.md, and updating some of them ships metadata that disagrees with itself. Also activates on gh release commands to BLOCK them and redirect to safe process."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"

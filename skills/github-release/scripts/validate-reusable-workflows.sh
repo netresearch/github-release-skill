@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # validate-reusable-workflows.sh - Verify reusable workflow refs in release
 # workflows actually resolve at their pinned SHA/ref.
@@ -37,6 +39,7 @@ fi
 
 # Collect matching workflow files (nullglob-style: no files -> empty list, no error)
 shopt -s nullglob
+# shellcheck disable=SC2206 # WORKFLOW_GLOB is a glob pattern; expanding it is the point
 files=( $WORKFLOW_GLOB )
 shopt -u nullglob
 
@@ -83,6 +86,8 @@ for wf in "${files[@]}"; do
     # tolerated. Processing order for the extracted value: strip the inline
     # comment FIRST (so the trailing quote is still at the end of the string),
     # then strip surrounding quotes, then trim whitespace.
+    # check_ref receives the file name only to print it; nothing writes to "$wf".
+    # shellcheck disable=SC2094
     while IFS= read -r line; do
         # Strip leading whitespace
         stripped="${line#"${line%%[![:space:]]*}"}"
