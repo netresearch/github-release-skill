@@ -10,7 +10,7 @@ Claude Code skill plugin for safe, automated GitHub releases with supply chain s
 AI coding agents (Claude Code, Copilot, etc.) naturally reach for a bare `gh release create` when asked to "create a release". This:
 
 1. Creates **lightweight unsigned tags** instead of signed annotated tags
-2. Creates **immutable releases** that permanently burn tag names (no recovery)
+2. Works with GitHub **immutable releases**: where the repository setting is on, a published release locks its tag and assets and burns the tag name (no recovery); the setting is per repository, see `references/immutable-releases.md`
 3. **Bypasses CI pipelines** that handle SBOMs, attestations, and signing
 
 This skill prevents these mistakes structurally via hooks and provides the correct release orchestration.

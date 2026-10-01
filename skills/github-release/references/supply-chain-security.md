@@ -76,7 +76,7 @@ cosign sign-blob --yes "$file" --bundle "${file}.bundle"
 cosign sign-blob --yes "$file" --bundle "${file}.sigstore.json"
 ```
 
-**Past releases cannot be retroactively fixed.** GitHub releases are immutable once assets are attached, so renaming or replacing assets on already-published releases is not possible. Only future releases benefit from the fix. Scorecard averages the Signed-Releases score over the **last 4 releases**, so the score climbs gradually as new releases ship.
+**Past releases cannot be retroactively fixed.** Releases published with immutable releases switched on cannot have their assets renamed or replaced, so that is not possible on already-published releases there (check the `immutable` field of the release). Only future releases benefit from the fix. Scorecard averages the Signed-Releases score over the **last 4 releases**, so the score climbs gradually as new releases ship.
 
 Reference upstream change for the netresearch shared workflows: [netresearch/typo3-ci-workflows#84](https://github.com/netresearch/typo3-ci-workflows/pull/84) — applied to both `release.yml` and `release-typo3-extension.yml`.
 

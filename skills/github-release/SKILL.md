@@ -18,7 +18,7 @@ allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 
 **NEVER run `gh release delete`, and never `gh release create` without `--verify-tag`.**
 
-Blocked by hooks. Immutable releases (GA Oct 2025) make tag names permanent — a bare `gh release create` creates the tag when it is missing, that tag is lightweight, and the name is burned forever. `--verify-tag` aborts unless the tag already exists on the remote, so the invocation can only publish a tag somebody pushed on purpose; the guard allows it for that reason (`--verify-tag=false` stays blocked).
+Blocked by hooks. Where a repository has immutable releases switched on (GA Oct 2025; a per-repository setting, see `references/immutable-releases.md`) a published release makes its tag name permanent — a bare `gh release create` creates the tag when it is missing, that tag is lightweight, and the name is burned forever. `--verify-tag` aborts unless the tag already exists on the remote, so the invocation can only publish a tag somebody pushed on purpose; the guard allows it for that reason (`--verify-tag=false` stays blocked).
 
 Where the repository has a workflow that publishes the release, that workflow does it and you do not run `gh release create` at all. Where it does not, **add one** — for a project shipped as its source tree, a tag-push caller of `netresearch/.github`'s `release-source-archive.yml` (`references/ci-workflow-templates.md`). Publishing by hand against the pushed signed tag (*Tag-only repositories* below) is the step for a release that cannot wait for that workflow, not a flow to keep.
 
