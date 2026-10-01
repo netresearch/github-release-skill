@@ -13,8 +13,10 @@ Blocks:
 Allows:
   - Signed tags: git tag -s v*
   - Annotated tags: git tag -a v*, and the -m/-F forms that imply -a
-  - Listing and inspecting tags: git tag -l, --list, -n, --contains,
-    --points-at, --merged, --sort, --format, --column, --ignore-case
+  - Listing and inspecting tags: git tag -l, --list, and the flags that imply
+    list mode (-n, --contains, --no-contains, --points-at, --merged,
+    --no-merged). --sort, --format, --column, -i and --omit-empty do not imply
+    it, so with a version name and no -l they count as a creation.
   - Verifying tags: git tag -v v*
   - Non-version tags (tags not matching v* pattern)
 
@@ -82,13 +84,17 @@ def has_version_tag_arg(args: str) -> bool:
     return bool(re.search(r"""(?:^|[\s/"'])v\d""", args))
 
 
-# Flags that make "git tag" a read-only query. git treats any of them as
-# implying --list, so they can carry a version argument (a shell pattern, or a
-# ref to compare against) without being a tag creation.
+# Flags that put "git tag" into list mode, so a version argument after them is a
+# pattern or a ref to compare against, not a tag to create. git-tag(1) says
+# "Implies --list" for -n, --contains, --no-contains and --points-at;
+# --merged and --no-merged do the same in git 2.55.0 although the page does
+# not say so. The other listing options (--sort, --format, --column,
+# --no-column, -i/--ignore-case, --omit-empty) only shape a listing: without
+# -l/--list, "git tag --sort=-v:refname v1.2.3" creates the lightweight tag
+# v1.2.3, so they must not exempt a command from the creation check.
 READ_ONLY_TAG_FLAG = re.compile(
     r"(?:^|\s)(?:-l|--list|-n\d*|--contains|--no-contains|--points-at"
-    r"|--merged|--no-merged|--sort|--format|--column|--no-column"
-    r"|-i|--ignore-case|--omit-empty)(?:=|\s|$)"
+    r"|--merged|--no-merged)(?:=|\s|$)"
 )
 
 

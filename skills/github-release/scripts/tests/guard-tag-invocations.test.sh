@@ -127,8 +127,30 @@ check 0 'inspect: -n with a version' 'git tag -n5 v1.2.3'
 check 0 'inspect: --contains' 'git tag --contains v1.2.3'
 check 0 'inspect: --points-at' 'git tag --points-at v1.2.3'
 check 0 'inspect: --merged' 'git tag --merged v1.2.3'
-check 0 'inspect: --format' 'git tag --format="%(refname)" v1.2.3'
+check 0 'inspect: --no-contains' 'git tag --no-contains v1.2.3'
+check 0 'inspect: --no-merged' 'git tag --no-merged v1.2.3'
 check 0 'bare git tag' 'git tag'
+
+# --- listing options that do NOT imply list mode ----------------------------
+# git-tag(1) says "Implies --list" only for -n, --contains, --no-contains and
+# --points-at (--merged/--no-merged behave the same). Measured on git 2.55.0:
+# each flag below followed by a name and no -l creates that name as a
+# lightweight tag, so the guard has to treat it as a creation.
+check 2 'creation behind --format' 'git tag --format="%(refname)" v1.2.3'
+check 2 'creation behind --sort' 'git tag --sort=-v:refname v1.2.3'
+check 2 'creation behind --column' 'git tag --column v1.2.3'
+check 2 'creation behind --no-column' 'git tag --no-column v1.2.3'
+check 2 'creation behind -i' 'git tag -i v1.2.3'
+check 2 'creation behind --ignore-case' 'git tag --ignore-case v1.2.3'
+check 2 'creation behind --omit-empty' 'git tag --omit-empty v1.2.3'
+# With -l/--list the same flags only shape a listing of a version pattern.
+check 0 'list: --format with -l' "git tag -l --format='%(refname)' 'v1.*'"
+check 0 'list: --sort with --list' "git tag --list --sort=-v:refname 'v1.*'"
+check 0 'list: --column with -l' "git tag -l --column 'v1.*'"
+check 0 'list: -i with -l' "git tag -i -l 'v1.*'"
+check 0 'list: --omit-empty with -l' "git tag -l --omit-empty --format='%(refname)' 'v1.*'"
+# ... and the annotated forms behind those flags stay allowed.
+check 0 'signed tag behind --sort' 'git tag --sort=-v:refname -s v1.2.3 -m release'
 check 0 'verify' 'git tag -v v1.2.3'
 
 # --- the bypass: every invocation is judged, not just the first -------------
