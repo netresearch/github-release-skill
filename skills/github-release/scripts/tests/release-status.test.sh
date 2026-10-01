@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for release-status.sh without a forge — no network, no gh.
 #
 # Pins the behaviour that six recorded agent trials went without: in an

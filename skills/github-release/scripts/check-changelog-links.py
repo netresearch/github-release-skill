@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """check-changelog-links.py - Verify Keep-a-Changelog reference-style links.
 
 Keep-a-Changelog projects commonly use reference-style section headers:

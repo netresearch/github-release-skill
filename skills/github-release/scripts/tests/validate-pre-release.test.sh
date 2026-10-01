@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for the "CI checks passing" item of validate-pre-release.sh.
 #
 # The check used to ask `gh run list --limit 1` for the newest run of any

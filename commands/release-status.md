@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: release-status
 description: "Check release health: tag types, release assets, workflow status, version sync"
 ---

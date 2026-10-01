@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Self-test for the two PreToolUse guards — no network.
 #
 # Pins the regression fixed alongside it: Claude Code delivers the command as
