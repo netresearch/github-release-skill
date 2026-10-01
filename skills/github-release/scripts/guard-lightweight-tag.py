@@ -13,8 +13,10 @@ Blocks:
 Allows:
   - Signed tags: git tag -s v*
   - Annotated tags: git tag -a v*, and the -m/-F forms that imply -a
-  - Listing and inspecting tags: git tag -l, --list, -n, --contains,
-    --points-at, --merged, --sort, --format, --column, --ignore-case
+  - Listing and inspecting tags: git tag -l, --list, and the flags that imply
+    list mode (-n, --contains, --no-contains, --points-at, --merged,
+    --no-merged). --sort, --format, --column, -i and --omit-empty do not imply
+    it, so with a version name and no -l they count as a creation.
   - Verifying tags: git tag -v v*
   - Non-version tags (tags not matching v* pattern)
 
@@ -30,6 +32,7 @@ Exit codes:
 
 import json
 import re
+import shlex
 import sys
 
 # Both guards share one invocation parser; sys.path[0] is this directory when
@@ -82,59 +85,207 @@ def has_version_tag_arg(args: str) -> bool:
     return bool(re.search(r"""(?:^|[\s/"'])v\d""", args))
 
 
-# Flags that make "git tag" a read-only query. git treats any of them as
-# implying --list, so they can carry a version argument (a shell pattern, or a
-# ref to compare against) without being a tag creation.
-READ_ONLY_TAG_FLAG = re.compile(
-    r"(?:^|\s)(?:-l|--list|-n\d*|--contains|--no-contains|--points-at"
-    r"|--merged|--no-merged|--sort|--format|--column|--no-column"
-    r"|-i|--ignore-case|--omit-empty)(?:=|\s|$)"
+# "git tag" is judged by its words, split the way the shell splits them, not by
+# searching the raw text. A text search read a flag spelled inside a quoted
+# value ("--format='%(refname) -l '") or after a shell comment ("v1.2.3 # -l")
+# as a real option and let the creation through, and read "v1" inside a
+# format string as a tag name.
+
+# Options that put "git tag" into list mode, so a version argument after them
+# is a pattern or a ref to compare against, not a tag to create. git-tag(1)
+# says "Implies --list" for -n, --contains, --no-contains and --points-at;
+# --merged and --no-merged do the same in git 2.55.0 although the page does
+# not say so. The other listing options (--sort, --format, --column,
+# --no-column, -i/--ignore-case, --omit-empty) only shape a listing: without
+# -l/--list, "git tag --sort=-v:refname v1.2.3" creates the lightweight tag
+# v1.2.3, so they must not exempt a command from the creation check.
+_LIST_OPTIONS = {
+    "--list",
+    "--contains",
+    "--no-contains",
+    "--points-at",
+    "--merged",
+    "--no-merged",
+}
+# Options that make the new tag an annotated or signed tag object. -m, -F and
+# --trailer imply -a when -a/-s/-u are absent (git-tag(1)).
+_ANNOTATING_OPTIONS = {
+    "--annotate",
+    "--sign",
+    "--local-user",
+    "--message",
+    "--file",
+    "--trailer",
+}
+# Long options whose value is the next word when no "=" is attached. The value
+# is consumed so that it is never read as an option or as the tag name; one
+# consequence is that "git tag --sort -l v1.2.3" counts as a creation (git
+# itself rejects it: "unknown field name: l").
+_VALUE_OPTIONS = {
+    "--message",
+    "--file",
+    "--local-user",
+    "--format",
+    "--sort",
+    "--cleanup",
+    "--trailer",
+}
+# Short options in a group such as -sa: a value letter ends the group, and the
+# rest of the word, or else the next word, is its value. -n takes only an
+# attached number and ends the group too.
+_SHORT_VALUE_LETTERS = "mFu"
+_SHORT_ANNOTATING_LETTERS = "asmFu"
+
+# A shell comment: an unquoted "#" that begins a word. A "#" inside a word or
+# inside quotes is text.
+_COMMENT_START = re.compile(
+    r"""\"(?:\\.|[^"\\])*\"|'[^']*'|\\.|(?P<comment>(?:^|(?<=\s))#)"""
 )
 
 
-def creates_annotated_tag(tag_args: str) -> bool:
-    """Whether these "git tag" arguments produce an annotated or signed tag."""
-    # -s/--sign, -a/--annotate, and combined short flags like -sa or -as.
-    if re.search(r"(?:^|\s)(?:-[a-z]*[sa][a-z]*|--sign|--annotate)\b", tag_args):
-        return True
-    # -m/-F imply -a when -a/-s/-u are absent, so these are annotated too
-    # (verified: "git tag -m msg vX" yields a tag object, not a commit).
-    return bool(re.search(r"(?:^|\s)(?:-m|-F|--message|--file)[=\s]", tag_args))
+def _without_comment(args: str) -> str:
+    """Cut a command's arguments at a real shell comment."""
+    for match in _COMMENT_START.finditer(args):
+        if match.group("comment") is not None:
+            return args[: match.start()]
+    return args
+
+
+def _is_version_name(word: str) -> bool:
+    """Whether a tag-name argument names a version tag (vX..., refs/tags/vX...).
+
+    A leading "$" is what shlex leaves of ANSI-C quoting: bash turns
+    $'v1.2.3' into v1.2.3, shlex into $v1.2.3.
+    """
+    word = word.strip()
+    return bool(re.match(r"\$?v\d", word) or re.search(r"/v\d", word))
+
+
+def _long_option_modes(name: str) -> set:
+    """The modes a long option sets: list, verify, delete, annotate."""
+    modes = set()
+    if name in _LIST_OPTIONS:
+        modes.add("list")
+    if name in _ANNOTATING_OPTIONS:
+        modes.add("annotate")
+    if name == "--verify":
+        modes.add("verify")
+    if name == "--delete":
+        modes.add("delete")
+    return modes
+
+
+# What each short option letter sets; a letter missing here sets nothing.
+_SHORT_MODES = {
+    "l": "list",
+    "n": "list",
+    "v": "verify",
+    "d": "delete",
+    **dict.fromkeys(_SHORT_ANNOTATING_LETTERS, "annotate"),
+}
+
+
+def _read_short_group(word: str, modes: set) -> int:
+    """Record the modes of a short group such as -sa; return 1 if it consumes
+    the next word as a value, else 0."""
+    for j in range(1, len(word)):
+        letter = word[j]
+        if letter in _SHORT_MODES:
+            modes.add(_SHORT_MODES[letter])
+        if letter == "n":
+            return 0
+        if letter in _SHORT_VALUE_LETTERS:
+            return 1 if j == len(word) - 1 else 0
+    return 0
+
+
+def _scan_tag_words(words: list):
+    """Split "git tag" words into the modes their options set and the names."""
+    modes = set()
+    names = []
+    options_done = False
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if options_done or word == "-" or not word.startswith("-"):
+            names.append(word)
+        elif word == "--":
+            options_done = True
+        elif word.startswith("--"):
+            name, eq, _ = word.partition("=")
+            modes |= _long_option_modes(name)
+            if name in _VALUE_OPTIONS and not eq:
+                i += 1
+        else:
+            i += _read_short_group(word, modes)
+        i += 1
+    return modes, names
+
+
+def _judge_tag_args(args: str):
+    """One reading of a "git tag" argument string.
+
+    Returns "delete" for the deletion of a version tag, "lightweight" for the
+    creation of a lightweight version tag, and None for everything else.
+    """
+    try:
+        # No comments=True: shlex would treat a "#" inside a word as a
+        # comment, which bash does not. Comments are cut by _without_comment.
+        words = shlex.split(args)
+    except ValueError:
+        # Unbalanced quotes: the shell will not run this as written, but a
+        # version token in it is reason enough not to guess.
+        return "lightweight" if has_version_tag_arg(args) else None
+
+    modes, names = _scan_tag_words(words)
+
+    has_version = any(_is_version_name(name) for name in names)
+    # Deletion first: "git tag -d --sort=refname vX" deletes, while -d next to
+    # a list-mode option makes git refuse to run at all.
+    if "delete" in modes:
+        return "delete" if has_version else None
+    if modes & {"list", "verify"}:
+        return None
+    if has_version and "annotate" not in modes:
+        return "lightweight"
+    return None
 
 
 def check_tag_invocation(segment: str) -> None:
-    """Block dangerous "git tag" forms in a single invocation."""
-    tag_match = re.match(INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment)
+    """Block dangerous "git tag" forms in a single invocation.
+
+    The arguments are judged twice, with and without a trailing shell comment
+    cut off, and the command is blocked if either reading blocks it: the
+    comment cutter is a text scan, so a "#" it misreads can only cost a block,
+    never hide a creation. The price is paid in the safe direction: a comment
+    that names a version tag after a non-version creation ("git tag nightly
+    # v1.2.3") is blocked, and so is any command naming a version whose
+    trailing comment holds an apostrophe ("# don't"), a listing included,
+    because the uncut reading cannot be parsed.
+
+    The segment can span lines: a quoted multi-line -m message stays inside
+    one invocation, so the arguments are captured with DOTALL. Without it the
+    capture stopped at the first newline of the message, and the cut-off,
+    unbalanced quote blocked an annotated tag with a multi-line message
+    whenever the version stood before that newline.
+    """
+    tag_match = re.match(
+        INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment, flags=re.DOTALL
+    )
     if not tag_match:
         return
 
     tag_args = tag_match.group(1).strip()
+    verdict = _judge_tag_args(_without_comment(tag_args)) or _judge_tag_args(tag_args)
 
-    # Allow bare "git tag" and every read-only listing/inspection form.
-    if not tag_args or READ_ONLY_TAG_FLAG.search(tag_args):
-        return
-
-    # Allow verification: -v (but not -v as part of a version like v1.0,
-    # nor the -v inside a value such as --sort=-v:refname).
-    if re.search(r"(?:^|\s)(-v|--verify)(?:\s|$)", tag_args):
-        return
-
-    # Check for tag deletion: git tag -d <tag> / git tag --delete <tag>
-    if re.search(r"(?:^|\s)(-d|--delete)\b", tag_args):
-        if has_version_tag_arg(tag_args):
-            block(
-                "Deleting a version tag is dangerous. Tags are immutable "
-                "references that downstream consumers and CI pipelines depend on.",
-                "If the tag points to a bad commit, create a new patch "
-                "release (vX.Y.Z+1) instead of deleting the existing tag.",
-            )
-        # Non-version tag deletion is allowed.
-        return
-
-    # If we get here, it is a tag creation command.
-    # Only process if it targets a version tag.
-    if has_version_tag_arg(tag_args) and not creates_annotated_tag(tag_args):
-        # This is a lightweight version tag -- block it.
+    if verdict == "delete":
+        block(
+            "Deleting a version tag is dangerous. Tags are immutable "
+            "references that downstream consumers and CI pipelines depend on.",
+            "If the tag points to a bad commit, create a new patch "
+            "release (vX.Y.Z+1) instead of deleting the existing tag.",
+        )
+    if verdict == "lightweight":
         block(
             "Lightweight version tags lack metadata (author, date, message) "
             "and cannot be signed. Version tags MUST be annotated (-a) or "
