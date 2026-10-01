@@ -67,9 +67,12 @@ in `env:` is taken literally), and pass `github.ref` straight to
     echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
 - name: Publish
+  env:
+    COMMENT: ${{ steps.notes.outputs.comment }}  # upload comment from an earlier step
   run: |
     test "$VERSION" = "$(php -r '$EM_CONF=[]; include "ext_emconf.php"; echo $EM_CONF[basename(__DIR__)]["version"];')" \
       || { echo "::error::tag $TAG vs ext_emconf.php mismatch"; exit 1; }
+    COMMENT="${COMMENT:-Updated extension to $VERSION}"  # never empty, see below
     tailor ter:publish --comment="$COMMENT" "$VERSION"
 ```
 
