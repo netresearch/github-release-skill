@@ -178,6 +178,17 @@ check 0 'option list ended by --' 'git tag -s -m release -- v1.2.3'
 check 2 'name after -- is still a name' 'git tag -- v1.2.3'
 # Unbalanced quotes do not parse; a version token in them blocks.
 check 2 'unbalanced quote with a version token' "git tag v1.2.3 'oops"
+# A quoted value may span lines; the whole invocation is still one command.
+check 0 'annotated tag with a multi-line -m message' 'git tag -a v1.2.3 -m "Release v1.2.3
+
+- fix foo
+- add bar"'
+check 0 'annotated tag with a multi-line single-quoted message' "git tag -a v1.2.3 -m 'one
+two'"
+check 2 'lightweight tag after a multi-line --format value' "git tag --format='%(refname)
+' v1.2.3"
+# bash turns $'v1.2.3' into v1.2.3 and creates that lightweight tag.
+check 2 'ANSI-C quoted lightweight tag' "git tag \$'v1.2.3'"
 check 0 'verify' 'git tag -v v1.2.3'
 
 # --- the bypass: every invocation is judged, not just the first -------------

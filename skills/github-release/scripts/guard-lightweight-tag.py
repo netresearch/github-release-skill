@@ -152,8 +152,12 @@ def _without_comment(args: str) -> str:
 
 
 def _is_version_name(word: str) -> bool:
-    """Whether a tag-name argument names a version tag (vX..., refs/tags/vX...)."""
-    return bool(re.search(r"(?:^|/)v\d", word.strip()))
+    """Whether a tag-name argument names a version tag (vX..., refs/tags/vX...).
+
+    A leading "$" is what shlex leaves of ANSI-C quoting: bash turns
+    $'v1.2.3' into v1.2.3, shlex into $v1.2.3.
+    """
+    return bool(re.search(r"(?:^\$?|/)v\d", word.strip()))
 
 
 def _judge_tag_args(args: str):
@@ -225,10 +229,18 @@ def check_tag_invocation(segment: str) -> None:
     comment cutter is a text scan, so a "#" it misreads can only cost a block,
     never hide a creation. The price is paid in the safe direction: a comment
     that names a version tag after a non-version creation ("git tag nightly
-    # v1.2.3") is blocked, and so is a signed tag whose trailing comment holds
-    an apostrophe ("# don't"), because the uncut reading cannot be parsed.
+    # v1.2.3") is blocked, and so is any command naming a version whose
+    trailing comment holds an apostrophe ("# don't"), a listing included,
+    because the uncut reading cannot be parsed.
+
+    The segment can span lines: a quoted multi-line -m message stays inside
+    one invocation, so the arguments are captured with DOTALL. Without it the
+    capture stopped at the first newline of the message, and the cut-off,
+    unbalanced quote blocked every annotated tag with a multi-line message.
     """
-    tag_match = re.match(INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment)
+    tag_match = re.match(
+        INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment, flags=re.DOTALL
+    )
     if not tag_match:
         return
 
