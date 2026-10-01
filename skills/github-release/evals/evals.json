@@ -1152,13 +1152,14 @@
     },
     {
       "id": 42,
-      "prompt": "This GitHub Action publishes our extension to TER with tailor but fails with HTTP 500 — can you fix the workflow? The publish step builds COMMENT from `git log --format='- %s' \"$PREV_TAG..$TAG\"` and then runs `tailor ter:publish --comment \"$COMMENT\" \"$VERSION\"`.",
-      "expected_output": "Before changing anything, check whether the version reached TER anyway: query https://extensions.typo3.org/api/v1/extension/<key>/versions, because TER can apply an upload and still answer 500 — if the version is there, re-run the failed jobs instead of re-tagging. Then fix the step: attach the comment to the option as --comment=\"$COMMENT\", because passed as a separate word a comment that starts with '- ' (commit subjects as a Markdown list) is parsed as an option. Set COMMENT through env:, not ${{ }} inside run:, and give it a non-empty fallback such as COMMENT=\"${COMMENT:-Updated extension to $VERSION}\", because tailor only substitutes its default when --comment is absent and an empty commit range would otherwise ship an empty upload comment.",
+      "prompt": "Our GitHub Action that publishes the extension to TER with tailor keeps failing — can you fix the workflow? The publish step builds COMMENT from `git log --format='- %s' \"$PREV_TAG..$TAG\"` and then runs `tailor ter:publish --comment \"$COMMENT\" \"$VERSION\"`. Most releases abort with `The \"- \" option does not exist.`; the one release whose tag range had no commits failed with `Reason: Unknown (Status 500)` instead.",
+      "expected_output": "Two failures, two causes. The '- ' abort comes from tailor itself, before anything is sent to TER: passed as a separate word, a comment that starts with '- ' (commit subjects as a Markdown list) is parsed as an option, so attach it as --comment=\"$COMMENT\". The 500 came from the empty comment of the empty commit range: tailor substitutes its default only when --comment is absent, so it sent an empty description, and TER rejects an empty upload comment (a TER without its 2026-09-30 fix answers that with a bare 500, a fixed one with a 400). Set COMMENT through env:, not ${{ }} inside run:, and give it a non-empty fallback such as COMMENT=\"${COMMENT:-Updated extension to $VERSION}\". A 500 alone does not say whether the upload was applied, so query https://extensions.typo3.org/api/v1/extension/<key>/versions before publishing that version again; if it is missing, republish it with a workflow_dispatch run of the fixed workflow (references/ter-republish.md) rather than deleting or moving the tag.",
       "expectations": [
         "The github-release skill triggers on a TER publish workflow fix and draws on references/typo3-ter-publishing.md",
+        "Attributes the '- ' abort to tailor's option parsing, not to TER",
+        "Attributes the 500 to the empty upload comment of the empty commit range, not to the separate-word --comment form",
         "Checks the TER API for the version before re-publishing or re-tagging",
         "Passes the comment attached to the option: --comment=\"$COMMENT\"",
-        "Explains that a comment starting with '- ' is otherwise parsed as an option",
         "Gives COMMENT a non-empty fallback so the upload comment is never empty",
         "Does NOT: keep --comment \"$COMMENT\" as a separate word in the fixed workflow",
         "Does NOT: delete or move the tag to retry the publish"
@@ -1182,7 +1183,7 @@
         }
       ],
       "samples": {
-        "passing": "First check whether the version is on TER already: curl -s https://extensions.typo3.org/api/v1/extension/<key>/versions — TER can apply an upload and still answer 500, and if the version is listed you re-run the failed jobs rather than cut a new tag. The step itself has a second bug: your comment starts with '- ', and passed as a separate word tailor parses it as an option. Attach it with =: tailor ter:publish --comment=\"$COMMENT\" \"$VERSION\". Set COMMENT through env:, and give it a fallback so it is never empty: COMMENT=\"${COMMENT:-Updated extension to $VERSION}\" — tailor only fills in its default when --comment is absent.",
+        "passing": "These are two different bugs. The '- ' abort is tailor's own option parser: your comment starts with '- ', and passed as a separate word tailor reads it as an option and stops before it contacts TER. Attach it with =: tailor ter:publish --comment=\"$COMMENT\" \"$VERSION\". The 500 is the empty range: no commits means an empty COMMENT, tailor only fills in its default when --comment is absent, and TER rejects an empty upload comment — older TER with a bare 500. Set COMMENT through env:, and give it a fallback so it is never empty: COMMENT=\"${COMMENT:-Updated extension to $VERSION}\". Before you publish that version again, check whether it is on TER: curl -s https://extensions.typo3.org/api/v1/extension/<key>/versions. If it is missing, republish it with a workflow_dispatch run of the fixed workflow; leave the tag where it is.",
         "failing": [
           "Quote it differently: tailor ter:publish --comment '$COMMENT' \"$VERSION\" and re-run the workflow.",
           "The 500 means the publish failed. Delete the tag with git tag -d v1.2.3, push the deletion, change the step to --comment=\"$COMMENT\" with a fallback, and tag again.",

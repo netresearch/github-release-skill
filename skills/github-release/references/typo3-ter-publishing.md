@@ -79,13 +79,19 @@ in `env:` is taken literally), and pass `github.ref` straight to
 Attach the comment with `=`. Passed as a separate word
 (`--comment "$COMMENT"`), a comment that starts with `-` — a Markdown
 bullet, or `git log --format='- %s'` output — is parsed as an option,
-and the upload aborts with `The "- " option does not exist.` Set
-`COMMENT` through `env:`, never via `${{ }}` inside `run:`.
+and tailor aborts with `The "- " option does not exist.` before it
+sends anything to TER — no HTTP status is involved. Set `COMMENT`
+through `env:`, never via `${{ }}` inside `run:`.
 
 Never let `COMMENT` be empty. tailor substitutes `Updated extension
 to <version>` only when `--comment` is absent; `--comment=""` is a
-value, so an empty list of commit subjects ships an empty upload
-comment. Give it a fallback before the call:
+value, and tailor sends it as an empty `description`. TER rejects an
+empty upload comment and stores nothing. Before TER's fix of
+2026-09-30 that rejection reached tailor as a bare
+`Reason: Unknown (Status 500)`; a TER carrying the fix answers 400
+with `Value for form data 'description' must not be empty.` A commit
+range with no subjects in it is enough to get there. Give `COMMENT` a
+fallback before the call:
 `COMMENT="${COMMENT:-Updated extension to $VERSION}"`.
 
 `actions/checkout` wants the raw ref so it can find the tag; the
@@ -131,6 +137,11 @@ curl -s -H 'Accept: application/json' \
 
 (That response is a nested array and its numbers carry no `v` prefix —
 see `release-process.md`, which covers the parsing trap separately.)
+
+Not every 500 is an applied upload. An empty upload comment drew the
+same `Unknown (Status 500)` from a TER without its 2026-09-30 fix, and
+there nothing was stored (see the `COMMENT` fallback above). The API
+query is what tells the two cases apart.
 
 **The expensive part is the second-order damage.** In
 `netresearch/typo3-ci-workflows`'s `release-typo3-extension.yml`,
