@@ -150,6 +150,28 @@ not trust a CHANGELOG written when the release PR opened — main drifts past a
 staged release. If reconciling adds material, land it as a `docs(changelog)`
 PR and re-verify step 2 before tagging.
 
+**Reconcile the other direction too: an entry can be present and false.** An
+`[Unreleased]` entry describes the state its PR left behind, and a later PR in
+the same range can change that file, setting or constraint again. Both entries
+then ship, and the earlier one tells the reader something the release does not
+do. For every entry, ask whether a later commit in the range touched the same
+thing; where it did, rewrite the entry to the state that ships, or drop it when
+nothing of it survives. One way to find candidates:
+
+```bash
+PREVIOUS_TAG=$(git describe --tags --abbrev=0)   # set here too: at prep time the block above has not run
+# files changed by more than one commit in the range — entries about them may describe an intermediate state
+git log --first-parent --name-only --pretty=format: "$PREVIOUS_TAG"..HEAD | sort | uniq -c | sort -rn | awk '$1 > 1'
+```
+
+Do this when the release branch moves `[Unreleased]` into `[X.Y.Z]`, and again
+before the tag for anything merged since. Observed on `netresearch/t3x-nr-repurpose`
+0.9.0: "The documentation says where `CHROMIUM_PATH` has to be set" described the
+docs between two PRs, the second of which made the export unnecessary; and "An
+Extension Manager or TER install accepts nr_vault 0.16" was overtaken by a PR
+merged after the release branch was cut that requires nr-vault 1.1. Neither the
+missing-entry diff above nor any CI check flags such an entry.
+
 The tag MUST be:
 - **Annotated** (`-a` or `-s`), never lightweight
 - **Signed** (`-s` for GPG/SSH signing) — required for SLSA L1+
