@@ -53,6 +53,10 @@ command -v jq >/dev/null || { echo "jq required" >&2; exit 2; }
 case "$TAG_ARG" in
   *[!A-Za-z0-9._-]*) echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2 ;;
 esac
+# The allowlist admits `..` and `.lock`; git knows which names are not refs.
+if [ -n "$TAG_ARG" ] && command -v git >/dev/null && ! git check-ref-format "refs/tags/$TAG_ARG" >/dev/null 2>&1; then
+  echo "--tag: '$TAG_ARG' is not a tag name" >&2; exit 2
+fi
 
 # `gh` is not a precondition, it is a capability. Six of six recorded agent
 # trials in a sandbox without it got `exit 2` and one unusable fact, when the
