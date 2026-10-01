@@ -1178,14 +1178,15 @@
         },
         {
           "type": "must_not",
-          "pattern": "(?i)git tag (-d|-f|--delete)"
+          "pattern": "(?i)(git tag (-d|-f|--delete|--force)|git push .*(--delete|:refs/tags/))"
         }
       ],
       "samples": {
         "passing": "First check whether the version is on TER already: curl -s https://extensions.typo3.org/api/v1/extension/<key>/versions — TER can apply an upload and still answer 500, and if the version is listed you re-run the failed jobs rather than cut a new tag. The step itself has a second bug: your comment starts with '- ', and passed as a separate word tailor parses it as an option. Attach it with =: tailor ter:publish --comment=\"$COMMENT\" \"$VERSION\". Set COMMENT through env:, and give it a fallback so it is never empty: COMMENT=\"${COMMENT:-Updated extension to $VERSION}\" — tailor only fills in its default when --comment is absent.",
         "failing": [
           "Quote it differently: tailor ter:publish --comment '$COMMENT' \"$VERSION\" and re-run the workflow.",
-          "The 500 means the publish failed. Delete the tag with git tag -d v1.2.3, push the deletion, change the step to --comment=\"$COMMENT\" with a fallback, and tag again."
+          "The 500 means the publish failed. Delete the tag with git tag -d v1.2.3, push the deletion, change the step to --comment=\"$COMMENT\" with a fallback, and tag again.",
+          "Move the tag onto the fixed commit with git tag --force v1.2.3 and force-push it, so the publish runs again with --comment=\"$COMMENT\" and a fallback."
         ]
       }
     }
