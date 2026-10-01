@@ -742,7 +742,11 @@ case "$1 $2" in
   "auth status")  exit 0 ;;
   "repo view")    echo "acme/tagarg"; exit 0 ;;
   "pr list")      echo "null"; exit 0 ;;
-  "release view") echo "$3" >>"$(dirname "$0")/views"; [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
+  "release view")
+    echo "$3" >>"$(dirname "$0")/views"
+    # With a `flaky` file beside the stub only the first lookup answers.
+    if [ -e "$(dirname "$0")/flaky" ] && [ "$(wc -l <"$(dirname "$0")/views")" -gt 1 ]; then exit 1; fi
+    [ "$3" = v1.0.0 ] && exit 0; exit 1 ;;
   "run list")
     case "$*" in
       *"--branch v1.0.1"*) cat "$(dirname "$0")/wf" 2>/dev/null || echo "in_progress/-" ;;
@@ -798,6 +802,13 @@ echo v1.0.1 >"$tagarg/bin/latest"
 old_out=$(tagarg_run --tag v1.0.0)
 refute "an older --tag is not called stale"            "fetch before trusting" "$old_out"
 check  "an older --tag still judges that tag"          "declared    : 1.0.0" "$old_out"
+# The release exists, but the body lookups of release-notes-status.sh fail: an
+# unreadable body is not a finished one.
+rm -f "$tagarg/bin/views"; : >"$tagarg/bin/flaky"
+flaky_out=$(tagarg_run --tag v1.0.0)
+check  "an unreadable body keeps the verdict open"     "gave no verdict" "$flaky_out"
+refute "an unreadable body is not ok"                  "NEXT: ok" "$flaky_out"
+rm -f "$tagarg/bin/flaky"
 rm -f "$tagarg/bin/latest"
 
 # Usage errors exit 2 and say why.

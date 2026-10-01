@@ -505,6 +505,12 @@ elif [ -n "$notes_next" ] && [ "$notes_next" != "ok" ]; then
   next="rewrite-release-notes"
   cmd="release-notes-status.sh -R $REPO $tag_ref   # then gh release edit --notes-file"
   add_note "release body: $notes_next"
+elif [ "$release_found" = 1 ] && [ -z "$notes_next" ] && [ -x "$HERE/release-notes-status.sh" ]; then
+  # The release exists but its body could not be judged -- the helper failed or
+  # printed nothing. A failed lookup is not a finished body.
+  next="rewrite-release-notes"
+  cmd="release-notes-status.sh -R $REPO $tag_ref   # no verdict was read; run it by hand"
+  add_note "release body: release-notes-status.sh gave no verdict"
 elif [ -n "$reg_missing" ]; then
   next="verify-publication"; add_note "not served yet by:$reg_missing"
 else
