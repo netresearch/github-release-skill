@@ -13,7 +13,7 @@ hooks/hooks.json              PreToolUse guards (blocks gh release, lightweight 
 skills/github-release/
   SKILL.md                    Core skill instructions (<500 words)
   checkpoints.yaml            Automated validation (16 mechanical + 4 LLM reviews)
-  evals/evals.json            42 evaluation scenarios
+  evals/evals.json            43 evaluation scenarios
   references/                 Extended documentation
   scripts/                    Guard hooks + utility scripts
   templates/                  CI workflow templates

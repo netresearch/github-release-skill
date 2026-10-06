@@ -165,6 +165,30 @@ fail independently, and one red job in the run does not tell you which.
 
 *Observed 2026-08-21 on a TYPO3 extension release, run 32534659449.*
 
+To find which extension of an organisation is missing on TER — "one of
+ours failed to upload, which one?" — measure every repository instead
+of searching old sessions or job logs. The latest GitHub release next
+to TER's `current_version` names it in one pass:
+
+```bash
+gh repo list <org> --limit 300 --no-archived --json name --jq '.[].name' \
+  | grep '^t3x-' | while read -r r; do
+    key=$(gh api "repos/<org>/$r/contents/composer.json" --jq .content \
+      | base64 -d | jq -r '.extra["typo3/cms"]["extension-key"] // empty')
+    rel=$(gh release list -R "<org>/$r" --limit 1 --exclude-drafts \
+      --exclude-pre-releases --json tagName --jq '.[0].tagName')
+    ter=$([ -n "$key" ] && curl -sL "https://extensions.typo3.org/api/v1/extension/$key" \
+      | jq -r '.[0].current_version.number // "-"')
+    printf '%s\t%s\t%s\t%s\n' "$r" "${key:--}" "${rel:--}" "${ter:--}"
+  done | column -t
+```
+
+A row whose release (minus a `v`) is newer than the TER version is
+either a failed publish or a release without a TER job; the release
+run's `Publish to TER` job says which. Old gaps on unmaintained
+extensions are noise — sort by release date. *Found 2026-10-05:
+`nr_temporal_cache` 1.0.1 released, TER still on 1.0.0, see below.*
+
 ## `release: published` Never Fires When CI Created the Release
 
 A workflow action performed with the default `GITHUB_TOKEN` does not
@@ -334,6 +358,34 @@ the unfiltered set over a correct upload.
 
 *Observed 2026-09-03 on `netresearch/t3x-nr-temporal-cache` 0.9.0 — 176
 zip entries, 15 of the 26 `export-ignore`d paths among them.*
+
+## The `composer.json` Description Carries the Extension Title
+
+Composer has no title field. TYPO3 v14 and, since the change merged
+into its `main` on 2026-09-14, TER read the extension title from the `description` in
+`composer.json`: the part before the first ` - ` is the title, the rest
+the description. Without ` - `, TER falls back to `title` in
+`ext_emconf.php`. A ` - ` that is just punctuation inside a sentence
+therefore turns most of the sentence into the title.
+
+That title is shown everywhere — detail page, lists, search, RSS, REST
+API, the FAIR beacon `name` — and TER stores it in a 255-byte column.
+Longer, the upload failed with the generic 500 and no reason
+(`nr_temporal_cache` 1.0.1: a 289-byte title, three red publish runs);
+ter !948, open as of 2026-10-06, turns it into a 400 that names the
+length. Shorter, it is accepted silently and the extension is listed
+under half a sentence.
+
+Write the description as `Title - Description`, with no other ` - `
+before the description proper, and check it before tagging:
+
+```bash
+jq -r .description composer.json | LC_ALL=C awk -F ' - ' '{ print length($1) " bytes: " $1 }'
+```
+
+The title should be the same name `ext_emconf.php` carries. Whether
+composer.json should get a dedicated title field is open in
+[ter#671](https://git.typo3.org/services/t3o-sites/extensions.typo3.org/ter/-/work_items/671).
 
 ## Related
 
