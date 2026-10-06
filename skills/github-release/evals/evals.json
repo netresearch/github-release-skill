@@ -1190,6 +1190,40 @@
           "Move the tag onto the fixed commit with git tag --force v1.2.3 and force-push it, so the publish runs again with --comment=\"$COMMENT\" and a fallback."
         ]
       }
+    },
+    {
+      "id": 43,
+      "prompt": "Publishing 1.0.1 of our TYPO3 extension to TER fails every time with `Reason: An error occured on handling the request. (HTTP 500, code 1603956982)`. 1.0.0 went through a month ago with the same workflow. Our composer.json description is: \"Automatic TYPO3 cache invalidation for time-based content (starttime/endtime), addressing Forge #14277. Three scoping strategies (global, per-page, per-content) and three timing strategies (dynamic, scheduler, hybrid). The default global scoping expires all page caches on every transition - read the Performance chapter before deployment.\" What is wrong?",
+      "expected_output": "TER, like TYPO3 v14, reads the extension title from the composer.json description: the part before the first ' - '. The only ' - ' sits near the end, so almost the whole sentence becomes the title, which exceeds the 255-byte title column and fails the INSERT; TER answered that with a generic 500 (a TER with ter !948 answers 400 with the length). 1.0.0 passed because TER only started reading composer.json this way in mid-September. Rewrite the description as 'Title - Description' (the title being the extension's name, as in ext_emconf.php) and check the part before ' - ' stays short, then release a new patch version; the failed tag cannot be republished with different content. Check the TER API first whether 1.0.1 was stored.",
+      "expectations": [
+        "The github-release skill draws on references/typo3-ter-publishing.md",
+        "Identifies the ' - ' in the composer.json description as what TER turns into the title",
+        "Names the 255-byte limit of the title column as the failing constraint",
+        "Recommends the form 'Title - Description' with the extension name as title",
+        "Fixes it in a new version rather than re-publishing or moving the existing tag",
+        "Does NOT: blame tailor, the token or the TYPO3 version range"
+      ],
+      "assertions": [
+        {
+          "type": "content",
+          "pattern": "(?i)(title).{0,200}(\" - \"|' - '|` - `|dash|hyphen)|(\" - \"|' - '|` - `|dash|hyphen).{0,200}(title)"
+        },
+        {
+          "type": "content",
+          "pattern": "(?i)255"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)(git tag (-d|-f|--delete|--force)|git push .*(--delete|:refs/tags/))"
+        }
+      ],
+      "samples": {
+        "passing": "The description is the problem. Composer has no title field, so TER - like TYPO3 v14 - takes the part of the description before the first ' - ' as the extension title. Yours has its only ' - ' near the end, so the title is almost the whole sentence, well over the 255 bytes TER's title column holds, and the INSERT fails; TER reports that as a generic 500. 1.0.0 was published before TER started reading composer.json that way. Write the description as 'Temporal Cache Management - Automatic TYPO3 cache invalidation …', check the title part with jq -r .description composer.json | LC_ALL=C awk -F ' - ' '{print length($1)}', and release 1.0.2. First confirm on https://extensions.typo3.org/api/v1/extension/<key>/versions that 1.0.1 was not stored.",
+        "failing": [
+          "A 500 from TER is usually transient. Re-run the publish job a few times; if it keeps failing, regenerate the TYPO3_API_TOKEN.",
+          "Your TYPO3 constraint is probably too wide. Narrow ext_emconf.php to 13.4.0-14.3.99, delete the tag with git tag -d 1.0.1, push the deletion and tag again."
+        ]
+      }
     }
   ]
 }
