@@ -824,6 +824,70 @@ tagarg_run --tag .. >/dev/null; st=$?
 check "a --tag that is no git ref exits 2" "status=2" "status=$st"
 check  "a malformed --tag is named"                    "is not a tag name" "$bad_out"
 
+# ---------------------------------------------------------------------------
+# --watch: the release the workflow publishes is the latest one afterwards
+# ---------------------------------------------------------------------------
+# netresearch/docker-development-skill, 2026-10-18: `--watch` printed
+# `watch: v1.17.0 workflow completed/success` and then `latest rel : v1.16.4`,
+# because the latest release was read once, before the watch, and the workflow
+# it waited for is what publishes the new one. Here releases/latest answers
+# v1.16.4 until the tag's run has completed and v1.17.0 from then on.
+
+later=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote" "$maint" "$tagarg" "$later"' EXIT
+mkdir -p "$later/bin" "$later/repo/.claude-plugin"
+ln -sf "$jq_path" "$later/bin/jq"
+printf '%s\n' '{"name": "later", "version": "1.17.0"}' >"$later/repo/.claude-plugin/plugin.json"
+cat >"$later/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# acme/later: v1.16.4 released, tag v1.17.0 pushed annotated. Its Release run is
+# in progress for the first two lookups, then completed; only from then on does
+# the release v1.17.0 exist and count as the latest.
+d=$(dirname "$0")
+published() { [ "$(cat "$d/count" 2>/dev/null || echo 0)" -ge 3 ]; }
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/later"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "run list")
+    case "$*" in
+      *"--branch v1.17.0"*)
+        n=$(( $(cat "$d/count" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/count"
+        if [ "$n" -ge 3 ]; then echo "completed/success"; else echo "in_progress/-"; fi ;;
+      *) echo none ;;
+    esac
+    exit 0 ;;
+  "release view")
+    { [ "$3" = v1.17.0 ] && published; } || exit 1
+    case "$*" in
+      *"--json body"*)    echo "A narrative written for the release." ;;
+      *"--json isDraft"*) echo false ;;
+    esac
+    exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)     if published; then echo v1.17.0; else echo v1.16.4; fi; exit 0 ;;
+    */git/ref/tags/v1.17.0) echo "tag"; exit 0 ;;
+    */git/ref/tags/*)      exit 1 ;;
+    */contents/*)          exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$later/bin/gh"
+
+rm -f "$later/bin/count"
+later_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+            RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 \
+            bash --noprofile --norc "$SCRIPT" -R acme/later --watch 2>&1)
+st=$?
+check  "watch waited through the run"                   "watch: v1.17.0 workflow in_progress/-" "$later_out"
+check  "after the watch the published release is latest" "latest rel  : v1.17.0" "$later_out"
+refute "the release from before the watch is not reported" "latest rel  : v1.16.4" "$later_out"
+check  "the verdict is about the published release"     "NEXT: ok — v1.17.0 released, notes rewritten" "$later_out"
+check  "a published release after the watch exits 0"    "status=0" "status=$st"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }
