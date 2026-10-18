@@ -96,19 +96,18 @@ if [ -n "${add_note_pending:-}" ]; then add_note "$add_note_pending"; fi
 # `gh api --jq` prints the ERROR body when the call fails, so a 404 lands a
 # blob of JSON in $latest and every comparison below then reads as a version
 # mismatch. Take the value only when the call succeeded, and only when it looks
-# like a tag.
+# like a tag. A failed read leaves $latest as it was and returns non-zero, so
+# a second read cannot replace a good value with nothing.
+latest=""
 read_latest() {
-  latest=""
-  if [ "$LOCAL_ONLY" = 0 ]; then
-    if latest_raw=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null); then
-      case "$latest_raw" in
-        *[!A-Za-z0-9._-]* | "" | null) latest="" ;;
-        *) latest="$latest_raw" ;;
-      esac
-    fi
-  fi
+  [ "$LOCAL_ONLY" = 0 ] || return 1
+  latest_raw=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null) || return 1
+  case "$latest_raw" in
+    *[!A-Za-z0-9._-]* | "" | null) return 1 ;;
+  esac
+  latest="$latest_raw"
 }
-read_latest
+read_latest || true
 
 # Version the files in the current directory declare: TYPO3 ext_emconf, else
 # composer extra, else a skill repo's plugin.json (the whole skill fleet declares
@@ -407,13 +406,22 @@ if [ "$tag_state" = "annotated" ]; then
     # published v1.17.0 still showed `latest rel : v1.16.4`
     # (netresearch/docker-development-skill, 2026-10-18). Read it again.
     if [ "$watched" = 1 ] && [ "${wf_state%%/*}" = "completed" ]; then
-      read_latest
-      latest_overall="$latest"
-      [ -z "$maint_line" ] || latest=$(line_latest_of "$maint_line")
+      if read_latest; then
+        latest_overall="$latest"
+        [ -z "$maint_line" ] || latest=$(line_latest_of "$maint_line")
+      else
+        add_note "the latest release could not be read again after the watch; ${latest:-<none>} is from before it"
+      fi
     fi
   fi
 fi
-[ -z "$maint_line" ] || add_note "maintenance line ${maint_line}.x: compared with ${latest:-no ${maint_line}.x release}, not with $latest_overall"
+if [ -n "$maint_line" ]; then
+  if [ "$latest" = "$latest_overall" ]; then
+    add_note "maintenance line ${maint_line}.x: compared with ${latest:-no ${maint_line}.x release}"
+  else
+    add_note "maintenance line ${maint_line}.x: compared with ${latest:-no ${maint_line}.x release}, not with $latest_overall"
+  fi
+fi
 
 # --- phase 5: is the published body finished? --------------------------------
 # One lookup answers both questions -- does the release exist, and may its body
