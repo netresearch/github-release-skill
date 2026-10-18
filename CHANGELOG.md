@@ -14,6 +14,31 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-19
+
+### Added
+
+- `release-status.sh --tag <name>` judges the tag just pushed instead of the latest published release. In a repository without a version file the script took the version from the latest release, which right after `git push origin vX.Y.Z` is still the previous one, so `--watch` returned at once with `ok`. With `--tag` the version, the tag lookup, the workflow run and the release body are all read under that name, and a tag older than the latest release is not reported as a stale worktree. A missing, empty, hyphen-leading or non-ref value exits 2 (#177)
+- the skill also loads for a workflow or CI step that publishes a TYPO3 extension to TER or calls `tailor ter:publish` / `tailor set-version`, and a new eval covers a failing TER publish workflow (#182)
+- `docs/SECURITY-ASSURANCE.md`, SPDX licence and copyright notices on the source files, and a README section linking the organisation's governance and security policies (#172)
+
+### Changed
+
+- `references/release-process.md`: the 0.x → 1.0 checklist names what the stability promise covers in a skill repository — skill names, trigger descriptions, script arguments and output — and counts slash commands and hooks as skill surface (#171)
+- `references/release-process.md`: the pre-tag CHANGELOG reconcile also rewrites or drops entries that a later change in the release range made false, not only missing ones (#183)
+- `references/immutable-releases.md` describes immutability as a per-repository setting, states what it locks, gives the commands to check and enable it, and lists which shared release workflows upload their assets before publishing; every other file making the burn claim is qualified the same way (#181)
+- both TER references pass the upload comment as `--comment="$COMMENT"`; passed as a separate word, a comment starting with `-` is parsed as an option and aborts the upload (#176)
+- `references/typo3-ter-publishing.md` says the upload comment must never be empty, attributes each publish failure to its cause (#182), explains that TER and TYPO3 v14 take the extension title from the `composer.json` description before the first ` - `, and shows how to find which extension of an organisation is missing on TER (#185)
+- `SKILL.md` "Start Here" says that `--watch` follows the previous release in a repository whose version lives in no file (#175); #177 replaces that workaround with `--tag`
+- ShellCheck runs at style severity in Skill Validation, after the eight existing style findings were fixed (#172); five workflows are synced with the skill template again (#179)
+
+### Fixed
+
+- `release-status.sh` on a maintenance branch compares the declared version with the newest release of that branch's major line instead of the whole repository, orders a line's tags by number, skips shallow clones, and names the branch's upstream in its advice (#174, fixes #173)
+- `release-status.sh --watch` reads `releases/latest` again once the tag's publishing workflow has completed, so every later phase, the `latest rel` line and the JSON `latest_release` refer to the release that workflow just published; when the re-read fails, the earlier result is kept (#189)
+- `release-status.sh`: an annotated tag without a release, and a release body that could not be read, no longer count as finished (#177)
+- `guard-lightweight-tag.py` reads `git tag` arguments as shell words (`shlex`) and exempts only list-mode flags. A creation hidden behind `--sort`, `--format`, `--column`, `--no-column`, `-i`/`--ignore-case` or `--omit-empty`, or behind flag text inside a quoted value or a shell comment, is now blocked (#180)
+
 ## [1.2.2] - 2026-09-27
 
 ### Changed
@@ -204,7 +229,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/netresearch/github-release-skill/compare/v1.1.0...v1.2.0
