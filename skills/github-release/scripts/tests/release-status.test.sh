@@ -560,12 +560,18 @@ mkdir -p "$maint/bin" "$maint/repo" "$maint/notags"
 ln -sf "$jq_path" "$maint/bin/jq"
 cat >"$maint/bin/gh" <<'STUB'
 #!/usr/bin/env bash
+# STUB_PENDING: a tag whose Release run is in progress for the first two
+# lookups; its release is published, and listed, only once the run completed.
+d=$(dirname "$0")
+unpublished() { [ -n "${STUB_PENDING:-}" ] && [ "$1" = "$STUB_PENDING" ] \
+                && [ "$(cat "$d/count" 2>/dev/null || echo 0)" -lt 3 ]; }
 case "$1 $2" in
   "auth status")  exit 0 ;;
   "pr list")      echo "null"; exit 0 ;;
   "release view")
     found=""; for t in ${STUB_TAGS:-}; do [ "$t" = "$3" ] && found=1; done
     [ -n "$found" ] || exit 1
+    unpublished "$3" && exit 1
     case "$*" in
       *isDraft*) echo "false" ;;
       *body*)    echo "Translations are imported in batches." ;;
@@ -576,6 +582,11 @@ case "$1 $2" in
     while [ $# -gt 0 ]; do
       case "$1" in --branch) branch="$2"; shift 2 ;; *) shift ;; esac
     done
+    if [ -n "${STUB_PENDING:-}" ] && [ "$branch" = "$STUB_PENDING" ]; then
+      n=$(( $(cat "$d/count" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/count"
+      if [ "$n" -ge 3 ]; then echo "completed/success"; else echo "in_progress/-"; fi
+      exit 0
+    fi
     for t in ${STUB_TAGS:-}; do
       [ "$t" = "$branch" ] && { echo "completed/success"; exit 0; }
     done
@@ -594,7 +605,7 @@ case "$path" in
     echo '{"message":"Not Found"}'; exit 1 ;;
   */releases\?*)
     [ -n "${STUB_RELEASES_FAIL:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
-    printf '%s\n' ${STUB_RELEASES:-} \
+    for r in ${STUB_RELEASES:-}; do unpublished "$r" || printf '%s\n' "$r"; done \
       | jq -R '{tag_name: ., draft: false, prerelease: false}' | jq -s . | jq -r "$filter"
     exit 0 ;;
   */git/ref/tags/*)
@@ -675,6 +686,20 @@ mg "$maint/repo" switch -q TYPO3_13
 m_local=$(maint_run "$maint/repo" v4.0.0 "v3.0.0 v3.0.4 v4.0.0" "" STUB_RELEASES_FAIL=1)
 check  "maintenance, no release list: the reachable tag is used" "latest rel  : v3.0.4" "$m_local"
 check  "maintenance, no release list: to be tagged"             "NEXT: signed-tag" "$m_local"
+
+# (e2) --watch on the maintenance line: v3.0.5 is tagged and its Release run
+# is in progress; once it completes the release list gains v3.0.5. Read before
+# the watch only, the line's newest release would still be v3.0.4.
+rm -f "$maint/bin/count"
+m_watch=$(cd "$maint/repo" && env -i PATH="$maint/bin:/usr/bin:/bin" HOME="$maint" \
+            STUB_LATEST=v4.0.0 STUB_TAGS="v3.0.0 v3.0.4 v3.0.5 v4.0.0" \
+            STUB_RELEASES="v4.0.0 v3.0.5 v3.0.4 v3.0.0" STUB_PENDING=v3.0.5 \
+            RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 \
+            bash --noprofile --norc "$SCRIPT" -R acme/textdb --watch 2>&1)
+check  "maintenance, watch: waited through the run"      "watch: v3.0.5 workflow in_progress/-" "$m_watch"
+check  "maintenance, watch: the line's published release" "latest rel  : v3.0.5  (newest 3.x release; v4.0.0 overall)" "$m_watch"
+check  "maintenance, watch: compared within the line"    "maintenance line 3.x: compared with v3.0.5, not with v4.0.0" "$m_watch"
+refute "maintenance, watch: not called a stale worktree" "already released -- fetch" "$m_watch"
 
 # (f) main at the newest line is unaffected.
 mg "$maint/repo" switch -q main
@@ -823,6 +848,87 @@ check "a --tag with a leading hyphen exits 2" "status=2" "status=$st"
 tagarg_run --tag .. >/dev/null; st=$?
 check "a --tag that is no git ref exits 2" "status=2" "status=$st"
 check  "a malformed --tag is named"                    "is not a tag name" "$bad_out"
+
+# ---------------------------------------------------------------------------
+# --watch: the release the workflow publishes is the latest one afterwards
+# ---------------------------------------------------------------------------
+# netresearch/docker-development-skill, 2026-10-18: `--watch` printed
+# `watch: v1.17.0 workflow completed/success` and then `latest rel : v1.16.4`,
+# because the latest release was read once, before the watch, and the workflow
+# it waited for is what publishes the new one. Here releases/latest answers
+# v1.16.4 until the tag's run has completed and v1.17.0 from then on.
+
+later=$(mktemp -d)
+trap 'rm -rf "$work" "$addon" "$herdr" "$tagonly" "$runs" "$manif" "$remote" "$maint" "$tagarg" "$later"' EXIT
+mkdir -p "$later/bin" "$later/repo/.claude-plugin"
+ln -sf "$jq_path" "$later/bin/jq"
+printf '%s\n' '{"name": "later", "version": "1.17.0"}' >"$later/repo/.claude-plugin/plugin.json"
+cat >"$later/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# acme/later: v1.16.4 released, tag v1.17.0 pushed annotated. Its Release run is
+# in progress for the first two lookups, then completed; only from then on does
+# the release v1.17.0 exist and count as the latest.
+d=$(dirname "$0")
+published() { [ "$(cat "$d/count" 2>/dev/null || echo 0)" -ge 3 ]; }
+case "$1 $2" in
+  "auth status")  exit 0 ;;
+  "repo view")    echo "acme/later"; exit 0 ;;
+  "pr list")      echo "null"; exit 0 ;;
+  "run list")
+    case "$*" in
+      *"--branch v1.17.0"*)
+        n=$(( $(cat "$d/count" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/count"
+        if [ "$n" -ge 3 ]; then echo "completed/success"; else echo "in_progress/-"; fi ;;
+      *) echo none ;;
+    esac
+    exit 0 ;;
+  "release view")
+    { [ "$3" = v1.17.0 ] && published; } || exit 1
+    case "$*" in
+      *"--json body"*)    echo "A narrative written for the release." ;;
+      *"--json isDraft"*) echo false ;;
+    esac
+    exit 0 ;;
+esac
+if [ "$1" = api ]; then
+  case "$2" in
+    */releases/latest)
+      if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
+      [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
+      echo v1.17.0; exit 0 ;;
+    */git/ref/tags/v1.17.0) echo "tag"; exit 0 ;;
+    */git/ref/tags/*)      exit 1 ;;
+    */contents/*)          exit 1 ;;
+  esac
+fi
+exit 1
+STUB
+chmod +x "$later/bin/gh"
+
+rm -f "$later/bin/count"
+later_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+            RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 \
+            bash --noprofile --norc "$SCRIPT" -R acme/later --watch 2>&1)
+st=$?
+check  "watch waited through the run"                   "watch: v1.17.0 workflow in_progress/-" "$later_out"
+check  "after the watch the published release is latest" "latest rel  : v1.17.0" "$later_out"
+refute "the release from before the watch is not reported" "latest rel  : v1.16.4" "$later_out"
+check  "the verdict is about the published release"     "NEXT: ok — v1.17.0 released, notes rewritten" "$later_out"
+check  "a published release after the watch exits 0"    "status=0" "status=$st"
+
+# The read after the watch fails. v1.18.0 was the latest release before it, so
+# the worktree's v1.17.0 is stale; a failed re-read must keep that value rather
+# than empty it, which would let the stale check pass and report ok.
+rm -f "$later/bin/count"
+fail_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+           LATER_BEFORE=v1.18.0 LATER_REREAD_FAILS=1 \
+           RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 \
+           bash --noprofile --norc "$SCRIPT" -R acme/later --watch 2>&1)
+st=$?
+check  "a failed re-read keeps the value read before"  "latest rel  : v1.18.0" "$fail_out"
+check  "a failed re-read is reported"                  "could not be read again after the watch" "$fail_out"
+refute "a failed re-read does not turn into ok"        "NEXT: ok" "$fail_out"
+check  "a failed re-read on a stale worktree exits 1"  "status=1" "status=$st"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.

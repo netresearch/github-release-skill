@@ -96,16 +96,18 @@ if [ -n "${add_note_pending:-}" ]; then add_note "$add_note_pending"; fi
 # `gh api --jq` prints the ERROR body when the call fails, so a 404 lands a
 # blob of JSON in $latest and every comparison below then reads as a version
 # mismatch. Take the value only when the call succeeded, and only when it looks
-# like a tag.
+# like a tag. A failed read leaves $latest as it was and returns non-zero, so
+# a second read cannot replace a good value with nothing.
 latest=""
-if [ "$LOCAL_ONLY" = 0 ]; then
-  if latest_raw=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null); then
-    case "$latest_raw" in
-      *[!A-Za-z0-9._-]* | "" | null) latest="" ;;
-      *) latest="$latest_raw" ;;
-    esac
-  fi
-fi
+read_latest() {
+  [ "$LOCAL_ONLY" = 0 ] || return 1
+  latest_raw=$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null) || return 1
+  case "$latest_raw" in
+    *[!A-Za-z0-9._-]* | "" | null) return 1 ;;
+  esac
+  latest="$latest_raw"
+}
+read_latest || true
 
 # Version the files in the current directory declare: TYPO3 ext_emconf, else
 # composer extra, else a skill repo's plugin.json (the whole skill fleet declares
@@ -276,6 +278,17 @@ newest_of_line() { # newest_of_line <major>: tag names on stdin
   grep -E "^v?${1}\.[0-9]+\.[0-9]+\$" | sed -E 's/^v?(.*)$/\1 &/' \
     | sort -V -k1,1 | tail -1 | cut -d' ' -f2
 }
+line_latest_of() { # line_latest_of <major>: the newest release of that line
+  local rels line_latest=""
+  if rels=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
+              --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' 2>/dev/null); then
+    line_latest=$(printf '%s\n' "$rels" | newest_of_line "$1" || true)
+  fi
+  if [ -z "$line_latest" ]; then
+    line_latest=$(git tag --merged HEAD 2>/dev/null | newest_of_line "$1" || true)
+  fi
+  printf '%s' "$line_latest"
+}
 latest_overall="$latest"; maint_line=""; maint_branch=""
 if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; then
   d_major="${declared%%.*}"; l_major="${latest#v}"; l_major="${l_major%%.*}"
@@ -301,16 +314,7 @@ if [ "$version_source" = "file" ] && [ -n "$declared" ] && [ -n "$latest" ]; the
             maint_branch=$(git for-each-ref --format='%(upstream:short)' "$head_ref" 2>/dev/null || true)
             [ -n "$maint_branch" ] || maint_branch="origin/${head_ref#refs/heads/}"
           fi
-          line_latest=""
-          if rels=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
-                      --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' 2>/dev/null); then
-            line_latest=$(printf '%s\n' "$rels" | newest_of_line "$d_major" || true)
-          fi
-          if [ -z "$line_latest" ]; then
-            line_latest=$(git tag --merged HEAD 2>/dev/null | newest_of_line "$d_major" || true)
-          fi
-          latest="$line_latest"
-          add_note "maintenance line ${d_major}.x: compared with ${line_latest:-no ${d_major}.x release}, not with $latest_overall"
+          latest=$(line_latest_of "$d_major")
         fi
       fi ;;
   esac
@@ -382,8 +386,9 @@ if [ "$tag_state" = "annotated" ]; then
   if [ "$WATCH" = 1 ]; then
     interval="${RELEASE_STATUS_WATCH_INTERVAL:-20}"
     deadline=$(( $(date +%s) + ${RELEASE_STATUS_WATCH_TIMEOUT:-2700} ))
-    last=""
+    last=""; watched=0
     while [ "${wf_state%%/*}" != "completed" ]; do
+      watched=1
       if [ "$wf_state" != "$last" ]; then
         printf 'watch: %s workflow %s\n' "$tag_ref" "$wf_state" >&2
         last="$wf_state"
@@ -396,6 +401,25 @@ if [ "$tag_state" = "annotated" ]; then
       wf_state=$(wf_query)
     done
     [ "${wf_state%%/*}" = "completed" ] && printf 'watch: %s workflow %s\n' "$tag_ref" "$wf_state" >&2
+    # The workflow that just completed is what publishes the release, so the
+    # latest release read above predates it. Reported against that value, a
+    # published v1.17.0 still showed `latest rel : v1.16.4`
+    # (netresearch/docker-development-skill, 2026-10-18). Read it again.
+    if [ "$watched" = 1 ] && [ "${wf_state%%/*}" = "completed" ]; then
+      if read_latest; then
+        latest_overall="$latest"
+        [ -z "$maint_line" ] || latest=$(line_latest_of "$maint_line")
+      else
+        add_note "the latest release could not be read again after the watch; ${latest:-<none>} is from before it"
+      fi
+    fi
+  fi
+fi
+if [ -n "$maint_line" ]; then
+  if [ "$latest" = "$latest_overall" ]; then
+    add_note "maintenance line ${maint_line}.x: compared with ${latest:-no ${maint_line}.x release}"
+  else
+    add_note "maintenance line ${maint_line}.x: compared with ${latest:-no ${maint_line}.x release}, not with $latest_overall"
   fi
 fi
 
