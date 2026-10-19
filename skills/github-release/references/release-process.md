@@ -39,7 +39,14 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 3. Create release branch:
    git checkout -b release/vX.Y.Z
 4. Bump all version files for the detected ecosystem
-5. Update CHANGELOG.md: add the new [X.Y.Z] section AND bump the footer
+5. Update CHANGELOG.md. Where the repository keeps entries as fragments in
+   changelog.d/ (one file <branch-slug>.<section>.md per change), run its
+   collect step FIRST (`composer changelog:collect`): it folds the fragments
+   into [Unreleased] and deletes them. Skipped, the release ships without
+   those notes. scripts/validate-pre-release.sh only warns about leftover
+   fragments. What fails such a release commit is the repository's own
+   check (`composer ci:test:changelog` in netresearch/t3x-nr-llm and
+   t3x-nr-vault). Then add the new [X.Y.Z] section AND bump the footer
    link-references (Keep a Changelog) — repoint the [Unreleased]: line to
    compare/vX.Y.Z...HEAD and add a [X.Y.Z]: .../compare/vPREVIOUS...vX.Y.Z line.
    The footer LABEL is the plain version ([X.Y.Z]:), while the compare URL uses
