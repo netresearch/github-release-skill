@@ -46,7 +46,7 @@ branch it compares with the newest release of that branch's major line.
 1. **Detect ecosystem** — find the project type's version files (see `references/ecosystem-detection.md`)
 2. **Determine next version** — from conventional commits or user input (major/minor/patch)
 3. **Bump version files** — every ecosystem-specific one, consistently
-4. **Update CHANGELOG.md** — add a release section with date and changes
+4. **Update CHANGELOG.md** — if the repository keeps entries as fragments in `changelog.d/`, first run its collect step (`composer changelog:collect`); then add a release section with date and changes
 5. **Create release branch and PR** — `release/vX.Y.Z`, always via PR (branch protection typically blocks direct pushes)
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD, never the `release/vX.Y.Z` tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI

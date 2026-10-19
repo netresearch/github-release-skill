@@ -106,6 +106,17 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "Changelog:"
+# Fragments: one file per change in changelog.d/, folded into [Unreleased] by
+# the repository's collect step in the release commit. README.md documents the
+# format and is no fragment.
+fragment_count=0
+if [[ -d changelog.d ]]; then
+    fragment_count=$(find changelog.d -maxdepth 1 -type f -name '*.md' ! -name README.md | wc -l)
+fi
+if ((fragment_count > 0)); then
+    check "WARN" "Changelog fragments collected" \
+        "${fragment_count} fragment(s) in changelog.d/ — run the collect step (composer changelog:collect) in the release commit before renaming [Unreleased]"
+fi
 if [[ -f CHANGELOG.md ]]; then
     if grep -qiE '^#+ *\[?Unreleased\]?' CHANGELOG.md; then
         # Check if there is content between [Unreleased] and the next heading
@@ -113,6 +124,8 @@ if [[ -f CHANGELOG.md ]]; then
         if [[ -n "$unreleased_content" ]]; then
             lines=$(echo "$unreleased_content" | wc -l)
             check "PASS" "CHANGELOG.md [Unreleased] has content" "${lines} line(s)"
+        elif ((fragment_count > 0)); then
+            check "PASS" "CHANGELOG.md [Unreleased] has content" "empty, but ${fragment_count} fragment(s) in changelog.d/"
         else
             check "FAIL" "CHANGELOG.md [Unreleased] has content" "section is empty"
         fi
