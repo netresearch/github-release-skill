@@ -608,6 +608,9 @@ case "$path" in
     for r in ${STUB_RELEASES:-}; do unpublished "$r" || printf '%s\n' "$r"; done \
       | jq -R '{tag_name: ., draft: false, prerelease: false}' | jq -s . | jq -r "$filter"
     exit 0 ;;
+  # The contributor harvest of release-notes-status.sh: a range with no PRs.
+  # Unanswered, the harvest fails, and a failed harvest is no longer ok.
+  */compare/*) exit 0 ;;
   */git/ref/tags/*)
     for t in ${STUB_TAGS:-}; do
       [ "$t" = "${path##*/git/ref/tags/}" ] && { echo "tag"; exit 0; }
@@ -896,7 +899,21 @@ if [ "$1" = api ]; then
       if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
       [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
       echo v1.17.0; exit 0 ;;
+    # The release list and the contributor harvest of release-notes-status.sh.
+    # Unanswered, both lookups fail, and a failed lookup is no longer ok.
+    */releases\?*)
+      jf="."; prev=""; for a in "$@"; do [ "$prev" = --jq ] && jf="$a"; prev="$a"; done
+      { published && echo v1.17.0; echo v1.16.4; } \
+        | jq -R '{tag_name: ., draft: false, body: "A narrative written for the release."}' \
+        | jq -s . | jq -r "$jf"
+      exit 0 ;;
     */git/ref/tags/v1.17.0) echo "tag"; exit 0 ;;
+  esac
+  # The harvest calls `gh api --paginate repos/.../compare/...`: a range with no PRs.
+  case "$*" in
+    *"/compare/"*)
+      [ -n "${LATER_COMPARE_FAILS:-}" ] && { echo 'gh: API rate limit exceeded for user ID 1.' >&2; exit 1; }
+      exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
     */contents/*)          exit 1 ;;
   esac
@@ -915,6 +932,18 @@ check  "after the watch the published release is latest" "latest rel  : v1.17.0"
 refute "the release from before the watch is not reported" "latest rel  : v1.16.4" "$later_out"
 check  "the verdict is about the published release"     "NEXT: ok — v1.17.0 released, notes rewritten" "$later_out"
 check  "a published release after the watch exits 0"    "status=0" "status=$st"
+
+# The contributor harvest fails, so release-notes-status.sh did not judge the
+# body. The advice is to run the check again, not to rewrite a body that may be
+# finished.
+rm -f "$later/bin/count"
+credit_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+             LATER_COMPARE_FAILS=1 \
+             RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 \
+             bash --noprofile --norc "$SCRIPT" -R acme/later --watch 2>&1)
+check  "a failed credit check is named"                 "not judged -- the contributor check failed" "$credit_out"
+check  "a failed credit check advises a re-run"         "the contributor check failed; re-run it" "$credit_out"
+refute "a failed credit check is not ok"                "NEXT: ok" "$credit_out"
 
 # The read after the watch fails. v1.18.0 was the latest release before it, so
 # the worktree's v1.17.0 is stale; a failed re-read must keep that value rather

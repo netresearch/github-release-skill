@@ -300,4 +300,146 @@ literal=$(grep -c 'for s in Installation' \
           "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh" || true)
 check "the loop reads ci_block_sections, not a retyped list" 0 "$literal"
 
+# --- a CI block counts only as a heading --------------------------------------
+# The sibling test used to be a substring match, so one release whose prose
+# mentioned "the `## Installation` block" made every other release on its line
+# report CI-APPENDED BLOCKS LOST.
+nl_body='## Highlights
+
+Fixed by @alice in #3.'
+# shellcheck disable=SC2016 # the backticks are a literal Markdown code span
+prose_sibling='CI now emits the `## Installation` block.'
+# shellcheck disable=SC2016 # the backticks are a literal Markdown code span
+prose_body='The `## Installation` block was dropped.'
+check "a sibling's prose mention is not a CI block" "" \
+      "$(lost_ci_sections "$nl_body" "$prose_sibling")"
+check "a sibling's heading is a CI block"           ' "Installation"' \
+      "$(lost_ci_sections "$nl_body" "$(printf 'Intro\n\n## Installation\n\ncomposer require x')")"
+check "a heading ending in CR still counts"         ' "Installation"' \
+      "$(lost_ci_sections "$nl_body" "$(printf 'Intro\r\n## Installation\r\n')")"
+check "the body's own CR heading is kept"           "" \
+      "$(lost_ci_sections "$(printf 'Intro\r\n## Installation\r\n')" "$(printf '## Installation\n')")"
+check "prose in the body does not stand in for the heading" ' "Installation"' \
+      "$(lost_ci_sections "$prose_body" "$(printf '## Installation\n')")"
+
+# --- a body with nothing in it --------------------------------------------------
+# A release created without notes shows only GitHub's compare link, or nothing.
+# Neither shape tripped any check, so both reported `ok`.
+check "Full Changelog line alone is empty" 1 \
+      "$(empty_body '**Full Changelog**: https://github.com/o/r/compare/v1.0.0...v1.0.1')"
+check "an empty body is empty"             1 "$(empty_body '')"
+check "blank lines and CR are empty"       1 \
+      "$(empty_body "$(printf '\r\n**Full Changelog**: https://x/compare/a...b\r\n\r\n')")"
+check "a narrative is not empty"           0 "$(empty_body "$narrative")"
+
+# --- the whole script against a stubbed forge -----------------------------------
+# The failures below sit in check_one, which needs gh, so gh is stubbed from a
+# fixture directory. Anything the stub does not expect exits non-zero rather
+# than returning the empty string.
+fx=$(mktemp -d)
+trap 'rm -rf "$fx"' EXIT
+mkdir -p "$fx/bin"
+ln -sf "$(command -v jq)" "$fx/bin/jq"
+cat >"$fx/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# Answers from $STUB:
+#   releases.json   [{tag_name, body, draft}, ...] newest first
+#   compare.json    {commits: [{commit: {message}}]}   (absent: no commits)
+#   graphql.json    the answer to every pullRequest query
+#   ratelimit       present: EVERY call answers like GitHub's exhausted quota
+#   compare-fails   present: only the compare call does
+ratelimit() { echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1; }
+[ -e "$STUB/ratelimit" ] && ratelimit
+jqexpr="."; args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --jq) jqexpr="$2"; shift 2 ;;
+    --paginate) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]}"
+if [ "$1 $2" = "release view" ]; then
+  rel=$(jq -c --arg t "$3" '.[] | select(.tag_name == $t) | {body, isDraft: .draft}' "$STUB/releases.json")
+  [ -n "$rel" ] || { echo "release not found" >&2; exit 1; }
+  jq -r "$jqexpr" <<<"$rel"; exit
+fi
+if [ "$1" = api ]; then
+  case "$2" in
+    graphql) [ -e "$STUB/graphql.json" ] || exit 1; jq -r "$jqexpr" "$STUB/graphql.json"; exit ;;
+    */compare/*)
+      [ -e "$STUB/compare-fails" ] && ratelimit
+      if [ -e "$STUB/compare.json" ]; then jq -r "$jqexpr" "$STUB/compare.json"; fi
+      exit ;;
+    */releases/latest) jq -r '.[0] | '"$jqexpr" "$STUB/releases.json"; exit ;;
+    */releases\?*) jq -r "$jqexpr" "$STUB/releases.json"; exit ;;
+  esac
+fi
+echo "gh stub: unexpected call: $*" >&2
+exit 1
+STUB
+chmod +x "$fx/bin/gh"
+
+# rns <fixture> <args...> — output plus a final `EXIT: <status>` line
+rns() {
+  local f="$1"; shift
+  env -i PATH="$fx/bin:/usr/bin:/bin" HOME="$f" STUB="$f" \
+    bash --noprofile --norc "$(dirname "${BASH_SOURCE[0]}")/../release-notes-status.sh" \
+    -R acme/lib "$@" 2>&1
+  echo "EXIT: $?"
+}
+# fixture <name> <body of v1.1.0> <body of v1.0.0>
+fixture() {
+  mkdir -p "$fx/$1"
+  jq -n --arg new "$2" --arg old "$3" \
+    '[{tag_name:"v1.1.0",body:$new,draft:false},{tag_name:"v1.0.0",body:$old,draft:false}]' \
+    >"$fx/$1/releases.json"
+}
+has() { case "$2" in *"$1"*) echo 1 ;; *) echo 0 ;; esac; } # <needle> <haystack>
+
+fixture prose "$nl_body" "$prose_sibling"
+out=$(rns "$fx/prose" v1.1.0)
+check "end to end: a sibling's prose mention does not report lost blocks" 0 "$(has 'CI-APPENDED BLOCKS LOST' "$out")"
+check "end to end: and the release is ok"                                 1 "$(has 'EXIT: 0' "$out")"
+
+fixture fcl '**Full Changelog**: https://github.com/acme/lib/compare/v1.0.0...v1.1.0' "$nl_body"
+out=$(rns "$fx/fcl" v1.1.0)
+check "end to end: a Full-Changelog-only body is NOT OVERHAULED" 1 "$(has 'NOT OVERHAULED' "$out")"
+check "end to end: and needs work"                                1 "$(has 'EXIT: 1' "$out")"
+
+# The harvest's failure must not read like a range with no contributors. The
+# control is a range whose only PR author is a bot: there the harvest succeeds
+# with nobody to credit, and the verdict is ok.
+fixture harvestfail "$nl_body" "$nl_body"
+touch "$fx/harvestfail/compare-fails"
+out=$(rns "$fx/harvestfail" v1.1.0)
+check "end to end: a failed harvest is reported" 1 "$(has 'CREDIT CHECK FAILED' "$out")"
+check "end to end: and names gh's error"         1 "$(has 'rate limit exceeded' "$out")"
+check "end to end: and is not ok"                1 "$(has 'EXIT: 1' "$out")"
+out=$(rns "$fx/harvestfail" v1.1.0 --json)
+check "end to end: --json carries the failure"   1 "$(has '"next":"credit-check-failed"' "$out")"
+
+fixture botonly "$nl_body" "$nl_body"
+jq -n '{commits:[{commit:{message:"chore(deps): bump x (#5)"}}]}' >"$fx/botonly/compare.json"
+jq -n '{data:{repository:{pullRequest:{author:{login:"renovate[bot]"},closingIssuesReferences:{nodes:[]}}}}}' \
+  >"$fx/botonly/graphql.json"
+out=$(rns "$fx/botonly" v1.1.0)
+check "end to end: a bot-only range is not a failed harvest" 0 "$(has 'CREDIT CHECK FAILED' "$out")"
+check "end to end: and is ok"                                1 "$(has 'EXIT: 0' "$out")"
+
+# A rate-limited lookup is not a missing release, and a run that could not read
+# a release has not checked it: it exits 2, never 0 and never 1.
+fixture limited "$nl_body" "$nl_body"
+touch "$fx/limited/ratelimit"
+out=$(rns "$fx/limited" v1.1.0)
+check "end to end: a rate limit is not 'not found'" 0 "$(has 'not found' "$out")"
+check "end to end: it is a failed lookup"           1 "$(has 'lookup failed: release v1.1.0' "$out")"
+check "end to end: and exits 2"                     1 "$(has 'EXIT: 2' "$out")"
+out=$(rns "$fx/limited" --last 5)
+check "end to end: a rate-limited sweep exits 2"    1 "$(has 'EXIT: 2' "$out")"
+out=$(rns "$fx/limited")
+check "end to end: so does the latest-release lookup" 1 "$(has 'EXIT: 2' "$out")"
+out=$(rns "$fx/prose" v9.9.9)
+check "end to end: a missing release is still 'not found'" 1 "$(has 'release v9.9.9 not found' "$out")"
+
 exit $fail
