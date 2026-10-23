@@ -608,6 +608,9 @@ case "$path" in
     for r in ${STUB_RELEASES:-}; do unpublished "$r" || printf '%s\n' "$r"; done \
       | jq -R '{tag_name: ., draft: false, prerelease: false}' | jq -s . | jq -r "$filter"
     exit 0 ;;
+  # The contributor harvest of release-notes-status.sh: a range with no PRs.
+  # Unanswered, the harvest fails, and a failed harvest is no longer ok.
+  */compare/*) exit 0 ;;
   */git/ref/tags/*)
     for t in ${STUB_TAGS:-}; do
       [ "$t" = "${path##*/git/ref/tags/}" ] && { echo "tag"; exit 0; }
@@ -896,7 +899,19 @@ if [ "$1" = api ]; then
       if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
       [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
       echo v1.17.0; exit 0 ;;
+    # The release list and the contributor harvest of release-notes-status.sh.
+    # Unanswered, both lookups fail, and a failed lookup is no longer ok.
+    */releases\?*)
+      jf="."; prev=""; for a in "$@"; do [ "$prev" = --jq ] && jf="$a"; prev="$a"; done
+      { published && echo v1.17.0; echo v1.16.4; } \
+        | jq -R '{tag_name: ., draft: false, body: "A narrative written for the release."}' \
+        | jq -s . | jq -r "$jf"
+      exit 0 ;;
     */git/ref/tags/v1.17.0) echo "tag"; exit 0 ;;
+  esac
+  # The harvest calls `gh api --paginate repos/.../compare/...`: a range with no PRs.
+  case "$*" in
+    *"/compare/"*) exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
     */contents/*)          exit 1 ;;
   esac

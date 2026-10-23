@@ -71,6 +71,44 @@ check "-R is accepted"                    "" "$(argerr -R o/r | grep -o 'unknown
 check "--repo still accepted"             "" "$(argerr --repo o/r | grep -o 'unknown arg')"
 check "an unknown flag is still rejected" "unknown arg: --nope" "$(argerr --nope x)"
 
+# --- a range with no human author -------------------------------------------
+# `local -A CODE` without `=()` is unbound under `set -u` in bash 4.4 to 5.3,
+# so `${#CODE[@]}` aborted the run whenever every PR in the range was a bot's.
+# gh is stubbed: the compare call yields one PR, and the GraphQL answer comes
+# from $STUB_AUTHOR.
+stub=$(mktemp -d)
+trap 'rm -rf "$stub"' EXIT
+mkdir -p "$stub/bin"
+ln -sf "$(command -v jq)" "$stub/bin/jq"
+cat >"$stub/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+jqexpr="."; args=()
+while [ $# -gt 0 ]; do
+  case "$1" in --jq) jqexpr="$2"; shift 2 ;; --paginate) shift ;; *) args+=("$1"); shift ;; esac
+done
+set -- "${args[@]}"
+case "$1 $2" in
+  "api repos/o/r/compare/v1...v2")
+    jq -nr '{commits:[{commit:{message:"chore(deps): bump x (#5)"}}]}' | jq -r "$jqexpr"; exit ;;
+  "api graphql")
+    jq -n --arg a "$STUB_AUTHOR" \
+      '{data:{repository:{pullRequest:{author:{login:$a},closingIssuesReferences:{nodes:[]}}}}}'; exit ;;
+esac
+echo "gh stub: unexpected call: $*" >&2; exit 1
+STUB
+chmod +x "$stub/bin/gh"
+harvest() { # <author> — output plus a final `EXIT: <status>` line
+  env -i PATH="$stub/bin:/usr/bin:/bin" HOME="$stub" STUB_AUTHOR="$1" \
+    bash --noprofile --norc "$HERE/../harvest-contributors.sh" -R o/r --from v1 --to v2 2>&1
+  echo "EXIT: $?"
+}
+bot_out=$(harvest 'renovate[bot]')
+check "a bot-only range does not crash" "" "$(grep -o 'unbound variable' <<<"$bot_out")"
+check "a bot-only range exits 0"        "EXIT: 0" "$(tail -n 1 <<<"$bot_out")"
+check "a bot-only range credits no one" "" "$(grep '^code authors' <<<"$bot_out")"
+human_out=$(harvest alice)
+check "a human author is still listed"  "code authors: @alice" "$(grep '^code authors' <<<"$human_out")"
+
 if [ "$fail" -eq 0 ]; then
   echo "All harvest-contributors self-tests passed."
 else

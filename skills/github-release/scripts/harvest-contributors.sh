@@ -80,8 +80,12 @@ main() {
   mapfile -t PRS < <(printf '%s\n' "$subjects" | extract_pr_numbers)
   [ "${#PRS[@]}" -gt 0 ] || { echo "No PRs found in ${REPO} ${FROM}...${TO}." >&2; exit 0; }
 
-  local -A CODE      # login -> 1 (merged-PR authors)
-  local -A REPORTERS # login -> "12 34" (space-separated issue numbers, deduped at emit)
+  # Assigned empty, not just declared: under `set -u` bash 4.4 through 5.3 treat
+  # a declared-only array as unbound, so `${#CODE[@]}` below aborted the run
+  # whenever no human authored a PR in the range (a bot-only range, or every
+  # PR lookup failing).
+  local -A CODE=()      # login -> 1 (merged-PR authors)
+  local -A REPORTERS=() # login -> "12 34" (space-separated issue numbers, deduped at emit)
   local pr json a inum ilogin
   for pr in "${PRS[@]}"; do
     # shellcheck disable=SC2016 # $o/$n/$pr are GraphQL variables, expanded server-side
