@@ -87,9 +87,16 @@ main() {
   local -A CODE=()      # login -> 1 (merged-PR authors)
   local -A REPORTERS=() # login -> "12 34" (space-separated issue numbers, deduped at emit)
   local pr json a inum ilogin
+  # Global, not local: the EXIT trap runs after main has returned.
+  GQL_ERR="$(mktemp)"
+  trap 'rm -f "$GQL_ERR"' EXIT
   for pr in "${PRS[@]}"; do
+    # A number that is an issue (not a PR) answers NOT_FOUND and gh exits 1; that
+    # one is skipped. Any other failure (rate limit, auth, network) stops the run:
+    # skipping it dropped that PR's author and reporters without a word, and the
+    # output read the same as a range with fewer contributors.
     # shellcheck disable=SC2016 # $o/$n/$pr are GraphQL variables, expanded server-side
-    json="$(gh api graphql -f query='
+    if ! json="$(gh api graphql -f query='
       query($o:String!,$n:String!,$pr:Int!){
         repository(owner:$o,name:$n){
           pullRequest(number:$pr){
@@ -97,10 +104,15 @@ main() {
             closingIssuesReferences(first:30){nodes{number author{login}}}
           }
         }
-      }' -F o="$owner" -F n="$name" -F pr="$pr" 2>/dev/null)" || continue
-    # A number that is an issue (not a PR) returns pullRequest: null. jq tolerates
-    # indexing null (yields null -> // empty), and .nodes[]? guards the iteration,
-    # so the null case is handled without erroring under set -e.
+      }' -F o="$owner" -F n="$name" -F pr="$pr" 2>"$GQL_ERR")"; then
+      if jq -e '[.errors[]? | select(.type == "NOT_FOUND")] | length > 0' <<<"$json" >/dev/null 2>&1; then
+        continue
+      fi
+      echo "lookup of #${pr} in ${REPO} failed: $(grep . "$GQL_ERR" | tail -n 1 || echo "gh exited non-zero")" >&2
+      exit 1
+    fi
+    # jq tolerates indexing null (yields null -> // empty), and .nodes[]? guards
+    # the iteration, so a PR without author or closing issues passes under set -e.
     a="$(jq -r '.data.repository.pullRequest.author.login // empty' <<<"$json")"
     if [ -n "$a" ] && ! is_bot "$a"; then CODE["$a"]=1; fi
 

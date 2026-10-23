@@ -91,14 +91,21 @@ case "$1 $2" in
   "api repos/o/r/compare/v1...v2")
     jq -nr '{commits:[{commit:{message:"chore(deps): bump x (#5)"}}]}' | jq -r "$jqexpr"; exit ;;
   "api graphql")
+    case "${STUB_GQL:-}" in
+      notfound)
+        echo '{"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a PullRequest with the number of 5."}]}'
+        echo 'gh: Could not resolve to a PullRequest with the number of 5.' >&2; exit 1 ;;
+      ratelimit)
+        echo 'gh: API rate limit exceeded for user ID 1.' >&2; exit 1 ;;
+    esac
     jq -n --arg a "$STUB_AUTHOR" \
       '{data:{repository:{pullRequest:{author:{login:$a},closingIssuesReferences:{nodes:[]}}}}}'; exit ;;
 esac
 echo "gh stub: unexpected call: $*" >&2; exit 1
 STUB
 chmod +x "$stub/bin/gh"
-harvest() { # <author> — output plus a final `EXIT: <status>` line
-  env -i PATH="$stub/bin:/usr/bin:/bin" HOME="$stub" STUB_AUTHOR="$1" \
+harvest() { # <author> [<graphql mode>] — output plus a final `EXIT: <status>` line
+  env -i PATH="$stub/bin:/usr/bin:/bin" HOME="$stub" STUB_AUTHOR="$1" STUB_GQL="${2:-}" \
     bash --noprofile --norc "$HERE/../harvest-contributors.sh" -R o/r --from v1 --to v2 2>&1
   echo "EXIT: $?"
 }
@@ -108,6 +115,17 @@ check "a bot-only range exits 0"        "EXIT: 0" "$(tail -n 1 <<<"$bot_out")"
 check "a bot-only range credits no one" "" "$(grep '^code authors' <<<"$bot_out")"
 human_out=$(harvest alice)
 check "a human author is still listed"  "code authors: @alice" "$(grep '^code authors' <<<"$human_out")"
+
+# --- a failed PR lookup ---------------------------------------------------------
+# The GraphQL call used to end in `|| continue`, so a rate-limited lookup dropped
+# that PR's author without a word. Only NOT_FOUND (the number is an issue) skips.
+nf_out=$(harvest alice notfound)
+check "an issue number is skipped"        "EXIT: 0" "$(tail -n 1 <<<"$nf_out")"
+check "and credits no one"                "" "$(grep '^code authors' <<<"$nf_out")"
+rl_out=$(harvest alice ratelimit)
+check "a failed lookup exits non-zero"    "EXIT: 1" "$(tail -n 1 <<<"$rl_out")"
+check "and names the PR and gh's error"   "lookup of #5 in o/r failed: gh: API rate limit exceeded for user ID 1." \
+      "$(grep '^lookup of' <<<"$rl_out")"
 
 if [ "$fail" -eq 0 ]; then
   echo "All harvest-contributors self-tests passed."

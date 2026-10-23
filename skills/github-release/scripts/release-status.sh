@@ -525,6 +525,12 @@ elif [ "$release_exists" = 0 ]; then
   # name: nothing was published, so this is not finished.
   next="await-release-workflow"
   add_note "no release exists for $tag_ref yet (workflow ${wf_state:-unknown}) -- read the run before re-running"
+elif [ "$notes_next" = "credit-check-failed" ]; then
+  # The contributor lookup failed, so the body was not judged: nothing in it
+  # needs rewriting yet. Same shape as "gave no verdict" below.
+  next="rewrite-release-notes"
+  cmd="release-notes-status.sh -R $REPO $tag_ref   # the contributor check failed; re-run it"
+  add_note "release body: not judged -- the contributor check failed (rate limit or auth?)"
 elif [ -n "$notes_next" ] && [ "$notes_next" != "ok" ]; then
   next="rewrite-release-notes"
   cmd="release-notes-status.sh -R $REPO $tag_ref   # then gh release edit --notes-file"
