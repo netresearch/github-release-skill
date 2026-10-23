@@ -14,6 +14,21 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Added
+
+- the release flow in `SKILL.md` and Phase 1 of `references/release-process.md` runs a repository's changelog collect step (`composer changelog:collect`) before writing the release section wherever entries are kept as fragments in `changelog.d/`. `validate-pre-release.sh` counts those fragments (not `changelog.d/README.md`) as `[Unreleased]` content and warns that they still have to be collected (#192)
+
+### Changed
+
+- `references/release-process.md` Phase 3 says to push the release tag from the worktree step 2 verified, not from `.bare`: there the pre-push hook runs without a work tree, lefthook fails on `git rev-parse --show-toplevel`, and the push is refused (#199)
+
+### Fixed
+
+- `release-notes-status.sh` reports a body that is still GitHub's generated "What's Changed" list (`* <title> by @login in <pull URL>`) as `NOT OVERHAULED`; one such bullet is enough. Generated `by @login in …` and `made their first contribution` lines no longer count as contributor credit (#196)
+- `release-notes-status.sh` reports a body that holds nothing but the `**Full Changelog**:` line, or nothing at all, as `NOT OVERHAULED` (`empty` in `--json`). A failed contributor harvest gives `CREDIT CHECK FAILED` (`credit_check_failed` in `--json`) instead of `ok`, and `release-status.sh` advises re-running the check instead of rewriting the body (#198)
+- `release-notes-status.sh` checks every `gh` lookup: a failure prints `lookup failed: <what> in <repo>` with gh's message and exits 2 instead of reporting `not found` or checking nothing, and a `--last` sweep exits 2 when any release could not be read. Only a whole `## <section>` heading line in a sibling release counts for CI-APPENDED BLOCKS LOST, so prose mentioning a section no longer triggers it (#198)
+- `harvest-contributors.sh` no longer aborts under `set -u` on a range without a human PR author, and a failed PR lookup other than `NOT_FOUND` stops the run with gh's message instead of silently dropping that PR's author and reporters (#198)
+
 ## [1.3.0] - 2026-10-19
 
 ### Added
