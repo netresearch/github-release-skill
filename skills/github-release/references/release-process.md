@@ -138,6 +138,13 @@ On mismatch, abort: do not tag, do not push. Cross-check against the API
 when in doubt: `gh api repos/{owner}/{repo}/commits/main --jq .sha` must
 equal `git rev-parse HEAD`.
 
+**Push the tag from a worktree, not from `.bare`.** In a bare-repo layout,
+`git -C .bare push origin vX.Y.Z` runs the repository's pre-push hook
+without a work tree. lefthook then fails on `git rev-parse --show-toplevel`
+with `fatal: this operation must be run in a work tree`, and the push is
+refused (measured on netresearch/ofelia, v1.0.2). Run step 4 from the
+worktree that holds `main`'s tip, the same one step 2 verified.
+
 **Reconcile the CHANGELOG against the whole range before tagging — position
 is not content.** Step 2 proves you are tagging main's tip; it does *not*
 prove the CHANGELOG describes what that tip actually contains. Between the
