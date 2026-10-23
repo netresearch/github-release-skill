@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-23
+
 ### Added
 
 - the release flow in `SKILL.md` and Phase 1 of `references/release-process.md` runs a repository's changelog collect step (`composer changelog:collect`) before writing the release section wherever entries are kept as fragments in `changelog.d/`. `validate-pre-release.sh` counts those fragments (not `changelog.d/README.md`) as `[Unreleased]` content and warns that they still have to be collected (#192)
@@ -244,7 +246,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/netresearch/github-release-skill/compare/v1.2.0...v1.2.1
