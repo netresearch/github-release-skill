@@ -5,5 +5,17 @@
   ],
   "pre-commit": {
     "enabled": true
-  }
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "uv release installed by the pre-command in script-tests.yml",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/script-tests\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+UV_VERSION=(?<currentValue>\\S+)"
+      ]
+    }
+  ]
 }

@@ -25,6 +25,22 @@ jobs:
     permissions:
       contents: read
     with:
+      # The Python scripts start through uv (shebang and hooks.json), and the
+      # runner image does not ship it: a pinned release, checked against the
+      # sha256 file published with that release. Renovate bumps UV_VERSION
+      # through the custom manager in renovate.json.
+      pre-command: |
+        # renovate: datasource=github-releases depName=astral-sh/uv
+        UV_VERSION=0.13.5
+        asset=uv-x86_64-unknown-linux-gnu.tar.gz
+        base="https://github.com/astral-sh/uv/releases/download/$UV_VERSION"
+        mkdir -p "$HOME/.local/bin"
+        cd "$RUNNER_TEMP"
+        curl -fsSL --proto '=https' -o "$asset" "$base/$asset"
+        curl -fsSL --proto '=https' -o "$asset.sha256" "$base/$asset.sha256"
+        sha256sum -c "$asset.sha256"
+        tar -xzf "$asset" -C "$HOME/.local/bin" --strip-components=1 uv-x86_64-unknown-linux-gnu/uv
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       check-cmd: >-
         for t in skills/github-release/scripts/tests/*.test.sh; do
           echo "== $t"; bash "$t" || exit 1;

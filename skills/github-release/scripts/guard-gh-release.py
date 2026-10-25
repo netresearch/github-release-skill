@@ -1,6 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+#
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """
 PreToolUse hook that blocks dangerous GitHub release operations.
 
@@ -96,8 +101,9 @@ ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 # through: a quoted endpoint path ("repos/$R/releases/$ID"), a flag value with
 # a space in it (-f body="new notes"), the long form --raw-field, --field=x.
 # Their flags group also backtracked exponentially on a run of dash-words,
-# which a 2-second hook timeout turns into a question of what the harness does
-# on timeout. shlex splits the words the way the shell does, in linear time.
+# and the hook timeout (onFailure: block in hooks.json) turns a hang into a
+# blocked Bash call. shlex splits the words the way the shell does, in linear
+# time.
 GH_API_RE = re.compile(INVOCATION_PREFIX + r"gh\s+api(?=\s|$)")
 
 # A release endpoint anywhere in a word: a bare or leading-slash path, a full

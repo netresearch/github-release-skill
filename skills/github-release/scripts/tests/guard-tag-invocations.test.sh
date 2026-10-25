@@ -23,7 +23,7 @@ check() { # <expected-rc> <description> <command>
   local want="$1" desc="$2" command="$3" payload got
   payload=$(CMD="$command" python3 -c \
     'import json,os;print(json.dumps({"tool_name":"Bash","tool_input":{"command":os.environ["CMD"]}}))')
-  printf '%s' "$payload" | python3 "$TAG_GUARD" >/dev/null 2>&1
+  printf '%s' "$payload" | uv run "$TAG_GUARD" >/dev/null 2>&1
   got=$?
   if [[ "$got" == "$want" ]]; then
     printf 'ok   - %s\n' "$desc"
@@ -37,7 +37,7 @@ check_reason() { # <expected-substring-in-reason> <description> <command>
   local want="$1" desc="$2" command="$3" payload stderr got
   payload=$(CMD="$command" python3 -c \
     'import json,os;print(json.dumps({"tool_name":"Bash","tool_input":{"command":os.environ["CMD"]}}))')
-  stderr=$(printf '%s' "$payload" | python3 "$TAG_GUARD" 2>&1 >/dev/null)
+  stderr=$(printf '%s' "$payload" | uv run "$TAG_GUARD" 2>&1 >/dev/null)
   got=$?
   if [[ "$got" == 2 && "$stderr" == *"$want"* ]]; then
     printf 'ok   - %s\n' "$desc"
