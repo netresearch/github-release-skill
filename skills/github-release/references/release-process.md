@@ -218,6 +218,24 @@ The tag push triggers the release workflow (e.g., `.github/workflows/release.yml
 
 After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
+**Exception: a skill repository keeps the generated body.** Where `composer.json` has `"type": "ai-agent-skill"`, GitHub's
+generated list, its `by @login` credits included, is the release notes (netresearch/skill-repo-skill#257,
+recorded in skill-repo-skill's `references/release-discipline.md`). Do not rewrite it there. The list names
+PR authors only, so add each issue reporter from the `issue reporters` line of `harvest-contributors.sh` at
+the PR that fixed the issue, as a suffix on that bullet:
+
+```
+* fix: crash on Python 3.9 by @alice in https://github.com/o/r/pull/202 — reported by @bob in #201
+```
+
+A reporter of an issue in another repository is written with the full reference
+(`reported by @bob in netresearch/retro-skill#201`). The harvest sees only issues the PRs close in this
+repository, so such a reporter is added by hand from the PR description, and the check below cannot report
+one that is left out: read the PR descriptions of the range for cross-repository `Fixes`/`Reported by` lines.
+`release-notes-status.sh` then reports the body as `ok — generated body kept`; a harvested reporter the body
+does not name is `MISSING CREDITS`, and a CI stub or an empty body still fails. It checks that the reporter is
+named, not on which bullet. The steps and the overhaul rules below apply to every other repository.
+
 ```
 1. Wait for CI release workflow to complete successfully
 2. Review the commits included in the release (git log prev_tag..new_tag)
@@ -236,11 +254,11 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
    (use --notes-file, not --notes "...", to avoid shell-quoting issues with multi-line Markdown)
 ```
 
-The auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
+Outside a skill repository, the auto-generated notes (PR titles, contributor lists) are a starting point, not the final product. The agent's description should read like a changelog entry written for humans.
 
 #### The overhaul is part of the release, not an optional follow-up
 
-Two starting points are equally unacceptable as a final release body:
+Outside a skill repository (see the exception above), two starting points are equally unacceptable as a final release body:
 
 - a flat auto-generated `## Changes` / `## What's Changed` list of PR titles (often padded with chore noise — dependency digest bumps, lint-fix PRs); and
 - a CI-generated **stub** — some release workflows auto-create the release on tag push with a placeholder body like `Release vX.Y.Z — see CHANGELOG.md for details`.

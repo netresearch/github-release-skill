@@ -51,7 +51,7 @@ branch it compares with the newest release of that branch's major line.
 6. **After PR merge** — `git checkout main && git pull`, assert HEAD equals the remote tip (stale-worktree guard), then tag `main`'s HEAD, never the `release/vX.Y.Z` tip: `git tag -s vX.Y.Z -m "vX.Y.Z"` — see `references/release-process.md` Phase 3.
 7. **Push tag** — `git push origin vX.Y.Z` triggers CI
 8. **CI publishes release** — artifacts, checksums, auto-generated notes
-9. **Overhaul release description** — rewrite CI's notes into a narrative; `@mention` every contributor **and reporter** inline at their change, never as a `## Contributors` section. Source them from `scripts/harvest-contributors.sh`, never `git log`. Verify with `scripts/release-notes-status.sh`. See `references/release-process.md` Phase 5.
+9. **Overhaul release description** — rewrite CI's notes into a narrative; `@mention` every contributor **and reporter** inline at their change, never as a `## Contributors` section. Source them from `scripts/harvest-contributors.sh`, never `git log`. Verify with `scripts/release-notes-status.sh`. See `references/release-process.md` Phase 5. A skill repository (composer type `ai-agent-skill`) keeps the generated body instead (netresearch/skill-repo-skill#257) and adds the issue reporter, whom the generated list never names, at the PR that fixed the issue: `… by @author in <PR URL> — reported by @reporter in #N`.
 10. **Do NOT re-run the release workflow after step 9** — many regenerate the body each run, overwriting the overhaul. For downstream retries, use a dispatcher — see `references/ter-republish.md`.
 
 ### Tag-only repositories
