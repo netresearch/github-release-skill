@@ -253,8 +253,12 @@ check_one() {
   # `2>/dev/null || true`, so a harvest that crashed — or never reached the
   # API — left an empty list, and the verdict read the same as for a range with
   # no contributors in it.
+  #
+  # A kept generated body credits PR authors in its own by-lines, and #257
+  # accepts that as the credit, so the harvest does not run for it at all: a
+  # failed release list or harvest must not turn an accepted body into an error.
   local missing="" harvest_failed=""
-  if [ -x "$HARVEST" ]; then
+  if [ -x "$HARVEST" ] && [ "$kept" != 1 ]; then
     local tags
     tags=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
              --jq '.[] | select(.draft==false) | .tag_name' 2>"$ERR") || {
@@ -265,9 +269,6 @@ check_one() {
       if harvested=$("$HARVEST" --repo "$REPO" --from "$prev" --to "$tag" 2>"$ERR"); then
         people=$(grep -v '^#' <<<"$harvested" | grep -oE '@[A-Za-z0-9-]+' | sort -u || true)
         local p
-        # A kept generated body credits PR authors in its own by-lines, and
-        # #257 accepts that as the credit; there is nothing to add by hand.
-        [ "$kept" = 1 ] && people=""
         for p in $people; do
           credit_mentioned "$body" "$p" || missing="$missing $p"
         done

@@ -468,6 +468,14 @@ check "end to end: and it is ok"                          1 "$(has 'EXIT: 0' "$o
 out=$(rns "$fx/skillgen" v1.1.0 --json)
 check "end to end: --json reports the kept body"          1 "$(has '"generated_body_kept":true' "$out")"
 
+# The harvest does not run for a kept body, so its failure cannot fail it.
+fixture skillharvest "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skillharvest/composer.json"
+touch "$fx/skillharvest/compare-fails"
+out=$(rns "$fx/skillharvest" v1.1.0)
+check "end to end: a failing harvest does not fail a kept body" 0 "$(has 'CREDIT CHECK FAILED' "$out")"
+check "end to end: the kept body is still ok"                   1 "$(has 'EXIT: 0' "$out")"
+
 # Control: the same body where composer.json is no skill package, or absent.
 fixture libgen "$github_generated" "$nl_body"
 printf '%s\n' '{"name":"acme/lib","type":"library"}' >"$fx/libgen/composer.json"
