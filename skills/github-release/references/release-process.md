@@ -218,6 +218,12 @@ The tag push triggers the release workflow (e.g., `.github/workflows/release.yml
 
 After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
+**Exception: a skill repository keeps the generated body.** Where `composer.json` has `"type": "ai-agent-skill"`, GitHub's
+generated list, its `by @login` credits included, is the release notes (netresearch/skill-repo-skill#257,
+recorded in skill-repo-skill's `references/release-discipline.md`). Skip this phase there;
+`release-notes-status.sh` reports such a body as `ok — generated body kept` and still flags a CI stub or an
+empty body.
+
 ```
 1. Wait for CI release workflow to complete successfully
 2. Review the commits included in the release (git log prev_tag..new_tag)

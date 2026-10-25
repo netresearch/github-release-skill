@@ -348,6 +348,8 @@ cat >"$fx/bin/gh" <<'STUB'
 #   graphql.json    the answer to every pullRequest query
 #   ratelimit       present: EVERY call answers like GitHub's exhausted quota
 #   compare-fails   present: only the compare call does
+#   composer.json   the file at the tag (absent: GitHub's 404)
+#   contents-fails  present: only the contents call answers like a rate limit
 ratelimit() { echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1; }
 [ -e "$STUB/ratelimit" ] && ratelimit
 jqexpr="."; args=()
@@ -370,6 +372,11 @@ if [ "$1" = api ]; then
     */compare/*)
       [ -e "$STUB/compare-fails" ] && ratelimit
       if [ -e "$STUB/compare.json" ]; then jq -r "$jqexpr" "$STUB/compare.json"; fi
+      exit ;;
+    */contents/composer.json\?ref=*)
+      [ -e "$STUB/contents-fails" ] && ratelimit
+      [ -e "$STUB/composer.json" ] || { echo 'gh: Not Found (HTTP 404)' >&2; exit 1; }
+      jq -n --arg c "$(base64 -w0 "$STUB/composer.json")" '{content: $c}' | jq -r "$jqexpr"
       exit ;;
     */releases/latest) jq -r '.[0] | '"$jqexpr" "$STUB/releases.json"; exit ;;
     */releases\?*) jq -r "$jqexpr" "$STUB/releases.json"; exit ;;
@@ -441,5 +448,48 @@ out=$(rns "$fx/limited")
 check "end to end: so does the latest-release lookup" 1 "$(has 'EXIT: 2' "$out")"
 out=$(rns "$fx/prose" v9.9.9)
 check "end to end: a missing release is still 'not found'" 1 "$(has 'release v9.9.9 not found' "$out")"
+
+# A skill repository keeps GitHub's generated body (skill-repo-skill#257).
+check "composer type ai-agent-skill is a skill package" 1 "$(skill_package '{"name":"netresearch/x-skill","type":"ai-agent-skill"}')"
+check "a library is not"                               0 "$(skill_package '{"name":"acme/lib","type":"library"}')"
+check "no composer.json is not"                        0 "$(skill_package '')"
+check "unparsable composer.json is not"                0 "$(skill_package '{"type":')"
+
+skill_composer='{"name":"acme/lib","type":"ai-agent-skill"}'
+fixture skillgen "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skillgen/composer.json"
+jq -n '{commits:[{commit:{message:"feat: x (#5)"}}]}' >"$fx/skillgen/compare.json"
+jq -n '{data:{repository:{pullRequest:{author:{login:"carol"},closingIssuesReferences:{nodes:[]}}}}}' \
+  >"$fx/skillgen/graphql.json"
+out=$(rns "$fx/skillgen" v1.1.0)
+check "end to end: a skill repo's generated body is kept" 1 "$(has 'generated body kept' "$out")"
+check "end to end: no credit is demanded for it"          0 "$(has 'MISSING CREDITS' "$out")"
+check "end to end: and it is ok"                          1 "$(has 'EXIT: 0' "$out")"
+out=$(rns "$fx/skillgen" v1.1.0 --json)
+check "end to end: --json reports the kept body"          1 "$(has '"generated_body_kept":true' "$out")"
+
+# Control: the same body where composer.json is no skill package, or absent.
+fixture libgen "$github_generated" "$nl_body"
+printf '%s\n' '{"name":"acme/lib","type":"library"}' >"$fx/libgen/composer.json"
+out=$(rns "$fx/libgen" v1.1.0)
+check "end to end: a library's generated body is NOT OVERHAULED" 1 "$(has 'NOT OVERHAULED' "$out")"
+check "end to end: and needs work"                               1 "$(has 'EXIT: 1' "$out")"
+fixture nocomposer "$github_generated" "$nl_body"
+out=$(rns "$fx/nocomposer" v1.1.0)
+check "end to end: without composer.json it is NOT OVERHAULED"   1 "$(has 'NOT OVERHAULED' "$out")"
+
+# A stub stays a stub in a skill repository: only the generated list is kept.
+fixture skillstub 'Release v1.1.0 — see CHANGELOG.md for details' "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skillstub/composer.json"
+out=$(rns "$fx/skillstub" v1.1.0)
+check "end to end: a skill repo's CI stub is NOT OVERHAULED"     1 "$(has 'NOT OVERHAULED' "$out")"
+
+# A failed composer.json lookup is a failed lookup, not a library.
+fixture skillfail "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skillfail/composer.json"
+touch "$fx/skillfail/contents-fails"
+out=$(rns "$fx/skillfail" v1.1.0)
+check "end to end: a failed composer.json lookup is reported" 1 "$(has 'lookup failed: composer.json at v1.1.0' "$out")"
+check "end to end: and exits 2"                               1 "$(has 'EXIT: 2' "$out")"
 
 exit $fail
