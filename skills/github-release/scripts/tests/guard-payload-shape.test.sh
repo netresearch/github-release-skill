@@ -49,7 +49,7 @@ while IFS='|' read -r want guard shape command desc; do
     *)      payload="$command" ;;
   esac
 
-  printf '%s' "$payload" | python3 "$local_guard" >/dev/null 2>&1
+  printf '%s' "$payload" | uv run "$local_guard" >/dev/null 2>&1
   got=$?
 
   if [[ "$got" == "$want" ]]; then

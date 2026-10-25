@@ -25,6 +25,15 @@ jobs:
     permissions:
       contents: read
     with:
+      # The Python scripts start through uv (shebang and hooks.json), and the
+      # runner image does not ship it: a pinned release, checked by sha256.
+      pre-command: |
+        mkdir -p "$HOME/.local/bin"
+        tgz="$RUNNER_TEMP/uv.tar.gz"
+        curl -fsSL --proto '=https' -o "$tgz" "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz"
+        echo "1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154  $tgz" | sha256sum -c -
+        tar -xzf "$tgz" -C "$HOME/.local/bin" --strip-components=1 uv-x86_64-unknown-linux-gnu/uv
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       check-cmd: >-
         for t in skills/github-release/scripts/tests/*.test.sh; do
           echo "== $t"; bash "$t" || exit 1;
