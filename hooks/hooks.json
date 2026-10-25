@@ -7,13 +7,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py",
+            "command": "uv run \"${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py\"",
             "timeout": 10,
             "onFailure": "block"
           },
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-lightweight-tag.py",
+            "command": "uv run \"${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-lightweight-tag.py\"",
             "timeout": 10,
             "onFailure": "block"
           }
