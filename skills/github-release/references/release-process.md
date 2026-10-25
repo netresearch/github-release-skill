@@ -220,9 +220,19 @@ After CI publishes the release, the agent overhauls the auto-generated descripti
 
 **Exception: a skill repository keeps the generated body.** Where `composer.json` has `"type": "ai-agent-skill"`, GitHub's
 generated list, its `by @login` credits included, is the release notes (netresearch/skill-repo-skill#257,
-recorded in skill-repo-skill's `references/release-discipline.md`). Skip this phase there;
-`release-notes-status.sh` reports such a body as `ok — generated body kept` and still flags a CI stub or an
-empty body.
+recorded in skill-repo-skill's `references/release-discipline.md`). Do not rewrite it there. The list names
+PR authors only, so add each issue reporter from the `issue reporters` line of `harvest-contributors.sh` at
+the PR that fixed the issue, as a suffix on that bullet:
+
+```
+* fix: crash on Python 3.9 by @alice in https://github.com/o/r/pull/202 — reported by @bob in #201
+```
+
+A reporter of an issue in another repository is written with the full reference
+(`reported by @bob in netresearch/retro-skill#201`). The harvest sees only issues the PRs close in this
+repository, so such a reporter is added by hand from the PR description.
+`release-notes-status.sh` then reports the body as `ok — generated body kept`; a missing reporter is
+`MISSING CREDITS`, and a CI stub or an empty body still fails.
 
 ```
 1. Wait for CI release workflow to complete successfully
