@@ -14,6 +14,17 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-29
+
+### Changed
+
+- the two guard hooks (`guard-gh-release.py`, `guard-lightweight-tag.py`) and `check-changelog-links.py` run through `uv run` on Python 3.11 or later instead of on the first `python3` on `PATH`. Both hooks set `"onFailure": "block"` and a 10-second timeout, so a guard that crashes, cannot start or times out blocks the Bash call; Claude Code before v2.1.295 ignores `onFailure` and stays fail-open (#204)
+- `references/supply-chain-security.md` says that `gh attestation verify` checks one artifact per call (a glob stops with `too many arguments`) and gives a loop that verifies several files and ends with status 1 when any of them failed (#207)
+
+### Fixed
+
+- `release-notes-status.sh` accepts GitHub's generated release body in a skill repository (`composer.json` type `ai-agent-skill`) and reports `ok — generated body kept`, as long as every issue reporter is named at the PR that fixed the issue (`— reported by @login in #N`). `--json` gains `generated_body_kept`. `SKILL.md` step 9 and Phase 5 of `references/release-process.md` name the exception (#206)
+
 ## [1.4.0] - 2026-10-23
 
 ### Added
@@ -246,7 +257,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/netresearch/github-release-skill/compare/v1.2.1...v1.2.2
