@@ -110,6 +110,19 @@ cp "$f" /tmp/t.tar.gz && printf x >> /tmp/t.tar.gz
 gh attestation verify /tmp/t.tar.gz --repo "$R" --signer-workflow "$W"; echo "rc=$?" # expect 404, rc=1
 ```
 
+**`gh attestation verify` takes exactly one artifact per call.** A glob such as `gh attestation verify dist/*.zip` expands to several arguments, and gh then stops with `too many arguments` and exit code 1 before it checks anything (measured with gh 2.102.0). Loop over the files, print each exit code, and let the last line fail when any file failed:
+
+```bash
+failed=0
+for f in dist/*.zip; do
+  gh attestation verify "$f" --repo "$R" --signer-workflow "$W"
+  rc=$?
+  printf '%s rc=%s\n' "$f" "$rc"
+  [ "$rc" -eq 0 ] || failed=1
+done
+[ "$failed" -eq 0 ]   # status 1 when any artifact failed
+```
+
 ## GitHub Artifact Attestations
 
 GitHub's native attestation system using `actions/attest@v4`:
