@@ -31,7 +31,7 @@ jobs:
       # through the custom manager in renovate.json.
       pre-command: |
         # renovate: datasource=github-releases depName=astral-sh/uv
-        UV_VERSION=0.13.5
+        UV_VERSION=0.13.6
         asset=uv-x86_64-unknown-linux-gnu.tar.gz
         base="https://github.com/astral-sh/uv/releases/download/$UV_VERSION"
         mkdir -p "$HOME/.local/bin"
