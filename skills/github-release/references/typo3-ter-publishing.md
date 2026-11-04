@@ -189,6 +189,35 @@ run's `Publish to TER` job says which. Old gaps on unmaintained
 extensions are noise — sort by release date. *Found 2026-10-05:
 `nr_temporal_cache` 1.0.1 released, TER still on 1.0.0, see below.*
 
+### A reserved key answers 200 with nothing published
+
+An extension key can be registered on TER without any upload. The API
+then answers **200** for it, with `version_count: 0` and
+`current_version` as an empty **array** instead of an object
+(`nr_mcp_agent`, measured 2026-11-04). A status-code check therefore
+reports "on TER" for an extension nobody can install. Before stating
+that an extension is published, or linking to its TER page from a
+README, a landing page or a manifest, read the count:
+
+```bash
+curl -sS "https://extensions.typo3.org/api/v1/extension/<key>" \
+  | jq -e 'type == "array" and .[0].version_count > 0' >/dev/null \
+  && echo published || echo "not published (reserved, unknown, or error)"
+```
+
+The response is a **list** with one element, not an object, even for a
+single key. Code that indexes it as an object (`.version_count`,
+`data["version_count"]`) raises, and an `except` around that turns every
+extension into "not on TER" without a trace. An unknown key answers 404
+with an error object. The `/versions` endpoint used above answers 404
+for a reserved key too ("No versions could be found"), so the checks in
+this skill that query it are not fooled; the trap is the plain
+`/extension/<key>` endpoint.
+
+Do not build the repository URL from the extension key either: TER's
+`meta.repository_url` names it (key `contexts`, repository
+`t3x-contexts`).
+
 ## `release: published` Never Fires When CI Created the Release
 
 A workflow action performed with the default `GITHUB_TOKEN` does not
