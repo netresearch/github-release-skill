@@ -178,7 +178,7 @@ gh repo list <org> --limit 300 --no-archived --json name --jq '.[].name' \
     rel=$(gh release list -R "<org>/$r" --limit 1 --exclude-drafts \
       --exclude-pre-releases --json tagName --jq '.[0].tagName')
     ter=$([ -n "$key" ] && curl -sL "https://extensions.typo3.org/api/v1/extension/$key" \
-      | jq -r '.[0].current_version.number // "-"')
+      | jq -r '(.[0]?.current_version | objects | .number) // "-"')
     printf '%s\t%s\t%s\t%s\n' "$r" "${key:--}" "${rel:--}" "${ter:--}"
   done | column -t
 ```
@@ -212,7 +212,9 @@ extension into "not on TER" without a trace. An unknown key answers 404
 with an error object. The `/versions` endpoint used above answers 404
 for a reserved key too ("No versions could be found"), so the checks in
 this skill that query it are not fooled; the trap is the plain
-`/extension/<key>` endpoint.
+`/extension/<key>` endpoint. The fleet table above reads that endpoint,
+so it takes `current_version` only when it is an object: indexing the
+empty array with `.number` makes jq exit 5 with "Cannot index array".
 
 Do not build the repository URL from the extension key either: TER's
 `meta.repository_url` names it (key `contexts`, repository
