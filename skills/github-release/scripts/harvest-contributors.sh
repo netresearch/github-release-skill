@@ -41,8 +41,15 @@ extract_pr_numbers() {
   grep -oE '\(#[0-9]+\)[[:space:]]*$|^Merge pull request #[0-9]+' | grep -oE '[0-9]+' | sort -un || true
 }
 
-# GitHub bot logins end in "[bot]"; also drop known automation by bare name.
+# is_bot <login> [<GraphQL __typename>]
+#
+# The GraphQL type decides first: a GitHub App author comes back from GraphQL as
+# `{"__typename":"Bot","login":"netresearch-project-bot"}`, WITHOUT the "[bot]"
+# suffix that REST shows. Matching on the login alone credited such an App as a
+# human contributor. The login checks below stay as the fallback for a caller
+# that has no type: a "[bot]" suffix, or known automation by bare name.
 is_bot() {
+  [[ "${2:-}" == "Bot" ]] && return 0
   case "$1" in
     *'[bot]') return 0 ;;
     dependabot | renovate | github-actions | gemini-code-assist | copilot*) return 0 ;;
@@ -86,7 +93,7 @@ main() {
   # PR lookup failing).
   local -A CODE=()      # login -> 1 (merged-PR authors)
   local -A REPORTERS=() # login -> "12 34" (space-separated issue numbers, deduped at emit)
-  local pr json a inum ilogin
+  local pr json a atype inum itype ilogin
   # Global, not local: the EXIT trap runs after main has returned.
   GQL_ERR="$(mktemp)"
   trap 'rm -f "$GQL_ERR"' EXIT
@@ -100,8 +107,8 @@ main() {
       query($o:String!,$n:String!,$pr:Int!){
         repository(owner:$o,name:$n){
           pullRequest(number:$pr){
-            author{login}
-            closingIssuesReferences(first:30){nodes{number author{login}}}
+            author{__typename login}
+            closingIssuesReferences(first:30){nodes{number author{__typename login}}}
           }
         }
       }' -F o="$owner" -F n="$name" -F pr="$pr" 2>"$GQL_ERR")"; then
@@ -113,15 +120,20 @@ main() {
     fi
     # jq tolerates indexing null (yields null -> // empty), and .nodes[]? guards
     # the iteration, so a PR without author or closing issues passes under set -e.
-    a="$(jq -r '.data.repository.pullRequest.author.login // empty' <<<"$json")"
-    if [ -n "$a" ] && ! is_bot "$a"; then CODE["$a"]=1; fi
+    #
+    # The type sits BEFORE the login and falls back to "-", never to "": tab is
+    # whitespace to `read`, so an empty field collapses and the login would slide
+    # into the type's place. A missing login is the last field and stays empty.
+    IFS=$'\t' read -r atype a < <(jq -r '.data.repository.pullRequest.author
+                    | "\(.__typename? // "-")\t\(.login? // "")"' <<<"$json")
+    if [[ -n "$a" ]] && ! is_bot "$a" "$atype"; then CODE["$a"]=1; fi
 
-    while IFS=$'\t' read -r inum ilogin; do
-      if [ -n "$ilogin" ] && ! is_bot "$ilogin"; then
+    while IFS=$'\t' read -r inum itype ilogin; do
+      if [[ -n "$ilogin" ]] && ! is_bot "$ilogin" "$itype"; then
         REPORTERS["$ilogin"]="${REPORTERS["$ilogin"]:+${REPORTERS["$ilogin"]} }${inum}"
       fi
     done < <(jq -r '.data.repository.pullRequest.closingIssuesReferences.nodes[]?
-                    | "\(.number)\t\(.author.login // "")"' <<<"$json")
+                    | "\(.number)\t\(.author.__typename? // "-")\t\(.author.login? // "")"' <<<"$json")
   done
 
   # Plain lookup — NOT a section to paste. @mention these people INLINE at the

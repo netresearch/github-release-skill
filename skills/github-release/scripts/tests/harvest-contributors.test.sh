@@ -98,30 +98,70 @@ case "$1 $2" in
       ratelimit)
         echo 'gh: API rate limit exceeded for user ID 1.' >&2; exit 1 ;;
     esac
-    jq -n --arg a "$STUB_AUTHOR" \
-      '{data:{repository:{pullRequest:{author:{login:$a},closingIssuesReferences:{nodes:[]}}}}}'; exit ;;
+    # STUB_TYPE adds the author's __typename (left out by default, so the old
+    # answer shape stays covered); STUB_ISSUE adds closing issue #7 whose author
+    # is given as "<__typename>:<login>".
+    jq -n --arg a "$STUB_AUTHOR" --arg t "${STUB_TYPE:-}" --arg i "${STUB_ISSUE:-}" '
+      def who($typ; $login): {login:$login} + (if $typ == "" then {} else {__typename:$typ} end);
+      {data:{repository:{pullRequest:{
+        author: who($t; $a),
+        closingIssuesReferences:{nodes:(if $i == "" then [] else
+          [{number:7, author: who($i | split(":")[0]; $i | split(":")[1])}] end)}}}}}'; exit ;;
 esac
 echo "gh stub: unexpected call: $*" >&2; exit 1
 STUB
 chmod +x "$stub/bin/gh"
 harvest() { # <author> [<graphql mode>] — output plus a final `EXIT: <status>` line
   env -i PATH="$stub/bin:/usr/bin:/bin" HOME="$stub" STUB_AUTHOR="$1" STUB_GQL="${2:-}" \
+    STUB_TYPE="${STUB_TYPE:-}" STUB_ISSUE="${STUB_ISSUE:-}" \
     bash --noprofile --norc "$HERE/../harvest-contributors.sh" -R o/r --from v1 --to v2 2>&1
   echo "EXIT: $?"
+}
+authors() { # <output> — its code-authors line
+  local out="$1"
+  grep '^code authors' <<<"$out"
+}
+reporters() { # <output> — its issue-reporters line
+  local out="$1"
+  grep '^issue reporters' <<<"$out"
 }
 bot_out=$(harvest 'renovate[bot]')
 check "a bot-only range does not crash" "" "$(grep -o 'unbound variable' <<<"$bot_out")"
 check "a bot-only range exits 0"        "EXIT: 0" "$(tail -n 1 <<<"$bot_out")"
-check "a bot-only range credits no one" "" "$(grep '^code authors' <<<"$bot_out")"
+check "a bot-only range credits no one" "" "$(authors "$bot_out")"
 human_out=$(harvest alice)
-check "a human author is still listed"  "code authors: @alice" "$(grep '^code authors' <<<"$human_out")"
+check "a human author is still listed"  "code authors: @alice" "$(authors "$human_out")"
+
+# --- a GitHub App author ------------------------------------------------------
+# GraphQL returns an App's login WITHOUT the "[bot]" suffix REST shows, e.g.
+# {"__typename":"Bot","login":"netresearch-project-bot"} for
+# netresearch/t3x-nr-textdb#224. Only the type marks it, and release-notes-status.sh
+# reported "MISSING CREDITS — @netresearch-project-bot" for that repo's v4.2.0.
+is_bot netresearch-project-bot Bot;  check "is_bot: App login with type Bot" "0" "$?"
+is_bot netresearch-project-bot;      check "the bare App login alone is not on the name list" "1" "$?"
+is_bot alice User;                   check "is_bot: User type is human" "1" "$?"
+app_out=$(STUB_TYPE=Bot harvest netresearch-project-bot)
+check "an App author (type Bot, no [bot]) credits no one" "" "$(authors "$app_out")"
+check "an App-only range exits 0"       "EXIT: 0" "$(tail -n 1 <<<"$app_out")"
+user_out=$(STUB_TYPE=User harvest alice)
+check "a typed human author is listed"  "code authors: @alice" "$(authors "$user_out")"
+issue_bot_out=$(STUB_TYPE=User STUB_ISSUE=Bot:netresearch-project-bot harvest alice)
+check "an App issue reporter is not listed" "" "$(reporters "$issue_bot_out")"
+issue_human_out=$(STUB_TYPE=User STUB_ISSUE=User:bob harvest alice)
+check "a human issue reporter is listed" "issue reporters (issue → reporter): @bob (#7)" \
+      "$(reporters "$issue_human_out")"
+# No __typename at all (an older answer shape): the login must stay a login and
+# not slide into the type's field.
+issue_untyped_out=$(STUB_ISSUE=:bob harvest alice)
+check "an untyped issue reporter is still listed" "issue reporters (issue → reporter): @bob (#7)" \
+      "$(reporters "$issue_untyped_out")"
 
 # --- a failed PR lookup ---------------------------------------------------------
 # The GraphQL call used to end in `|| continue`, so a rate-limited lookup dropped
 # that PR's author without a word. Only NOT_FOUND (the number is an issue) skips.
 nf_out=$(harvest alice notfound)
 check "an issue number is skipped"        "EXIT: 0" "$(tail -n 1 <<<"$nf_out")"
-check "and credits no one"                "" "$(grep '^code authors' <<<"$nf_out")"
+check "and credits no one"                "" "$(authors "$nf_out")"
 rl_out=$(harvest alice ratelimit)
 check "a failed lookup exits non-zero"    "EXIT: 1" "$(tail -n 1 <<<"$rl_out")"
 check "and names the PR and gh's error"   "lookup of #5 in o/r failed: gh: API rate limit exceeded for user ID 1." \
