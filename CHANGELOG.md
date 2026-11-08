@@ -14,6 +14,14 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `references/typo3-ter-publishing.md` says that the TER API answers 200 for a reserved extension key with nothing published (`version_count: 0`, `current_version: []`), while `/versions` answers 404, so a check tests `version_count` rather than the status code. The fleet table in the same file reads `current_version.number` only when `current_version` is an object; jq used to exit 5 on a reserved key (#212)
+
+### Fixed
+
+- `harvest-contributors.sh` treats an author whose GraphQL `__typename` is `Bot` as a bot, also when GraphQL returns its login without the `[bot]` suffix, for PR authors and for the authors of closing issues. A GitHub App is then no longer listed as a code author or issue reporter, and `release-notes-status.sh` no longer asks for it to be credited (#214)
+
 ## [1.5.0] - 2026-10-29
 
 ### Changed
