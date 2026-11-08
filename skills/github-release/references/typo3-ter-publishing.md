@@ -55,7 +55,7 @@ in `env:` is taken literally), and read the tag name from `GITHUB_REF`
 while checking out the commit itself:
 
 ```yaml
-- uses: actions/checkout@<sha>          # no ref: checks out github.sha
+- uses: actions/checkout@<sha>          # no ref: bound to github.sha
 
 - name: Resolve version
   run: |
@@ -75,11 +75,16 @@ while checking out the commit itself:
 ```
 
 Do not pass `ref: ${{ github.ref }}` to the checkout. Without `ref`,
-`actions/checkout` checks out `github.sha`, the commit the tag pointed at
-when the run started (`src/input-helper.ts` at v7.0.1, lines 79-82); an
-explicit `github.ref` is resolved again when the step runs, so a tag moved
-in between puts a commit on TER that the build and any release gate never
-saw. A called workflow that needs a ref passes `${{ github.sha }}`. Before
+`actions/checkout` pairs the tag with `github.sha`, the commit the tag
+pointed at when the run started (`src/input-helper.ts` at v7.0.1, lines
+79-82), fetches the tag and fails with `The ref 'refs/tags/…' does not
+point to the expected commit` when it has moved (`src/git-source-provider.ts`,
+lines 221-229). A re-run of that run fails the same way: push a new tag,
+or move the tag back to `github.sha` and re-run. An explicit `github.ref` carries no commit, so the same
+step checks out whatever the tag points at by then, and a tag moved in
+between puts a commit on TER that the build and any release gate never saw.
+A called workflow that needs a ref passes `${{ github.sha }}`, which checks
+out that commit whatever the tag does. Before
 the GitHub release is created, check that the tag still points at
 `github.sha` and stop otherwise: netresearch/typo3-ci-workflows#330 does
 both in `release-typo3-extension.yml` and `release.yml`.
