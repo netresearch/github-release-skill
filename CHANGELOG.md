@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-08
+
 ### Changed
 
 - `references/typo3-ter-publishing.md` says that the TER API answers 200 for a reserved extension key with nothing published (`version_count: 0`, `current_version: []`), while `/versions` answers 404, so a check tests `version_count` rather than the status code. The fleet table in the same file reads `current_version.number` only when `current_version` is an object; jq used to exit 5 on a reserved key (#212)
@@ -265,7 +267,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/netresearch/github-release-skill/compare/v1.2.2...v1.3.0
