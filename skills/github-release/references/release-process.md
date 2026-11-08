@@ -46,7 +46,13 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
    those notes. scripts/validate-pre-release.sh only warns about leftover
    fragments. What fails such a release commit is the repository's own
    check (`composer ci:test:changelog` in netresearch/t3x-nr-llm and
-   t3x-nr-vault). Then add the new [X.Y.Z] section AND bump the footer
+   t3x-nr-vault). Read every collected entry against the current tree before
+   committing: a fragment describes the state of its own PR, and a later PR
+   can change the rule it states without touching the fragment (t3x-nr-vault
+   1.4.0: one entry gave a weaker old-key retention rule than the key
+   rotation guide on the same tree; only a reviewer bot on the release PR,
+   netresearch/t3x-nr-vault#511, caught it). Then add
+   the new [X.Y.Z] section AND bump the footer
    link-references (Keep a Changelog) — repoint the [Unreleased]: line to
    compare/vX.Y.Z...HEAD and add a [X.Y.Z]: .../compare/vPREVIOUS...vX.Y.Z line.
    The footer LABEL is the plain version ([X.Y.Z]:), while the compare URL uses

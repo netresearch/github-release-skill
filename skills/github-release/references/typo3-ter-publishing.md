@@ -51,13 +51,11 @@ will compare `v0.6.0` against `0.6.0` and silently fail validation.
 
 The fix is to derive the bare version in a `run:` step (GitHub Actions
 `env:` blocks do **not** perform shell parameter expansion — `${TAG#v}`
-in `env:` is taken literally), and pass `github.ref` straight to
-`actions/checkout`:
+in `env:` is taken literally), and read the tag name from `GITHUB_REF`
+while checking out the commit itself:
 
 ```yaml
-- uses: actions/checkout@<sha>
-  with:
-    ref: ${{ github.ref }}              # refs/tags/v0.6.0 — finds the tag
+- uses: actions/checkout@<sha>          # no ref: checks out github.sha
 
 - name: Resolve version
   run: |
@@ -75,6 +73,16 @@ in `env:` is taken literally), and pass `github.ref` straight to
     COMMENT="${COMMENT:-Updated extension to $VERSION}"  # never empty, see below
     tailor ter:publish --comment="$COMMENT" "$VERSION"
 ```
+
+Do not pass `ref: ${{ github.ref }}` to the checkout. Without `ref`,
+`actions/checkout` checks out `github.sha`, the commit the tag pointed at
+when the run started (`src/input-helper.ts` at v7.0.1, lines 79-82); an
+explicit `github.ref` is resolved again when the step runs, so a tag moved
+in between puts a commit on TER that the build and any release gate never
+saw. A called workflow that needs a ref passes `${{ github.sha }}`. Before
+the GitHub release is created, check that the tag still points at
+`github.sha` and stop otherwise: netresearch/typo3-ci-workflows#330 does
+both in `release-typo3-extension.yml` and `release.yml`.
 
 Attach the comment with `=`. Passed as a separate word
 (`--comment "$COMMENT"`), a comment that starts with `-` — a Markdown
