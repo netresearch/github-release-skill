@@ -1,6 +1,7 @@
 {
   "name": "@netresearch/github-release-skill",
   "version": "0.0.0-source",
+  "private": true,
   "description": "Claude Code skill for safe GitHub releases with supply chain security.",
   "license": "(MIT AND CC-BY-SA-4.0)",
   "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
