@@ -322,6 +322,20 @@ check "the body's own CR heading is kept"           "" \
 check "prose in the body does not stand in for the heading" ' "Installation"' \
       "$(lost_ci_sections "$prose_body" "$(printf '## Installation\n')")"
 
+# --- the heading level is the repository's choice -----------------------------
+# CybotTM/wow-quickroute's release workflow writes `### Installation`. One older
+# release with a hand-edited `## Installation` made every other release on the
+# line report the block as lost, the workflow's own output included
+# (netresearch/github-release-skill#219).
+check "a level-3 body heading matches a level-2 sibling" "" \
+      "$(lost_ci_sections "$(printf 'Intro\n\n### Installation\n1. Download')" "$(printf '## Installation\n')")"
+check "a level-3 sibling heading is a CI block"         ' "Installation"' \
+      "$(lost_ci_sections "$nl_body" "$(printf 'Intro\n\n### Installation\n1. Download')")"
+check "level 3 on both sides is kept"                   "" \
+      "$(lost_ci_sections "$(printf '### Installation\n')" "$(printf '### Installation\n')")"
+check "a level-1 title is not a CI block"               "" \
+      "$(lost_ci_sections "$nl_body" "$(printf '# Installation\n')")"
+
 # --- a body with nothing in it --------------------------------------------------
 # A release created without notes shows only GitHub's compare link, or nothing.
 # Neither shape tripped any check, so both reported `ok`.

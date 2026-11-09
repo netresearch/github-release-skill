@@ -129,14 +129,19 @@ ci_block_sections() {
                 "Software Bill of Materials"
 }
 
-# Does <text> carry `## <section>` as a heading? Only a whole heading line
-# counts. A substring test took prose such as "the `## Installation` block" in
-# one sibling as proof that the line emits that block, and then reported every
-# other release on the line as CI-APPENDED BLOCKS LOST. Trailing whitespace is
-# allowed because bodies edited in the web UI end their lines with `\r`.
-# <section> comes from ci_block_sections and holds no regex metacharacters.
+# Does <text> carry <section> as a heading below the title? Only a whole
+# heading line counts. A substring test took prose such as "the `## Installation`
+# block" in one sibling as proof that the line emits that block, and then
+# reported every other release on the line as CI-APPENDED BLOCKS LOST. Any level
+# from `##` to `######` counts: a repository's own release workflow picks its
+# level (CybotTM/wow-quickroute writes `### Installation`), and one sibling
+# edited to another level must not mark the workflow's output as lost (#219).
+# Trailing whitespace is allowed because bodies edited in the web UI end their
+# lines with `\r`. <section> comes from ci_block_sections and holds no regex
+# metacharacters.
 has_heading() { # <text> <section>
-  body_has "$1" -E "^## $2[[:space:]]*\$"
+  local text="$1" section="$2"
+  body_has "$text" -E "^#{2,6} ${section}[[:space:]]*\$"
 }
 
 # The CI blocks a sibling on the line carries as a heading and <body> does not,
