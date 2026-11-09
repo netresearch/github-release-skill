@@ -406,7 +406,7 @@ def _stdin_scripts(node, data: bytes) -> list:
 # parser could not read is cut at every character that can end a command,
 # quotes or not. Coarse on purpose: a piece that merely starts with a
 # guarded word can only add a block, never hide a command.
-_COARSE_SEPARATORS = re.compile(r"[\n;&|(){}]+")
+_COARSE_SEPARATORS = re.compile(r"[\n;&|(){}`]+")
 
 
 def _error_region(error, data: bytes):

@@ -344,6 +344,12 @@ EOF
 )
 git tag v1.2.3
 echo \"it's done\""
+check 2 'backtick substitution in the coarsely cut rest after two heredocs' "cat <<A <<B
+x
+A
+it's
+B
+echo \`git tag v1.2.3\`"
 check 0 'deleting a branch named v2-migration with -d' 'git push origin -d v2-migration'
 check 0 'deleting a branch named v2-old by colon refspec' 'git push origin :v2-old'
 check 2 'deleting a pre-release tag' 'git push origin --delete v1.2.3-rc.1'

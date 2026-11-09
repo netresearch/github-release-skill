@@ -364,6 +364,12 @@ A
 it's
 B
 gh release delete v1.2.3 --yes"
+check 2 'backtick substitution in the coarsely cut rest after two heredocs' "cat <<A <<B
+x
+A
+it's
+B
+echo \`gh release delete v1.2.3 --yes\`"
 check 2 'create in a heredoc read by bash past a line starting with the delimiter' "bash <<'EOF'
 echo EOF2
 gh release create v1.2.3
