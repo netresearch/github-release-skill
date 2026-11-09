@@ -285,13 +285,14 @@ The netresearch `release-go-app.yml` orchestrator appends `## Container image` a
 # jq -j writes the body exactly as stored; `--jq .body` appends a newline the
 # stored body does not have, and the recipe would publish it
 gh release view vX.Y.Z --repo owner/repo --json body | jq -j .body > /tmp/orig.md
-# everything from the FIRST CI block on — whichever of them the body opens with
-awk '/^## (Installation|Container image|Verify your download)$/{f=1} f' /tmp/orig.md > /tmp/tail.md
+# everything from the FIRST CI block on — whichever of them the body opens with,
+# at whatever heading level the workflow writes (`##+`, not `##`)
+awk '/^##+ (Installation|Container image|Verify your download)$/{f=1} f' /tmp/orig.md > /tmp/tail.md
 cat my-narrative.md /tmp/tail.md > /tmp/final.md                 # narrative replaces ONLY ## Changes
 gh release edit vX.Y.Z --repo owner/repo --notes-file /tmp/final.md
 ```
 
-Check `/tmp/tail.md` before the edit: an empty file means the body carries none of these headings, and the edit would drop whatever CI appended. Read the body and add its first CI heading to the pattern. Observed 2026-09-24 on six TYPO3 extension releases: the first CI block of each was `## Installation`, so the `## Container image` cut captured nothing, and the capture with `--jq .body` put one extra trailing newline into the first body published from it.
+Check `/tmp/tail.md` before the edit: an empty file means the body carries none of these headings, and the edit would drop whatever CI appended. Read the body and add its first CI heading to the pattern. Observed 2026-09-24 on six TYPO3 extension releases: the first CI block of each was `## Installation`, so the `## Container image` cut captured nothing, and the capture with `--jq .body` put one extra trailing newline into the first body published from it. A repository's own release workflow can write the blocks one level lower: CybotTM/wow-quickroute writes `### Installation`, which a pattern anchored on `^##` followed by a space never matches (#219).
 
 Then re-check the emitted verify commands are correct for a reusable-workflow build (`--signer-workflow`, not `--repo` alone).
 
