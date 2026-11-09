@@ -4,7 +4,7 @@
 #
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["tree-sitter==0.26.0", "tree-sitter-bash==0.25.1"]
 # ///
 """
 PreToolUse hook that blocks dangerous git tag operations.
@@ -42,7 +42,16 @@ import sys
 
 # Both guards share one invocation parser; sys.path[0] is this directory when
 # the hook is run as a script, so the sibling module resolves.
-from _invocations import INVOCATION_PREFIX, split_invocations
+from _invocations import (
+    GIT_GLOBAL_OPTIONS,
+    INVOCATION_PREFIX,
+    command_word,
+    split_invocations,
+)
+
+# "git", however it is spelled (issue #158), and its own options in front of
+# the subcommand ("git -C <dir> tag").
+GIT = INVOCATION_PREFIX + command_word("git") + GIT_GLOBAL_OPTIONS
 
 
 def parse_command(input_data: str) -> str:
@@ -88,6 +97,19 @@ def has_version_tag_arg(args: str) -> bool:
     # after a path separator (refs/tags/vX.Y.Z), or just inside a quote, because
     # a quoted tag name creates exactly the same tag as the bare form.
     return bool(re.search(r"""(?:^|[\s/"'])v\d""", args))
+
+
+def deletes_version_tag_ref(push_args: str) -> bool:
+    """Whether a "git push --delete" names a version tag: vX..., or
+    refs/tags/vX..., bare or quoted.
+
+    Narrower than has_version_tag_arg on purpose. "release/v1.5.0" is a branch,
+    and deleting it after a release PR is routine, but the "/v1" in its name
+    blocked the deletion. Three such deletions in recorded agent sessions went
+    through "git -C <dir> push", which this guard did not read before; reading
+    it would have blocked all three.
+    """
+    return bool(re.search(r"""(?:^|[\s"'])(?:refs/tags/)?v\d""", push_args))
 
 
 # "git tag" is judged by its words, split the way the shell splits them, not by
@@ -274,9 +296,7 @@ def check_tag_invocation(segment: str) -> None:
     unbalanced quote blocked an annotated tag with a multi-line message
     whenever the version stood before that newline.
     """
-    tag_match = re.match(
-        INVOCATION_PREFIX + r"git\s+tag\b(.*)", segment, flags=re.DOTALL
-    )
+    tag_match = re.match(GIT + r"\s+tag\b(.*)", segment, flags=re.DOTALL)
     if not tag_match:
         return
 
@@ -318,7 +338,7 @@ def targets_only_major_pointer(push_args: str) -> bool:
 
 def check_push_invocation(segment: str) -> None:
     """Block tag deletion and tag force-push in a single "git push"."""
-    push_match = re.match(INVOCATION_PREFIX + r"git\s+push\b(.*)", segment)
+    push_match = re.match(GIT + r"\s+push\b(.*)", segment, flags=re.DOTALL)
     if push_match:
         push_args = push_match.group(1).strip()
 
@@ -334,7 +354,7 @@ def check_push_invocation(segment: str) -> None:
 
         # Check for --delete flag with version tag: git push --delete origin v*
         # Also handles: git push origin --delete v*
-        if re.search(r"--delete\b", push_args) and has_version_tag_arg(push_args):
+        if re.search(r"--delete\b", push_args) and deletes_version_tag_ref(push_args):
             block(
                 "Deleting a remote version tag removes a published release reference. "
                 "This can break downstream consumers, CI pipelines, and package "

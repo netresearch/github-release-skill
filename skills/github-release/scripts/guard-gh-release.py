@@ -4,7 +4,7 @@
 #
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["tree-sitter==0.26.0", "tree-sitter-bash==0.25.1"]
 # ///
 """
 PreToolUse hook that blocks dangerous GitHub release operations.
@@ -36,7 +36,12 @@ import sys
 
 # Both guards share one invocation parser; sys.path[0] is this directory when
 # the hook is run as a script, so the sibling module resolves.
-from _invocations import INVOCATION_PREFIX, split_invocations
+from _invocations import (
+    GH_GLOBAL_OPTIONS,
+    INVOCATION_PREFIX,
+    command_word,
+    split_invocations,
+)
 
 
 def parse_command(input_data: str) -> str:
@@ -89,7 +94,9 @@ suggestion: |
 # produced by split_invocations, so a separator -- a newline included -- has
 # already ended the previous command, and INVOCATION_PREFIX absorbs sudo, an env
 # assignment or a loop keyword standing in front of "gh".
-GH_RELEASE_RE = re.compile(INVOCATION_PREFIX + r"gh\s+release\s+(\S+)")
+GH_RELEASE_RE = re.compile(
+    INVOCATION_PREFIX + command_word("gh") + GH_GLOBAL_OPTIONS + r"\s+release\s+(\S+)"
+)
 
 # Read-only subcommands that are safe.
 ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
@@ -104,7 +111,9 @@ ALLOWED_RELEASE_SUBCOMMANDS = {"view", "list", "download"}
 # and the hook timeout (onFailure: block in hooks.json) turns a hang into a
 # blocked Bash call. shlex splits the words the way the shell does, in linear
 # time.
-GH_API_RE = re.compile(INVOCATION_PREFIX + r"gh\s+api(?=\s|$)")
+GH_API_RE = re.compile(
+    INVOCATION_PREFIX + command_word("gh") + GH_GLOBAL_OPTIONS + r"\s+api(?=\s|$)"
+)
 
 # A release endpoint anywhere in a word: a bare or leading-slash path, a full
 # URL, or a path whose quoting shlex could not resolve ($'...'). Owner and
