@@ -26,7 +26,8 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 # The hooks.json command for a guard, exactly as Claude Code runs it.
 hook_cmd() { # <guard-script-name>
-  jq -r --arg g "$1" '.hooks.PreToolUse[].hooks[].command | select(contains($g))' "$HOOKS"
+  local guard="$1"
+  jq -r --arg g "$guard" '.hooks.PreToolUse[].hooks[].command | select(contains($g))' "$HOOKS"
 }
 REL_CMD=$(hook_cmd guard-gh-release.py)
 TAG_CMD=$(hook_cmd guard-lightweight-tag.py)
@@ -36,6 +37,17 @@ for c in "$REL_CMD" "$TAG_CMD"; do
     fail=1
   fi
 done
+
+# The warm cases need the dependencies installed, not left to whichever suite
+# happened to run first, and a stamp of their own: a fresh stamp in the real
+# TMPDIR from a failed install would send them to the fallback.
+for g in guard-gh-release.py guard-lightweight-tag.py; do
+  if ! uv sync --script "$HERE/../$g" >/dev/null 2>&1; then
+    printf 'FAIL - cannot install the dependencies of %s for the warm cases\n' "$g"
+    fail=1
+  fi
+done
+WARM_TMP=$(mktemp -d "$SCRATCH/warm.XXXX")
 
 payload_for() { # <command>
   CMD="$1" python3 -c \
@@ -56,7 +68,7 @@ check() {
         sh -c "$hook" 2>&1 >/dev/null)
     got=$?
   else
-    stderr=$(printf '%s' "$payload" | CLAUDE_PLUGIN_ROOT="$ROOT" sh -c "$hook" 2>&1 >/dev/null)
+    stderr=$(printf '%s' "$payload" | CLAUDE_PLUGIN_ROOT="$ROOT" TMPDIR="$WARM_TMP" sh -c "$hook" 2>&1 >/dev/null)
     got=$?
   fi
   if [[ "$got" == "$want" && "$stderr" == *"$text"* ]]; then
@@ -93,6 +105,41 @@ check offline 2 "$REL_CMD" 'gh escaped' '\gh release create v1.2.3'
 check offline 2 "$REL_CMD" 'gh split by empty quotes' 'g""h release create v1.2.3'
 check offline 2 "$TAG_CMD" 'git quoted' "'git' tag v1.2.3"
 check offline 2 "$TAG_CMD" 'git on a later line' $'echo start\nsudo git tag v1.2.3'
+
+# A payload whose tool_input.command is empty is read through to the top-level
+# command, as the guards' parse_command does.
+d=$(mktemp -d "$SCRATCH/shape.XXXX")
+printf '%s' '{"tool_input":{"command":""},"command":"gh release delete v1"}' |
+  CLAUDE_PLUGIN_ROOT="$ROOT" UV_OFFLINE=1 UV_CACHE_DIR="$d/cache" TMPDIR="$d" \
+    sh -c "$REL_CMD" >/dev/null 2>&1
+got=$?
+if [[ "$got" == 2 ]]; then
+  printf 'ok   - [offline] empty tool_input.command falls through to command\n'
+else
+  printf 'FAIL - [offline] empty tool_input.command falls through to command: rc %s\n' "$got"
+  fail=1
+fi
+
+# --- no uv on PATH: the fallback decides and names the real cause -----------
+uv_dir=$(dirname "$(command -v uv)")
+if [[ -x "$uv_dir/sh" || -x "$uv_dir/python3" ]]; then
+  printf 'skip - [no-uv] uv shares %s with sh or python3\n' "$uv_dir"
+else
+  NOUV_PATH=$(tr ':' '\n' <<<"$PATH" | grep -vxF "$uv_dir" | paste -sd: -)
+  for c in 'ls -la|0|' 'gh pr list|2|uv is not on PATH'; do
+    IFS='|' read -r command want text <<<"$c"
+    d=$(mktemp -d "$SCRATCH/nouv.XXXX")
+    stderr=$(printf '%s' "$(payload_for "$command")" |
+      PATH="$NOUV_PATH" CLAUDE_PLUGIN_ROOT="$ROOT" TMPDIR="$d" sh -c "$REL_CMD" 2>&1 >/dev/null)
+    got=$?
+    if [[ "$got" == "$want" && "$stderr" == *"$text"* ]]; then
+      printf 'ok   - [no-uv] %s\n' "$command"
+    else
+      printf 'FAIL - [no-uv] %s: rc %s (want %s), stderr: %s\n' "$command" "$got" "$want" "$stderr"
+      fail=1
+    fi
+  done
+fi
 
 # --- unreachable index: the call is decided inside the hook timeout ---------
 # uv waits about 49 s for a blackholed index on its own; hooks.json allows 10.

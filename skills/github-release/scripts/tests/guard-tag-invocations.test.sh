@@ -32,8 +32,9 @@ run_guard() {
 }
 
 skip_case() { # <expected-rc> <description>
-  [[ "${BLOCK_ONLY:-}" == 1 && "$1" != 2 ]] || return 1
-  printf 'skip - %s\n' "$2"
+  local want="$1" desc="$2"
+  [[ "${BLOCK_ONLY:-}" == 1 && "$want" != 2 ]] || return 1
+  printf 'skip - %s\n' "$desc"
 }
 
 check() { # <expected-rc> <description> <command>
