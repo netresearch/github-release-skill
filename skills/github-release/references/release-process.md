@@ -287,7 +287,7 @@ The netresearch `release-go-app.yml` orchestrator appends `## Container image` a
 gh release view vX.Y.Z --repo owner/repo --json body | jq -j .body > /tmp/orig.md
 # everything from the FIRST CI block on — whichever of them the body opens with,
 # at whatever heading level the workflow writes (`##+`, not `##`)
-awk '/^##+ (Installation|Container image|Verify your download)$/{f=1} f' /tmp/orig.md > /tmp/tail.md
+awk '/^##+ (Installation|Container image|Verify your download)[[:space:]]*$/{f=1} f' /tmp/orig.md > /tmp/tail.md
 cat my-narrative.md /tmp/tail.md > /tmp/final.md                 # narrative replaces ONLY ## Changes
 gh release edit vX.Y.Z --repo owner/repo --notes-file /tmp/final.md
 ```
