@@ -6,6 +6,12 @@
   "pre-commit": {
     "enabled": true
   },
+  "pep723": {
+    "description": "Inline script dependencies of the guard hooks (tree-sitter, tree-sitter-bash); the manager is opt-in",
+    "managerFilePatterns": [
+      "/^skills/github-release/scripts/guard-[^/]+\\.py$/"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",

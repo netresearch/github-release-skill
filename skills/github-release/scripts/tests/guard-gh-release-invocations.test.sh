@@ -233,11 +233,12 @@ check 0 'api -i on a release read' 'gh api -i repos/o/r/releases/latest'
 # A shell comment is cut the way bash cuts it: words after it never reach gh.
 check 2 'api DELETE with a comment naming GET' 'gh api repos/o/r/releases/1 -X DELETE # -X GET'
 check 2 'api data with a comment naming GET' 'gh api repos/o/r/releases -f tag_name=v1 # -X GET'
-# The call is also judged without the comment cut, so a release path that
-# appears only in a comment blocks. That is the safe direction: the cutter is a
-# text scan, and a "#" bash does not read as a comment must never cost a real
-# method (the two cases below).
-check 2 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
+# The parser separates a comment from the command, so a release path that
+# appears only in a comment is not part of the call. This blocked while the
+# comment was cut by a text scan and the uncut text was judged as well. A "#"
+# bash does not read as a comment must still never cost a real method (the two
+# cases below).
+check 0 'api POST elsewhere, release path only in a comment' 'gh api repos/o/r/issues -X POST # repos/o/r/releases'
 # shellcheck disable=SC2016  # the guard must see the expansion unexpanded
 check 2 'api "#" inside a ${...} expansion' 'gh api repos/o/r/releases/1 -H X-A:${V/ #/} -X DELETE'
 check 2 "api \"#\" after a \$'...' string with an escaped quote" "gh api repos/o/r/releases/1 -H \$'X-A: a\\'b' -H 'X-B: #c' -X DELETE"
@@ -252,6 +253,130 @@ check 2 'api DELETE after a quoted assignment with a blank' 'A="x y" gh api -X D
 check 0 'view after a quoted assignment with a blank' 'A="x y" gh release view v1.2.3'
 # shellcheck disable=SC2016
 check 2 'create in a ${ cmd; } substitution' 'echo ${ gh release create v1.2.3; }'
+
+# --- a script handed to a shell is commands, not one argument (issue #157) --
+# The argument of "bash -c" and a heredoc or here-string a shell reads as its
+# script run exactly like the same text typed directly.
+check 2 'api PATCH inside bash -c' 'bash -c "gh api -X PATCH repos/o/r/releases/1 -f name=v1"'
+check 2 'create inside bash -lc' "bash -lc 'gh release create v1.2.3'"
+check 2 'create inside sh with options before -c' "sh -eu -o pipefail -c 'gh release create v1.2.3'"
+check 2 'delete inside sudo /bin/bash -c' "sudo /bin/bash -c 'gh release delete v1.2.3'"
+check 2 'create inside bash -c inside bash -c' "bash -c \"bash -c 'gh release create v1.2.3'\""
+check 0 'view inside bash -c' "bash -c 'gh release view v1.2.3'"
+check 2 'create inside eval' 'eval "gh release create v1.2.3"'
+check 2 'api PATCH in a heredoc read by bash' "bash <<'EOF'
+gh api -X PATCH repos/o/r/releases/1 -f name=v1
+EOF"
+check 2 'create in a heredoc read by sh -s' "sh -s -- arg <<EOF
+gh release create v1.2.3
+EOF"
+check 2 'create in a heredoc piped into bash' "cat <<'EOF' | bash
+gh release create v1.2.3
+EOF"
+check 2 'create in a here-string read by bash' "bash <<< 'gh release create v1.2.3'"
+check 2 'create echoed into sh' "echo 'gh release create v1.2.3' | sh"
+check 0 'heredoc written to a file stays data' "cat > notes.md <<'EOF'
+gh release create v1.2.3
+EOF"
+check 0 'heredoc read by a script file stays data' "bash deploy.sh <<'EOF'
+gh release create v1.2.3
+EOF"
+# shellcheck disable=SC2016  # the guard must see the substitution unexpanded
+check 2 'command substitution in an unquoted heredoc runs' 'cat > notes.md <<EOF
+$(gh release create v1.2.3)
+EOF'
+check 0 'command substitution in a quoted heredoc is text' "cat > notes.md <<'EOF'
+\$(gh release create v1.2.3)
+EOF"
+
+# --- the command name may be escaped, quoted or path-qualified (issue #158) --
+check 2 'api DELETE, escaped command name' '\gh api repos/o/r/releases/1 -X DELETE'
+check 2 'api DELETE, double-quoted command name' '"gh" api repos/o/r/releases/1 -X DELETE'
+check 2 'api DELETE, single-quoted command name' "'gh' api repos/o/r/releases/1 -X DELETE"
+check 2 'api DELETE, path-qualified command name' '/usr/bin/gh api repos/o/r/releases/1 -X DELETE'
+check 2 'create, path-qualified command name' '/usr/bin/gh release create v1'
+check 2 'create, quoted path' '"/usr/bin/gh" release create v1.2.3'
+check 2 'create, path behind sudo' 'sudo /usr/bin/gh release create v1.2.3'
+check 0 'a longer word ending in gh is another program' 'xgh release create v1.2.3'
+check 2 'delete with -R before the subcommand' 'gh -R o/r release delete v1.2.3'
+check 2 'create with --repo= before the subcommand' 'gh --repo=o/r release create v1.2.3'
+check 0 'view with -R before the subcommand' 'gh -R o/r release view v1.2.3'
+
+# --- ANSI-C quoting $'...' is read as bash reads it (issue #159) ------------
+check 2 "api DELETE after a \$'...' string with an escaped quote, no comment" "gh api repos/o/r/releases/1 -H \$'a\\'' -X DELETE -H \\'"
+check 2 "api method in ANSI-C quotes" "gh api repos/o/r/releases/1 -X \$'DELETE'"
+check 0 "api read with an ANSI-C header holding a quote" "gh api repos/o/r/releases/1 -H \$'Accept: x\\'y'"
+
+# --- what the parser cannot read is parsed again, not dropped ---------------
+# tree-sitter-bash 0.25.1 reads "==" after echo as an operator and the ";" as
+# an error, which made the next command an argument of echo.
+check 2 'create after "echo ==;"' 'echo ==; gh release create v1.2.3'
+check 0 'release read with a quoted pipe after "echo ==;"' 'echo ==; gh api "repos/o/r/releases?per_page=3" --jq ".[] | .tag_name"'
+
+# --- a heredoc ends only at a line equal to its delimiter -------------------
+# tree-sitter-bash 0.25.1 also ends it at "    EOF", "EOF2" or "EOF # x" and
+# reads the rest of the body as commands; an apostrophe there swallowed the
+# command after the real terminator (review of #221).
+check 2 'delete after a heredoc holding an indented copy of its delimiter' "cat > README.md <<'EOF'
+## Publishing
+
+Write the notes with a heredoc:
+
+    cat > notes.md <<'EOF'
+    ...
+    EOF
+
+Then publish. Don't skip --verify-tag.
+EOF
+gh release delete v1.2.2 --yes"
+check 0 'release command inside a PR body after an indented delimiter' "gh pr create --title x --body \"\$(cat <<'EOF'
+Example:
+
+  cat <<'EOF'
+  EOF
+  gh release delete v1.2.2 --yes
+EOF
+)\""
+# Inside "$( )" or backticks bash also ends a heredoc where the substitution
+# ends ("EOF)"), so the command after it runs (second review of #221).
+check 2 'delete after a heredoc closed with its substitution' "x=\$(cat <<EOF
+notes
+EOF)
+gh release delete v1.2.3 --yes"
+check 2 'delete after a heredoc closed with a backtick' "x=\`cat <<EOF
+notes
+EOF\`
+gh release delete v1.2.3 --yes"
+check 2 'delete after a heredoc closed with its substitution, same line' "x=\$(cat <<EOF
+notes
+EOF); gh release delete v1.2.3 --yes"
+check 2 'delete after a misread heredoc in a substitution whose body has a line ending in ")"' "NOTES=\$(cat <<'EOF'
+EOF2
+1) first item
+it's
+EOF
+)
+gh release delete v1.2.3 --yes
+echo \"it's done\""
+check 2 'delete after two heredocs on one line' "cat <<A <<B
+x
+A
+it's
+B
+gh release delete v1.2.3 --yes"
+check 2 'backtick substitution in the coarsely cut rest after two heredocs' "cat <<A <<B
+x
+A
+it's
+B
+echo \`gh release delete v1.2.3 --yes\`"
+check 2 'create in a heredoc read by bash past a line starting with the delimiter' "bash <<'EOF'
+echo EOF2
+gh release create v1.2.3
+EOF"
+check 2 'delete behind a redirection in front of the command name' '2>/dev/null gh release delete v1.2.3 --yes'
+check 2 'delete inside bash -euo pipefail -c' "bash -euo pipefail -c 'gh release delete v1.2.3 --yes'"
+check 2 'delete inside bash -eO extglob -c' "bash -eO extglob -c 'gh release delete v1.2.3 --yes'"
 
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'

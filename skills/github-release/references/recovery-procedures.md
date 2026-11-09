@@ -346,8 +346,9 @@ repository name already.
 **Recovery** (existing releases): this is the maintainer's step, not the
 agent's. `guard-gh-release.py` blocks `gh release edit --title` and a
 mutating `gh api` call on a releases endpoint, with no override, and that is
-intended. It reads the command it is shown; a call wrapped in `bash -c "…"`
-or in a script is beyond it, so do not read its silence there as permission.
+intended. It reads the command it is shown, including a script handed to a
+shell with `bash -c "…"` or a heredoc; a script file is beyond it, so do not
+read its silence there as permission.
 Hand the maintainer a script instead, and let them run it with the `!` prefix:
 
 1. List the releases whose title is exactly `<Project> <tag>`:

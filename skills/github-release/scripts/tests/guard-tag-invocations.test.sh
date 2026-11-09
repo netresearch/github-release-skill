@@ -287,5 +287,79 @@ check 2 'force-push of a pre-release tag stays blocked' 'git push -f origin refs
 check 2 'pointer and release tag together stay blocked' 'git push -f origin refs/tags/v4 refs/tags/v4.7.2'
 check 2 'force-push of all tags stays blocked' 'git push --force --tags'
 check 2 'deleting the pointer stays blocked' 'git push origin :refs/tags/v4'
+# --- a script handed to a shell is commands, not one argument (issue #157) --
+check 2 'lightweight tag inside bash -c' "bash -c 'git tag v1.2.3'"
+check 2 'tag deletion inside sh -c behind env' "env FOO=1 sh -c 'git tag -d v1.2.3'"
+check 2 'tag deletion in a heredoc read by bash' "bash <<'EOF'
+git tag -d v1.2.3
+EOF"
+check 2 'tag force-push in a heredoc piped into sh' "cat <<EOF | sh
+git push --force --tags
+EOF"
+check 0 'signed tag inside bash -c' "bash -c 'git tag -s v1.2.3 -m v1.2.3'"
+check 2 'tag deletion inside eval' "eval 'git tag -d v1.2.3'"
+
+# --- the command name may be escaped, quoted or path-qualified (issue #158) --
+check 2 'lightweight tag, escaped command name' '\git tag v1.2.3'
+check 2 'lightweight tag, double-quoted command name' '"git" tag v1.2.3'
+check 2 'lightweight tag, single-quoted command name' "'git' tag v1.2.3"
+check 2 'lightweight tag, path-qualified command name' '/usr/bin/git tag v1.2.3'
+check 2 'remote tag deletion, path-qualified command name' '/usr/bin/git push origin :refs/tags/v1.2.3'
+
+# --- git's own options before the subcommand --------------------------------
+check 2 'lightweight tag after -C <dir>' 'git -C /tmp/repo tag v1.2.3'
+check 2 'tag deletion after -C "<dir with a blank>"' 'git -C "/tmp/a b" tag -d v1.2.3'
+check 2 'lightweight tag after -c key=value' 'git -c user.name=x tag v1.2.3'
+check 2 'lightweight tag after --git-dir=<dir>' 'git --git-dir=/r/.git tag v1.2.3'
+check 2 'lightweight tag after --no-pager' 'git --no-pager tag v1.2.3'
+check 0 'signed tag after -C <dir>' 'git -C /tmp/repo tag -s v1.2.3 -m v1.2.3'
+check 0 'listing after -C <dir>' "git -C /r tag -l 'v1.*'"
+check 2 'remote tag deletion after -C <dir>' 'git -C /r/.bare push origin --delete v1.2.3'
+check 2 'remote tag deletion by refs/tags/ path' 'git push origin --delete refs/tags/v1.2.3'
+# A branch whose name holds "/v1" is not a version tag. Deleting the release
+# branch after its PR merged is routine.
+check 0 'release branch deletion' 'git push origin --delete release/v1.5.0'
+check 0 'release branch deletion after -C <dir>' 'git -C /r/.bare push origin --delete release/v1.5.0'
+
+# --- a heredoc ends only at a line equal to its delimiter -------------------
+check 2 'lightweight tag after a heredoc holding "    EOF" and an apostrophe' "cat > notes.md <<'EOF'
+    EOF
+it's
+EOF
+git tag v1.2.3"
+check 2 'lightweight tag after a heredoc holding "EOF2"' "cat > notes.md <<'EOF'
+EOF2
+it's
+EOF
+git tag v1.2.3"
+check 0 'a tab-indented terminator ends a <<- heredoc' "$(printf 'cat > notes.md <<-EOF\n\tgit tag v1.2.3\n\tEOF\necho done')"
+check 2 'lightweight tag after a commit message heredoc closed with its substitution' "git commit -m \"\$(cat <<'EOF'
+fix: x
+EOF)\" && git tag v1.2.3"
+check 2 'lightweight tag after a misread heredoc in a substitution whose body has a line ending in ")"' "NOTES=\$(cat <<'EOF'
+  EOF
+1) first item
+it's
+EOF
+)
+git tag v1.2.3
+echo \"it's done\""
+check 2 'backtick substitution in the coarsely cut rest after two heredocs' "cat <<A <<B
+x
+A
+it's
+B
+echo \`git tag v1.2.3\`"
+check 0 'deleting a branch named v2-migration with -d' 'git push origin -d v2-migration'
+check 0 'deleting a branch named v2-old by colon refspec' 'git push origin :v2-old'
+check 2 'deleting a pre-release tag' 'git push origin --delete v1.2.3-rc.1'
+check 2 'deleting a bare major tag by colon refspec' 'git push origin :v4'
+check 2 'lightweight tag inside bash -eo pipefail -c' "bash -eo pipefail -c 'git tag v1.2.3'"
+check 2 'remote tag deletion by tags/ path' 'git push origin --delete tags/v1.2.3'
+check 2 'remote tag deletion with -d' 'git push -d origin v1.2.3'
+check 2 'remote tag deletion by a colon refspec without refs/tags/' 'git push origin :v1.2.3'
+check 0 'push of a branch with -d in its name' 'git push origin my-d-branch'
+check 0 'a comment naming a version after a non-version tag' 'git tag nightly # v1.2.3'
+
 
 exit "$fail"
