@@ -472,7 +472,20 @@ def _collect(command: str, out: list, depth: int, deadline: float) -> None:
             # ("2>/dev/null gh release delete") would defeat the prefix match.
             name = node.child_by_field_name("name")
             start = name.start_byte if name is not None else None
-            out.append(_render(node, data, start).strip())
+            text = _render(node, data, start)
+            if name is not None:
+                # The shell runs gh for g""h and g\h too: the checks match the
+                # name as the shell reads it, after quote removal.
+                raw = _render(name, data)
+                value = _word_value(name, data)
+                if (
+                    value
+                    and value != raw
+                    and not re.search(r"\s", value)
+                    and text.startswith(raw)
+                ):
+                    text = shlex.quote(value) + text[len(raw) :]
+            out.append(text.strip())
             shell = _shell_script(node, data)
             if shell is not None and shell[0] is not None:
                 _collect(shell[0], out, depth + 1, deadline)

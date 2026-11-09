@@ -21,11 +21,30 @@ GH_GUARD="${1:-$HERE/../guard-gh-release.py}"
 
 fail=0
 
+# GUARD_LAUNCHER=<path to run-guard.sh> sends each case through the launcher,
+# the path hooks/hooks.json takes, instead of `uv run` on the guard.
+# BLOCK_ONLY=1 checks only the cases that must block; guard-launcher.test.sh
+# uses it for the launcher's fallback, which blocks more than the guard does.
+run_guard() {
+  if [[ -n "${GUARD_LAUNCHER:-}" ]]; then
+    sh "$GUARD_LAUNCHER" "$(basename "$GH_GUARD")"
+  else
+    uv run "$GH_GUARD"
+  fi
+}
+
+skip_case() { # <expected-rc> <description>
+  local want="$1" desc="$2"
+  [[ "${BLOCK_ONLY:-}" == 1 && "$want" != 2 ]] || return 1
+  printf 'skip - %s\n' "$desc"
+}
+
 check() { # <expected-rc> <description> <command>
   local want="$1" desc="$2" command="$3" payload got
+  skip_case "$want" "$desc" && return
   payload=$(CMD="$command" python3 -c \
     'import json,os;print(json.dumps({"tool_name":"Bash","tool_input":{"command":os.environ["CMD"]}}))')
-  printf '%s' "$payload" | uv run "$GH_GUARD" >/dev/null 2>&1
+  printf '%s' "$payload" | run_guard >/dev/null 2>&1
   got=$?
   if [[ "$got" == "$want" ]]; then
     printf 'ok   - %s\n' "$desc"
@@ -58,6 +77,14 @@ gh release create v1.2.3'
 # --- an invocation may carry a prefix --------------------------------------
 # Regression: "gh" had to sit directly after the separator, so any prefix hid it.
 check 2 'prefixed with sudo' 'sudo gh release create v1.2.3'
+
+# --- the program name spelled so that the text never holds "gh" -------------
+# Regression: a text pre-check skipped every call without the substring "gh",
+# so these ran unjudged although the shell runs gh for each of them.
+check 2 'name split by ANSI-C quoting' "g\$'h' release delete v1.2.3"
+check 2 'name fully ANSI-C escaped' "\$'\\x67h' release delete v1.2.3"
+check 2 'name split by empty quotes' 'g""h release create v1.2.3'
+check 2 'name split by a backslash' 'g\h release delete v1.2.3'
 check 2 'prefixed with an env assignment' 'GH_TOKEN=x gh release delete v1.2.3'
 # shellcheck disable=SC2016  # the guard must see "$v" literally, unexpanded
 check 2 'inside a loop body' 'for v in v1.2.3; do gh release create "$v"; done'

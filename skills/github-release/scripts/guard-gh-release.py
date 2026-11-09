@@ -437,10 +437,8 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
-    # Quick pre-check: skip if command does not mention gh at all.
-    if "gh" not in command.lower():
-        sys.exit(0)
-
+    # No text pre-check: the shell runs gh for g$'h', g""h and g\h, none of
+    # which contains "gh", and parsing every call costs well under a millisecond.
     check_command(command)
     # If we get here, the command is allowed.
     sys.exit(0)
