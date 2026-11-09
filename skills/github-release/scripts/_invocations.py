@@ -310,13 +310,17 @@ def _misread_heredoc(node, data: bytes):
     """Where tree-sitter-bash ended a heredoc on a line bash does not, the
     body and the end of the real terminator line; None when the two agree.
 
-    bash ends a heredoc only at a line equal to the delimiter ("<<-" strips
+    bash ends a heredoc at a line equal to the delimiter ("<<-" strips
     leading tabs first). tree-sitter-bash 0.25.1 also ends it at "EOF2",
     "EOF # x" or "    EOF", and parses the rest of the body as commands. An
     apostrophe there ("it's") opened a string that swallowed everything after
     it, a "gh release delete" after the real terminator included. Found by
-    the review of #221. Returns (body, body_start, rest_start); rest_start is None when
-    no line terminates the heredoc and bash reads it to the end of the input.
+    the review of #221. Returns (body, body_start, rest_start).
+
+    Where no line equals the delimiter, the tree is trusted as it is: inside
+    "$( )" or backticks bash also ends the heredoc at the end of the
+    substitution ("EOF)"), which tree-sitter reads correctly, and cutting the
+    tree there hid every later command (second review of #221).
     """
     start = next((c for c in node.children if c.type == "heredoc_start"), None)
     if start is None:
@@ -347,7 +351,7 @@ def _misread_heredoc(node, data: bytes):
             text = data[body_start:cursor].decode("utf-8", "replace")
             return text, body_start, line_end + 1
         cursor = line_end + 1
-    return data[body_start:].decode("utf-8", "replace"), body_start, None
+    return None
 
 
 def _stdin_scripts(node, data: bytes) -> list:
@@ -430,13 +434,22 @@ def _collect(command: str, out: list, depth: int, deadline: float) -> None:
         node = stack.pop()
         if node.start_byte >= cut_at:
             continue
+        if node.is_missing and node.start_byte < cut_at:
+            # tree-sitter-bash 0.25.1 does not read a second heredoc on one
+            # line ("cat <<A <<B"): it reports a MISSING word and parses B's
+            # body as commands, where an apostrophe swallowed the rest. The
+            # text from here on is cut coarsely instead, which can only block.
+            text = data[node.start_byte :].decode("utf-8", "replace")
+            out.extend(p.strip() for p in _COARSE_SEPARATORS.split(text))
+            cut_at = node.start_byte
+            continue
         if node.type == "heredoc_redirect":
             misread = _misread_heredoc(node, data)
             if misread is not None:
                 body, cut_at, rest_start = misread
                 if _redirect_feeds_shell(node, data):
                     _collect(body, out, depth + 1, deadline)
-                if rest_start is not None and rest_start < len(data):
+                if rest_start < len(data):
                     rest = data[rest_start:].decode("utf-8", "replace")
                     _collect(rest, out, depth + 1, deadline)
                 stack.extend(reversed(node.children))

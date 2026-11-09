@@ -337,6 +337,25 @@ Example:
   gh release delete v1.2.2 --yes
 EOF
 )\""
+# Inside "$( )" or backticks bash also ends a heredoc where the substitution
+# ends ("EOF)"), so the command after it runs (second review of #221).
+check 2 'delete after a heredoc closed with its substitution' "x=\$(cat <<EOF
+notes
+EOF)
+gh release delete v1.2.3 --yes"
+check 2 'delete after a heredoc closed with a backtick' "x=\`cat <<EOF
+notes
+EOF\`
+gh release delete v1.2.3 --yes"
+check 2 'delete after a heredoc closed with its substitution, same line' "x=\$(cat <<EOF
+notes
+EOF); gh release delete v1.2.3 --yes"
+check 2 'delete after two heredocs on one line' "cat <<A <<B
+x
+A
+it's
+B
+gh release delete v1.2.3 --yes"
 check 2 'create in a heredoc read by bash past a line starting with the delimiter' "bash <<'EOF'
 echo EOF2
 gh release create v1.2.3

@@ -100,6 +100,11 @@ def has_version_tag_arg(args: str) -> bool:
     return bool(re.search(r"""(?:^|[\s/"'])v\d""", args))
 
 
+# A version tag name in a ref: v1.2, v1.2.3-rc.1, or a bare major v4. A
+# branch such as v2-migration is not one.
+_VERSION_REF = r"v\d+(?:\.\d|(?=[\s\"']|$))"
+
+
 def deletes_version_tag_ref(push_args: str) -> bool:
     """Whether a "git push --delete" names a version tag: vX..., or
     tags/vX... or refs/tags/vX..., bare or quoted.
@@ -110,7 +115,9 @@ def deletes_version_tag_ref(push_args: str) -> bool:
     through "git -C <dir> push", which this guard did not read before; reading
     it would have blocked all three.
     """
-    return bool(re.search(r"""(?:^|[\s"'])(?:refs/)?(?:tags/)?v\d""", push_args))
+    return bool(
+        re.search(r"""(?:^|[\s"'])(?:refs/)?(?:tags/)?""" + _VERSION_REF, push_args)
+    )
 
 
 # "git tag" is judged by its words, split the way the shell splits them, not by
@@ -344,7 +351,9 @@ def check_push_invocation(segment: str) -> None:
         push_args = push_match.group(1).strip()
 
         # Check for remote tag deletion via colon refspec: git push origin :refs/tags/v*
-        if re.search(r"(?:^|\s)['\"]?\+?:(?:refs/)?(?:tags/)?v\d", push_args):
+        if re.search(
+            r"(?:^|\s)['\"]?\+?:(?:refs/)?(?:tags/)?" + _VERSION_REF, push_args
+        ):
             block(
                 "Deleting a remote version tag removes a published release reference. "
                 "This can break downstream consumers, CI pipelines, and package "
