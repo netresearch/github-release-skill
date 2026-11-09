@@ -336,13 +336,14 @@ check 0 'a tab-indented terminator ends a <<- heredoc' "$(printf 'cat > notes.md
 check 2 'lightweight tag after a commit message heredoc closed with its substitution' "git commit -m \"\$(cat <<'EOF'
 fix: x
 EOF)\" && git tag v1.2.3"
-check 2 'lightweight tag after a backtick heredoc when a later heredoc reuses the delimiter' "git commit -m \"\`cat <<EOF
-fix: x
-EOF\`\"
+check 2 'lightweight tag after a misread heredoc in a substitution whose body has a line ending in ")"' "NOTES=\$(cat <<'EOF'
+  EOF
+1) first item
+it's
+EOF
+)
 git tag v1.2.3
-cat <<'EOF'
-note
-EOF"
+echo \"it's done\""
 check 0 'deleting a branch named v2-migration with -d' 'git push origin -d v2-migration'
 check 0 'deleting a branch named v2-old by colon refspec' 'git push origin :v2-old'
 check 2 'deleting a pre-release tag' 'git push origin --delete v1.2.3-rc.1'

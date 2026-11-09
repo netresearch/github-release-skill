@@ -350,20 +350,14 @@ gh release delete v1.2.3 --yes"
 check 2 'delete after a heredoc closed with its substitution, same line' "x=\$(cat <<EOF
 notes
 EOF); gh release delete v1.2.3 --yes"
-check 2 'delete after "EOF)" when a later heredoc reuses the delimiter' "git commit -m \"\$(cat <<'EOF'
-fix: x
-EOF)\" && gh release delete v1.2.3 --yes
-gh pr create --body \"\$(cat <<'EOF'
-body
+check 2 'delete after a misread heredoc in a substitution whose body has a line ending in ")"' "NOTES=\$(cat <<'EOF'
+EOF2
+1) first item
+it's
 EOF
-)\""
-check 2 'delete on the line after "EOF)" when a later heredoc reuses the delimiter' "git commit -m \"\$(cat <<'EOF'
-fix: x
-EOF)\"
+)
 gh release delete v1.2.3 --yes
-cat <<'EOF'
-note
-EOF"
+echo \"it's done\""
 check 2 'delete after two heredocs on one line' "cat <<A <<B
 x
 A

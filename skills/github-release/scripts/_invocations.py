@@ -321,6 +321,13 @@ def _misread_heredoc(node, data: bytes):
     "$( )" or backticks bash also ends the heredoc at the end of the
     substitution ("EOF)"), which tree-sitter reads correctly, and cutting the
     tree there hid every later command (second review of #221).
+
+    Known limit: where tree-sitter ended the heredoc on "EOF)" and a later,
+    separate heredoc uses the same delimiter, the search takes that later
+    line, and the commands in between count as body (main misses them too).
+    Bounding the search by the substitution node was tried and reverted: that
+    node comes from the misread tree, and a body line ending in ")" closed it
+    early, which hid commands main caught (fourth review of #221).
     """
     start = next((c for c in node.children if c.type == "heredoc_start"), None)
     if start is None:
@@ -343,20 +350,10 @@ def _misread_heredoc(node, data: bytes):
         line_end = len(data) if line_end < 0 else line_end
         if terminates(data[line_start:line_end]):
             return None
-    # Inside "$( )" or backticks the heredoc cannot outlive the substitution;
-    # a later line equal to the delimiter belongs to another heredoc (third
-    # review of #221: "EOF)" followed by a second <<'EOF' further down).
-    limit = len(data)
-    parent = node.parent
-    while parent is not None:
-        if parent.type == "command_substitution":
-            limit = parent.end_byte
-            break
-        parent = parent.parent
     cursor = body_start
-    while cursor < limit:
-        line_end = data.find(b"\n", cursor, limit)
-        line_end = limit if line_end < 0 else line_end
+    while cursor < len(data):
+        line_end = data.find(b"\n", cursor)
+        line_end = len(data) if line_end < 0 else line_end
         if terminates(data[cursor:line_end]):
             text = data[body_start:cursor].decode("utf-8", "replace")
             return text, body_start, line_end + 1
@@ -444,12 +441,11 @@ def _collect(command: str, out: list, depth: int, deadline: float) -> None:
         node = stack.pop()
         if node.start_byte >= cut_at:
             continue
-        if node.is_missing:
+        if node.is_missing and node.start_byte < cut_at:
             # tree-sitter-bash 0.25.1 does not read a second heredoc on one
-            # line ("cat <<A <<B"): it parses B's body as commands, and an
-            # apostrophe in it swallowed the rest, ending in a MISSING node.
-            # The text from here on is cut coarsely instead, which can only
-            # block.
+            # line ("cat <<A <<B"): it reports a MISSING word and parses B's
+            # body as commands, where an apostrophe swallowed the rest. The
+            # text from here on is cut coarsely instead, which can only block.
             text = data[node.start_byte :].decode("utf-8", "replace")
             out.extend(p.strip() for p in _COARSE_SEPARATORS.split(text))
             cut_at = node.start_byte
