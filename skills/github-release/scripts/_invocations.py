@@ -324,7 +324,9 @@ def _misread_heredoc(node, data: bytes):
 
     Known limit: where tree-sitter ended the heredoc on "EOF)" and a later,
     separate heredoc uses the same delimiter, the search takes that later
-    line, and the commands in between count as body (main misses them too).
+    line, and the commands in between count as body. The same happens in
+    the quoted form 'NOTES="$(cat <<EOF ... EOF\n)"' when tree-sitter ends the
+    heredoc on a line such as "EOF2" or "    EOF". main misses both forms too.
     Bounding the search by the substitution node was tried and reverted: that
     node comes from the misread tree, and a body line ending in ")" closed it
     early, which hid commands main caught (fourth review of #221).
@@ -443,9 +445,10 @@ def _collect(command: str, out: list, depth: int, deadline: float) -> None:
             continue
         if node.is_missing and node.start_byte < cut_at:
             # tree-sitter-bash 0.25.1 does not read a second heredoc on one
-            # line ("cat <<A <<B"): it reports a MISSING word and parses B's
-            # body as commands, where an apostrophe swallowed the rest. The
-            # text from here on is cut coarsely instead, which can only block.
+            # line ("cat <<A <<B"): it parses B's body as commands, and an
+            # apostrophe in it swallowed the rest, ending in a MISSING node.
+            # The text from here on is cut coarsely instead, which can only
+            # block.
             text = data[node.start_byte :].decode("utf-8", "replace")
             out.extend(p.strip() for p in _COARSE_SEPARATORS.split(text))
             cut_at = node.start_byte
