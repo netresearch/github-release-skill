@@ -177,11 +177,11 @@ def _gh_api_mutates_release(args: str):
     text scan, and a "#" bash does not treat as a comment -- inside ${V/ #/},
     or after a $'...' string with an escaped quote -- made it drop a real
     "-X DELETE". Judging both ways, a mistake in either reading can only block.
-    A method or path that appears only in a comment therefore blocks too, which
-    is the safe direction. So does a release read whose trailing comment holds
-    an apostrophe ("# don't mutate"): the uncut reading sees an unclosed quote
-    and cannot parse it. Narrowing that was measured to reopen a 2 -> 0 path,
-    so the block stays; drop the apostrophe or the comment.
+
+    Since the call is read with tree-sitter-bash (_invocations.py), a comment
+    is no longer part of the invocation, so "# -X GET" or "# don't mutate"
+    after a call reaches neither reading. Both readings still matter for the
+    coarse pieces cut where the parser gives up, which keep their comments.
     """
     return _judge_gh_api(_without_comment(args)) or _judge_gh_api(args)
 

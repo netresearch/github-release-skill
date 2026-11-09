@@ -12,7 +12,8 @@ PreToolUse hook that blocks dangerous git tag operations.
 Blocks:
   - Lightweight version tags (git tag v* without -s or -a)
   - Version tag deletion (git tag -d v*)
-  - Remote version tag deletion (git push --delete origin v*, git push origin :refs/tags/v*)
+  - Remote version tag deletion (git push --delete/-d origin v*, tags/v* or
+    refs/tags/v*, and git push origin :v* or :refs/tags/v*)
   - Force-pushing tags (git push -f with tag refs)
 
 Allows:
@@ -101,7 +102,7 @@ def has_version_tag_arg(args: str) -> bool:
 
 def deletes_version_tag_ref(push_args: str) -> bool:
     """Whether a "git push --delete" names a version tag: vX..., or
-    refs/tags/vX..., bare or quoted.
+    tags/vX... or refs/tags/vX..., bare or quoted.
 
     Narrower than has_version_tag_arg on purpose. "release/v1.5.0" is a branch,
     and deleting it after a release PR is routine, but the "/v1" in its name
@@ -109,7 +110,7 @@ def deletes_version_tag_ref(push_args: str) -> bool:
     through "git -C <dir> push", which this guard did not read before; reading
     it would have blocked all three.
     """
-    return bool(re.search(r"""(?:^|[\s"'])(?:refs/tags/)?v\d""", push_args))
+    return bool(re.search(r"""(?:^|[\s"'])(?:refs/)?(?:tags/)?v\d""", push_args))
 
 
 # "git tag" is judged by its words, split the way the shell splits them, not by
@@ -284,11 +285,11 @@ def check_tag_invocation(segment: str) -> None:
     The arguments are judged twice, with and without a trailing shell comment
     cut off, and the command is blocked if either reading blocks it: the
     comment cutter is a text scan, so a "#" it misreads can only cost a block,
-    never hide a creation. The price is paid in the safe direction: a comment
-    that names a version tag after a non-version creation ("git tag nightly
-    # v1.2.3") is blocked, and so is any command naming a version whose
-    trailing comment holds an apostrophe ("# don't"), a listing included,
-    because the uncut reading cannot be parsed.
+    never hide a creation. Since the call is read with tree-sitter-bash
+    (_invocations.py), a comment is no longer part of the invocation, so
+    "git tag nightly # v1.2.3" and a trailing "# don't" are allowed; both
+    readings still matter for the coarse pieces cut where the parser gives
+    up, which keep their comments.
 
     The segment can span lines: a quoted multi-line -m message stays inside
     one invocation, so the arguments are captured with DOTALL. Without it the
@@ -343,7 +344,7 @@ def check_push_invocation(segment: str) -> None:
         push_args = push_match.group(1).strip()
 
         # Check for remote tag deletion via colon refspec: git push origin :refs/tags/v*
-        if re.search(r":refs/tags/v\d", push_args):
+        if re.search(r"(?:^|\s)['\"]?\+?:(?:refs/)?(?:tags/)?v\d", push_args):
             block(
                 "Deleting a remote version tag removes a published release reference. "
                 "This can break downstream consumers, CI pipelines, and package "
@@ -354,7 +355,9 @@ def check_push_invocation(segment: str) -> None:
 
         # Check for --delete flag with version tag: git push --delete origin v*
         # Also handles: git push origin --delete v*
-        if re.search(r"--delete\b", push_args) and deletes_version_tag_ref(push_args):
+        if re.search(
+            r"(?:^|\s)(?:--delete\b|-d(?=\s|$))", push_args
+        ) and deletes_version_tag_ref(push_args):
             block(
                 "Deleting a remote version tag removes a published release reference. "
                 "This can break downstream consumers, CI pipelines, and package "

@@ -162,8 +162,8 @@ def _text(node, data: bytes) -> str:
     return data[node.start_byte : node.end_byte].decode("utf-8", "replace")
 
 
-def _render(node, data: bytes) -> str:
-    """The text of `node` as the guards read it.
+def _render(node, data: bytes, start: int | None = None) -> str:
+    """The text of `node` as the guards read it, from byte `start` on.
 
     A $'...' string is rewritten into plain single quotes holding its value.
     The guards split arguments with shlex, which does not know ANSI-C quoting:
@@ -180,7 +180,9 @@ def _render(node, data: bytes) -> str:
             continue
         stack.extend(current.children)
     spans.sort(key=lambda n: n.start_byte)
-    parts, cursor = [], node.start_byte
+    cursor = node.start_byte if start is None else start
+    spans = [span for span in spans if span.start_byte >= cursor]
+    parts = []
     for span in spans:
         parts.append(data[cursor : span.start_byte].decode("utf-8", "replace"))
         body = _text(span, data)[2:-1]  # drop "$'" and "'"
@@ -256,7 +258,9 @@ def _shell_script(command, data: bytes):
             if value[0] == "-":
                 has_c = has_c or "c" in value[1:]
                 has_s = has_s or "s" in value[1:]
-            index += 1
+            # A group ending in o or O takes the next word as that option's
+            # value: "bash -euo pipefail -c '...'" (bash reads it that way).
+            index += 2 if value[-1] in "oO" else 1
             continue
         break
     operand = _word_value(args[index], data) if index < len(args) else None
@@ -282,6 +286,70 @@ def _first_command(node):
     return None
 
 
+def _redirect_feeds_shell(node, data: bytes) -> bool:
+    """Whether a heredoc or here-string is read by a shell as its script."""
+    # The redirect hangs off a redirected_statement, or, for a here-string,
+    # off the command itself.
+    statement = node.parent
+    if statement is not None and statement.type == "redirected_statement":
+        receiver = statement.child_by_field_name("body")
+    else:
+        receiver = statement
+    # "cat <<EOF | bash": the rest of the opener line, the pipe included,
+    # sits inside the heredoc_redirect node.
+    piped = next((c for c in node.children if c.type == "pipeline"), None)
+    target = _first_command(piped) if piped is not None else None
+    return (
+        receiver is not None
+        and receiver.type == "command"
+        and _feeds_shell(receiver, data)
+    ) or (target is not None and _feeds_shell(target, data))
+
+
+def _misread_heredoc(node, data: bytes):
+    """Where tree-sitter-bash ended a heredoc on a line bash does not, the
+    body and the end of the real terminator line; None when the two agree.
+
+    bash ends a heredoc only at a line equal to the delimiter ("<<-" strips
+    leading tabs first). tree-sitter-bash 0.25.1 also ends it at "EOF2",
+    "EOF # x" or "    EOF", and parses the rest of the body as commands. An
+    apostrophe there ("it's") opened a string that swallowed everything after
+    it, a "gh release delete" after the real terminator included. Found by
+    the review of #221. Returns (body, body_start, rest_start); rest_start is None when
+    no line terminates the heredoc and bash reads it to the end of the input.
+    """
+    start = next((c for c in node.children if c.type == "heredoc_start"), None)
+    if start is None:
+        return None
+    delimiter = _word_value(start, data).encode("utf-8", "surrogatepass")
+    strip_tabs = any(c.type == "<<-" for c in node.children)
+    # The body starts on the line after the opener. tree-sitter's heredoc_body
+    # node is no guide: when it misreads, the node can be empty and sit on the
+    # line it took for the terminator.
+    newline = data.find(b"\n", start.end_byte)
+    body_start = len(data) if newline < 0 else newline + 1
+
+    def terminates(line: bytes) -> bool:
+        return (line.lstrip(b"\t") if strip_tabs else line) == delimiter
+
+    end = next((c for c in node.children if c.type == "heredoc_end"), None)
+    if end is not None:
+        line_start = data.rfind(b"\n", 0, end.start_byte) + 1
+        line_end = data.find(b"\n", end.end_byte)
+        line_end = len(data) if line_end < 0 else line_end
+        if terminates(data[line_start:line_end]):
+            return None
+    cursor = body_start
+    while cursor < len(data):
+        line_end = data.find(b"\n", cursor)
+        line_end = len(data) if line_end < 0 else line_end
+        if terminates(data[cursor:line_end]):
+            text = data[body_start:cursor].decode("utf-8", "replace")
+            return text, body_start, line_end + 1
+        cursor = line_end + 1
+    return data[body_start:].decode("utf-8", "replace"), body_start, None
+
+
 def _stdin_scripts(node, data: bytes) -> list:
     """Scripts that `node` hands to a shell on stdin (issue #157).
 
@@ -291,22 +359,7 @@ def _stdin_scripts(node, data: bytes) -> list:
     """
     scripts = []
     if node.type in ("heredoc_redirect", "herestring_redirect"):
-        # The redirect hangs off a redirected_statement, or, for a here-string,
-        # off the command itself.
-        statement = node.parent
-        if statement is not None and statement.type == "redirected_statement":
-            receiver = statement.child_by_field_name("body")
-        else:
-            receiver = statement
-        # "cat <<EOF | bash": the rest of the opener line, the pipe included,
-        # sits inside the heredoc_redirect node.
-        piped = next((c for c in node.children if c.type == "pipeline"), None)
-        target = _first_command(piped) if piped is not None else None
-        if (
-            receiver is not None
-            and receiver.type == "command"
-            and _feeds_shell(receiver, data)
-        ) or (target is not None and _feeds_shell(target, data)):
+        if _redirect_feeds_shell(node, data):
             if node.type == "heredoc_redirect":
                 body = next(
                     (c for c in node.children if c.type == "heredoc_body"), None
@@ -338,9 +391,8 @@ def _stdin_scripts(node, data: bytes) -> list:
 
 # Past the depth limit or the time budget, a nested script or a part the
 # parser could not read is cut at every character that can end a command,
-# quotes or not. Coarse on purpose: a piece
-# that merely starts with a guarded word can only add a block, never hide a
-# command.
+# quotes or not. Coarse on purpose: a piece that merely starts with a
+# guarded word can only add a block, never hide a command.
 _COARSE_SEPARATORS = re.compile(r"[\n;&|(){}]+")
 
 
@@ -366,17 +418,38 @@ def _collect(command: str, out: list, depth: int, deadline: float) -> None:
         text = command.replace("\\\n", " ")
         out.extend(piece.strip() for piece in _COARSE_SEPARATORS.split(text))
         return
-    data = command.encode("utf-8")
+    # "surrogatepass": a lone surrogate (a JSON "\\ud83d") must not crash
+    # the guard, which would block the call for the wrong reason.
+    data = command.encode("utf-8", "surrogatepass")
     stack = [_PARSER.parse(data).root_node]
     # ERROR nodes inside a region already parsed again are covered by it.
     covered_until = -1
+    # Nothing at or after a misread heredoc body is taken from this tree.
+    cut_at = len(data) + 1
     while stack:
         node = stack.pop()
+        if node.start_byte >= cut_at:
+            continue
+        if node.type == "heredoc_redirect":
+            misread = _misread_heredoc(node, data)
+            if misread is not None:
+                body, cut_at, rest_start = misread
+                if _redirect_feeds_shell(node, data):
+                    _collect(body, out, depth + 1, deadline)
+                if rest_start is not None and rest_start < len(data):
+                    rest = data[rest_start:].decode("utf-8", "replace")
+                    _collect(rest, out, depth + 1, deadline)
+                stack.extend(reversed(node.children))
+                continue
         if node.type == "ERROR" and node.start_byte >= covered_until:
             region, covered_until = _error_region(node, data)
             _collect(region, out, depth + 1, deadline)
         if node.type == "command":
-            out.append(_render(node, data).strip())
+            # From the command name on: a redirection in front of it
+            # ("2>/dev/null gh release delete") would defeat the prefix match.
+            name = node.child_by_field_name("name")
+            start = name.start_byte if name is not None else None
+            out.append(_render(node, data, start).strip())
             shell = _shell_script(node, data)
             if shell is not None and shell[0] is not None:
                 _collect(shell[0], out, depth + 1, deadline)

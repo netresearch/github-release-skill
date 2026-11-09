@@ -313,6 +313,38 @@ check 0 "api read with an ANSI-C header holding a quote" "gh api repos/o/r/relea
 check 2 'create after "echo ==;"' 'echo ==; gh release create v1.2.3'
 check 0 'release read with a quoted pipe after "echo ==;"' 'echo ==; gh api "repos/o/r/releases?per_page=3" --jq ".[] | .tag_name"'
 
+# --- a heredoc ends only at a line equal to its delimiter -------------------
+# tree-sitter-bash 0.25.1 also ends it at "    EOF", "EOF2" or "EOF # x" and
+# reads the rest of the body as commands; an apostrophe there swallowed the
+# command after the real terminator (review of #221).
+check 2 'delete after a heredoc holding an indented copy of its delimiter' "cat > README.md <<'EOF'
+## Publishing
+
+Write the notes with a heredoc:
+
+    cat > notes.md <<'EOF'
+    ...
+    EOF
+
+Then publish. Don't skip --verify-tag.
+EOF
+gh release delete v1.2.2 --yes"
+check 0 'release command inside a PR body after an indented delimiter' "gh pr create --title x --body \"\$(cat <<'EOF'
+Example:
+
+  cat <<'EOF'
+  EOF
+  gh release delete v1.2.2 --yes
+EOF
+)\""
+check 2 'create in a heredoc read by bash past a line starting with the delimiter' "bash <<'EOF'
+echo EOF2
+gh release create v1.2.3
+EOF"
+check 2 'delete behind a redirection in front of the command name' '2>/dev/null gh release delete v1.2.3 --yes'
+check 2 'delete inside bash -euo pipefail -c' "bash -euo pipefail -c 'gh release delete v1.2.3 --yes'"
+check 2 'delete inside bash -eO extglob -c' "bash -eO extglob -c 'gh release delete v1.2.3 --yes'"
+
 if [[ "$fail" == 0 ]]; then
   printf '\nAll gh-release invocation tests passed\n'
 else

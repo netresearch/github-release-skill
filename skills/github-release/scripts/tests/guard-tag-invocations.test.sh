@@ -321,5 +321,24 @@ check 2 'remote tag deletion by refs/tags/ path' 'git push origin --delete refs/
 check 0 'release branch deletion' 'git push origin --delete release/v1.5.0'
 check 0 'release branch deletion after -C <dir>' 'git -C /r/.bare push origin --delete release/v1.5.0'
 
+# --- a heredoc ends only at a line equal to its delimiter -------------------
+check 2 'lightweight tag after a heredoc holding "    EOF" and an apostrophe' "cat > notes.md <<'EOF'
+    EOF
+it's
+EOF
+git tag v1.2.3"
+check 2 'lightweight tag after a heredoc holding "EOF2"' "cat > notes.md <<'EOF'
+EOF2
+it's
+EOF
+git tag v1.2.3"
+check 0 'a tab-indented terminator ends a <<- heredoc' "$(printf 'cat > notes.md <<-EOF\n\tgit tag v1.2.3\n\tEOF\necho done')"
+check 2 'lightweight tag inside bash -eo pipefail -c' "bash -eo pipefail -c 'git tag v1.2.3'"
+check 2 'remote tag deletion by tags/ path' 'git push origin --delete tags/v1.2.3'
+check 2 'remote tag deletion with -d' 'git push -d origin v1.2.3'
+check 2 'remote tag deletion by a colon refspec without refs/tags/' 'git push origin :v1.2.3'
+check 0 'push of a branch with -d in its name' 'git push origin my-d-branch'
+check 0 'a comment naming a version after a non-version tag' 'git tag nightly # v1.2.3'
+
 
 exit "$fail"
