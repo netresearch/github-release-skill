@@ -51,7 +51,10 @@ if ! env_ready; then
   stamp="${TMPDIR:-/tmp}/github-release-guard-install-$(id -u).stamp"
   now=$(date +%s)
   last=$(cat "$stamp" 2>/dev/null)
-  case $last in '' | *[!0-9]*) last=0 ;; esac
+  case $last in
+    '' | *[!0-9]*) last=0 ;;
+    *) ;;
+  esac
   if [ $((now - last)) -ge 300 ]; then
     printf '%s\n' "$now" >"$stamp" 2>/dev/null
     UV_HTTP_TIMEOUT=3 UV_HTTP_RETRIES=0 uv sync --script "$guard" >/dev/null 2>&1
