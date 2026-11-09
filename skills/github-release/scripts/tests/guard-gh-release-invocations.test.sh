@@ -77,6 +77,14 @@ gh release create v1.2.3'
 # --- an invocation may carry a prefix --------------------------------------
 # Regression: "gh" had to sit directly after the separator, so any prefix hid it.
 check 2 'prefixed with sudo' 'sudo gh release create v1.2.3'
+
+# --- the program name spelled so that the text never holds "gh" -------------
+# Regression: a text pre-check skipped every call without the substring "gh",
+# so these ran unjudged although the shell runs gh for each of them.
+check 2 'name split by ANSI-C quoting' "g\$'h' release delete v1.2.3"
+check 2 'name fully ANSI-C escaped' "\$'\\x67h' release delete v1.2.3"
+check 2 'name split by empty quotes' 'g""h release create v1.2.3'
+check 2 'name split by a backslash' 'g\h release delete v1.2.3'
 check 2 'prefixed with an env assignment' 'GH_TOKEN=x gh release delete v1.2.3'
 # shellcheck disable=SC2016  # the guard must see "$v" literally, unexpanded
 check 2 'inside a loop body' 'for v in v1.2.3; do gh release create "$v"; done'

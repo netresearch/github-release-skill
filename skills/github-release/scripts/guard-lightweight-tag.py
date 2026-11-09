@@ -426,9 +426,8 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
-    # Quick pre-check: skip if command does not mention git at all.
-    if "git" not in command.lower():
-        sys.exit(0)
+    # No text pre-check: the shell runs git for gi$'t', g""it and g\it, none of
+    # which contains "git", and parsing every call costs well under a millisecond.
 
     check_command(command)
     # If we get here, the command is allowed.

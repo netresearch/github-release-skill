@@ -83,7 +83,11 @@ sys.stdout.write(c)
 # The guards recognise `\gh`, `"git"`, `g""h` and `/usr/bin/gh`: drop quotes
 # and backslashes, then look for gh or git as a word of its own. Only grep's
 # "no match" (1) allows; a match (0) or an error (2, or a failed tr) blocks.
-normalised=$(printf '%s\n' "$command" | tr -d "\\\\\"'") || normalised=gh
+# ANSI-C quoting ($'\x67h' is gh) cannot be decoded here, so it blocks too.
+case $command in
+  *"\$'"*) normalised=gh ;;
+  *) normalised=$(printf '%s\n' "$command" | tr -d "\\\\\"'") || normalised=gh ;;
+esac
 printf '%s\n' "$normalised" | grep -Eq '(^|[^A-Za-z0-9_-])(gh|git)([^A-Za-z0-9_-]|$)'
 [ $? -eq 1 ] && exit 0
 

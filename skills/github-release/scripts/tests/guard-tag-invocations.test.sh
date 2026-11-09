@@ -107,6 +107,11 @@ check 0 'unquoted heredoc delimiter' \
   "cat > note.md <<EOF
 git tag -d v9.9.9 is refused
 EOF"
+# Regression: a text pre-check skipped every call without the substring
+# "git", so these ran unjudged although the shell runs git for each of them.
+check 2 'name split by ANSI-C quoting' "gi\$'t' tag v1.2.3"
+check 2 'name split by empty quotes' 'g""it tag v1.2.3'
+check 2 'name split by a backslash' 'g\it tag -d v1.2.3'
 # Stripping the body must not blind the guard to real commands around it.
 check 2 'a real deletion AFTER the heredoc terminator' \
   "cat > note.md <<'EOF'
