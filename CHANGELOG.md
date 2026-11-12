@@ -23,7 +23,7 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ### Fixed
 
-- `release-notes-status.sh` counts a CI block heading such as `Installation` at any level from `##` to `######`, so a release whose workflow writes `### Installation` is no longer reported as `CI-APPENDED BLOCKS LOST`. The capture recipe in `references/release-process.md` matches those headings at any level as well (#220)
+- `release-notes-status.sh` counts a CI block heading such as `Installation` at any level from `##` to `######`, so a release whose workflow writes `### Installation` is no longer reported as `CI-APPENDED BLOCKS LOST`. The capture recipe in `references/release-process.md` matches its three headings (`Installation`, `Container image`, `Verify your download`) at any level from `##` on as well (#220)
 - `guard-lightweight-tag.py` treats `git push --delete` or `-d` as a version tag deletion only for `vX…`, `tags/vX…` or `refs/tags/vX…`, so deleting a branch such as `release/v1.5.0` is no longer blocked. `git push -d origin vX` and `git push origin :vX` without `refs/tags/` are now blocked as well (#221)
 
 ## [1.5.1] - 2026-11-08
