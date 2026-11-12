@@ -14,6 +14,18 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- the two guard hooks (`guard-gh-release.py`, `guard-lightweight-tag.py`) read a Bash call with tree-sitter-bash instead of regular expressions. They now also judge a release or tag command run through `bash -c`, `eval`, a heredoc or here-string a shell reads as its script, or `echo`/`printf` output piped into a shell; a `$( )` inside a heredoc with an unquoted delimiter; a command name written escaped, quoted or with a path (`\gh`, `"git"`, `g""h`, `/usr/bin/gh`) or behind a redirection; and `git -C <dir>`, `git -c k=v`, `--git-dir=…` or `gh -R <repo>` before the subcommand. `$'...'` strings are decoded before the arguments are split. A comment after a command is no longer read as part of it, so `git tag nightly # v1.2.3` is allowed. A script file (`bash release.sh`) is still not read. The guards declare `tree-sitter==0.26.0` and `tree-sitter-bash==0.25.1`, which uv installs on first use (#221)
+- the hooks start the guards through the new `run-guard.sh`. When the guards' dependencies cannot be built from the uv cache, it tries one install with a 3-second HTTP timeout at most once in 5 minutes; until that succeeds, a fallback blocks every Bash call that names `gh` or `git` (read-only calls included) or contains `$'`, lets every other call through, and names the cause and the install command. This needs uv 0.5.31 or later; with an older uv or none on `PATH` the fallback decides every call (#223)
+- `references/typo3-ter-publishing.md`: the TER publishing example checks out without `ref:`, which binds the checkout to `github.sha` and fails when the tag has moved, instead of `ref: ${{ github.ref }}`, which checks out whatever the tag points at by then. It names the tag check of netresearch/typo3-ci-workflows#330 (#217)
+- `references/release-process.md` Phase 1 asks to read every collected changelog entry against the current tree before the release commit, because a later PR can change a rule without touching the fragment that states it (#217)
+
+### Fixed
+
+- `release-notes-status.sh` counts a CI block heading such as `Installation` at any level from `##` to `######`, so a release whose workflow writes `### Installation` is no longer reported as `CI-APPENDED BLOCKS LOST`. The capture recipe in `references/release-process.md` matches those headings at any level as well (#220)
+- `guard-lightweight-tag.py` treats `git push --delete` or `-d` as a version tag deletion only for `vX…`, `tags/vX…` or `refs/tags/vX…`, so deleting a branch such as `release/v1.5.0` is no longer blocked. `git push -d origin vX` and `git push origin :vX` without `refs/tags/` are now blocked as well (#221)
+
 ## [1.5.1] - 2026-11-08
 
 ### Changed
