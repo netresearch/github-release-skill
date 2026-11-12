@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-12
+
 ### Changed
 
 - the two guard hooks (`guard-gh-release.py`, `guard-lightweight-tag.py`) read a Bash call with tree-sitter-bash instead of regular expressions. They now also judge a release or tag command run through `bash -c`, `eval`, a heredoc or here-string a shell reads as its script, or `echo`/`printf` output piped into a shell; a `$( )` inside a heredoc with an unquoted delimiter; a command name written escaped, quoted or with a path (`\gh`, `"git"`, `g""h`, `/usr/bin/gh`) or behind a redirection; and `git -C <dir>`, `git -c k=v`, `--git-dir=…` or `gh -R <repo>` before the subcommand. `$'...'` strings are decoded before the arguments are split. A comment after a command is no longer read as part of it, so `git tag nightly # v1.2.3` is allowed. A script file (`bash release.sh`) is still not read. The guards declare `tree-sitter==0.26.0` and `tree-sitter-bash==0.25.1`, which uv installs on first use (#221)
@@ -279,7 +281,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/netresearch/github-release-skill/compare/v1.3.0...v1.4.0

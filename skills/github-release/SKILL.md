@@ -7,7 +7,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires uv (runs the scripts on Python 3.11 or later), gh CLI, git with GPG/SSH signing configured. The plugin hooks fail closed from Claude Code v2.1.295 (onFailure); with uv before 0.5.31 their launcher blocks every gh and git call."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.5.1"
+  version: "1.6.0"
   repository: https://github.com/netresearch/github-release-skill
 allowed-tools: Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep
 ---
