@@ -4,7 +4,7 @@
 #
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["tree-sitter==0.26.0", "tree-sitter-bash==0.25.1"]
+# dependencies = ["tree-sitter==0.26.1", "tree-sitter-bash==0.25.1"]
 # ///
 """
 PreToolUse hook that blocks dangerous GitHub release operations.
