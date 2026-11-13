@@ -344,6 +344,7 @@ gh api repos/owner/repo/compare/<from>...<to> --jq '.commits[].author.login?' | 
   ```
 
   One person per line (the `%n` separator keeps multiple co-authors from colliding), deduped; the emails map names back to GitHub accounts.
+- **Mirrored issue:** a repository that copies issues from an upstream project (a title such as `[Upstream #341] …`) records the maintainer who copied it as the issue author, so the harvest lists that maintainer as the reporter. Credit the author of the upstream issue as the reporter, with the full reference (`reported by @login in upstream-owner/repo#341`). Neither check above shows this case: the reporter never appears in the commit list. `release-notes-status.sh` still requires every harvested login in the body, the maintainer's included, so keep the maintainer's mention at the change they worked on; where the maintainer had no other part in the release, name them as the one who mirrored the issue (`mirrored as #316 by @maintainer`). netresearch/ofelia holds 72 such issues, all authored by the maintainer (2026-11-13).
 
 The compare API caps at 250 commits — for a wider range, run it in two halves.
 
