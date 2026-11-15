@@ -14,6 +14,10 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `references/release-process.md`: for an issue mirrored from an upstream project (a title such as `[Upstream #341] …`), credit the author of the upstream issue as the reporter with the full reference (`reported by @login in upstream-owner/repo#341`), and keep the mention of the maintainer who mirrored it, because `release-notes-status.sh` requires every harvested login in the body (#229)
+
 ## [1.6.0] - 2026-11-12
 
 ### Changed
