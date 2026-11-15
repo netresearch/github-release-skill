@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-15
+
 ### Changed
 
 - `references/release-process.md`: for an issue mirrored from an upstream project (a title such as `[Upstream #341] …`), credit the author of the upstream issue as the reporter with the full reference (`reported by @login in upstream-owner/repo#341`), and keep the mention of the maintainer who mirrored it, because `release-notes-status.sh` requires every harvested login in the body (#229)
@@ -285,7 +287,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/netresearch/github-release-skill/compare/v1.4.0...v1.5.0
