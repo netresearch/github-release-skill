@@ -58,11 +58,16 @@ check_ref() {
 
     # -s silent, -o /dev/null discard body, -w status, -L follow redirects,
     # --proto/--proto-redir =https refuse any non-HTTPS hop, redirects included,
-    # --max-time 15 cap latency, -I HEAD (some CDNs serve 405 on HEAD -> fall back)
-    http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 -I "$url" 2>/dev/null || echo "000")
-    if [[ "$http_code" == "405" || "$http_code" == "000" ]]; then
-        http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 "$url" 2>/dev/null || echo "000")
+    # --max-time 15 cap latency, -I HEAD (some CDNs serve 405 on HEAD -> fall back).
+    # -w prints the code even when curl fails (000 when no response arrived), so
+    # a failure must not append a second code: "|| echo 000" turned a refused
+    # redirect into "302000" and a timeout into "000000", which skipped the
+    # fallback below.
+    http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 -I "$url" 2>/dev/null || true)
+    if [[ "$http_code" == "405" || "${http_code:-000}" == "000" ]]; then
+        http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 "$url" 2>/dev/null || true)
     fi
+    http_code="${http_code:-000}"
 
     checked+=( "${owner}/${repo}/${path}@${ref}" )
     if [[ "$http_code" == "200" ]]; then
