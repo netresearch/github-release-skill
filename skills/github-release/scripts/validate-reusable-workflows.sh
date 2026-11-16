@@ -57,10 +57,11 @@ check_ref() {
     local http_code
 
     # -s silent, -o /dev/null discard body, -w status, -L follow redirects,
+    # --proto/--proto-redir =https refuse any non-HTTPS hop, redirects included,
     # --max-time 15 cap latency, -I HEAD (some CDNs serve 405 on HEAD -> fall back)
-    http_code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 -I "$url" 2>/dev/null || echo "000")
+    http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 -I "$url" 2>/dev/null || echo "000")
     if [[ "$http_code" == "405" || "$http_code" == "000" ]]; then
-        http_code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 "$url" 2>/dev/null || echo "000")
+        http_code=$(curl -sSL --proto '=https' --proto-redir '=https' -o /dev/null -w '%{http_code}' --max-time 15 "$url" 2>/dev/null || echo "000")
     fi
 
     checked+=( "${owner}/${repo}/${path}@${ref}" )
