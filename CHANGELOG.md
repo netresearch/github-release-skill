@@ -14,6 +14,10 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Fixed
+
+- `scripts/validate-reusable-workflows.sh` refuses a redirect to a non-HTTPS URL, and when curl fails it reports one HTTP code instead of two run together (#236)
+
 ## [1.6.1] - 2026-11-15
 
 ### Changed
