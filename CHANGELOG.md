@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-11-18
+
 ### Fixed
 
 - `scripts/validate-reusable-workflows.sh` refuses a redirect to a non-HTTPS URL, and when curl fails it reports one HTTP code instead of two run together (#236)
@@ -291,7 +293,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/netresearch/github-release-skill/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/netresearch/github-release-skill/compare/v1.5.0...v1.5.1
