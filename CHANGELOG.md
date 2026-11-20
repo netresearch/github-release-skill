@@ -14,6 +14,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-20
+
 ### Changed
 
 - `references/npm-staged-publishing.md` says that a trusted publisher on npmjs.com is bound to the calling workflow's filename when the publish runs inside a reusable workflow. A repository that moves its publish onto a shared reusable therefore keeps the existing workflow as a thin caller under its old name, grants `id-token: write` in the calling job and in the reusable's publish job, and declares the publisher's environment on the reusable's publish job. A publisher bound to another filename is deleted and created again on npmjs.com, because npm does not let a connection be edited (#240)
@@ -298,7 +300,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/netresearch/github-release-skill/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/netresearch/github-release-skill/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/netresearch/github-release-skill/compare/v1.5.1...v1.6.0
