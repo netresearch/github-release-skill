@@ -105,6 +105,34 @@ That message reads like a misconfigured publisher and is not one. Staging is not
 unconditional in principle either — `npm trust <provider>` has `--allow-publish`
 and `--allow-stage-publish` — but the UI's default is stage-only.
 
+## Trusted Publishing through a reusable workflow
+
+A trusted publisher on npmjs.com names one workflow file, and when the publish
+runs inside a reusable workflow, that file is the caller. The npm documentation
+says so: *"Some GitHub Actions workflows use `workflow_call` to invoke other
+workflows that run `npm publish` […] validation checks the calling workflow's
+name instead of the workflow that actually contains the publish command"*, and
+*"The `id-token: write` permission must also be given to both parent and child
+workflows."* ([Trusted publishing](https://docs.npmjs.com/trusted-publishers))
+
+So a repository that moves its publish onto a shared reusable keeps the file
+the publisher is bound to: the existing workflow becomes a thin caller of the
+reusable, under its old name. A renamed or newly added caller fails the OIDC
+exchange on the next release, and stays failing until someone replaces the
+publisher on npmjs.com by hand: npm does not let a connection be edited, so it
+is deleted and created again with the new filename. Read the filename the
+publisher names before the migration; the match is exact, `.yml` included.
+Grant `id-token: write` in the calling job as well as in the reusable's publish
+job. When the publisher also names an environment, the reusable's publish job
+has to declare that `environment`: a job that calls a reusable workflow cannot
+set one, so the old job's setting does not carry over.
+
+The migration pull request publishes nothing; the first release tag after the
+merge is the test, and publishing is irreversible, so check the filename before
+that tag rather than after. A package that publishes with a token has no
+publisher to break: it keeps passing its secret to the reusable explicitly, and
+gains OIDC only once a publisher is configured.
+
 ## Parity with `npm publish`
 
 `StagePublish extends Publish` and sets `static stage = true`, inheriting
