@@ -118,10 +118,14 @@ workflows."* ([Trusted publishing](https://docs.npmjs.com/trusted-publishers))
 So a repository that moves its publish onto a shared reusable keeps the file
 the publisher is bound to: the existing workflow becomes a thin caller of the
 reusable, under its old name. A renamed or newly added caller fails the OIDC
-exchange on the next release, and stays failing until someone edits the
-publisher on npmjs.com by hand. Read the filename the publisher names before
-the migration; the match is exact, `.yml` included. Grant `id-token: write` in
-the calling job as well as in the reusable's publish job.
+exchange on the next release, and stays failing until someone replaces the
+publisher on npmjs.com by hand: npm does not let a connection be edited, so it
+is deleted and created again with the new filename. Read the filename the
+publisher names before the migration; the match is exact, `.yml` included.
+Grant `id-token: write` in the calling job as well as in the reusable's publish
+job. When the publisher also names an environment, the reusable's publish job
+has to declare that `environment`: a job that calls a reusable workflow cannot
+set one, so the old job's setting does not carry over.
 
 The migration pull request publishes nothing; the first release tag after the
 merge is the test, and publishing is irreversible, so check the filename before
