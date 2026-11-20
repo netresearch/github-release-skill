@@ -14,6 +14,11 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+### Changed
+
+- `references/npm-staged-publishing.md` says that a trusted publisher on npmjs.com is bound to the calling workflow's filename when the publish runs inside a reusable workflow. A repository that moves its publish onto a shared reusable therefore keeps the existing workflow as a thin caller under its old name, grants `id-token: write` in the calling job and in the reusable's publish job, and declares the publisher's environment on the reusable's publish job. A publisher bound to another filename is deleted and created again on npmjs.com, because npm does not let a connection be edited (#240)
+- `references/ecosystem-detection.md` treats its table of version files as a floor, not a repository's list: before the release PR, search the tree for the outgoing version (`git grep -nF '1.2.3' -- . ':!CHANGELOG.md'`), judge every hit, and check that a JSON string that holds JSON still parses after the replacement (#240)
+
 ## [1.6.2] - 2026-11-18
 
 ### Fixed
