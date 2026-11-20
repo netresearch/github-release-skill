@@ -56,6 +56,17 @@ Notes:
   and without this skill; `ext_emconf.php` and `CHANGELOG.md` were updated in
   every unaided trial. Check both paths, and check the release-prep step touched
   one of them before calling the version bump done.
+- **The table is a floor, not this repository's list.** Repositories add
+  surfaces of their own that no consistency test reads, such as the input data
+  of a generated landing page or a schema.org `softwareVersion`, so nothing
+  fails when one is missed; others have fewer (no `extra.typo3/cms.version`).
+  Before opening the release PR, search the tree for the outgoing version and
+  judge every hit, for example `git grep -nF '1.2.3' -- . ':!CHANGELOG.md'`
+  (the changelog keeps its history). Derive the list again for each release
+  instead of reusing the last repository's. Where a hit sits in a JSON string
+  that itself holds JSON, such as a JSON-LD block stored as a string, check that
+  the file and the embedded document still parse after the replacement: a
+  careless edit breaks the file without changing the version.
 
 ### PHP / Composer
 
