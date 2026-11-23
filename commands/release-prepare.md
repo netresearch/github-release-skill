@@ -115,6 +115,9 @@ or the repository root), write the body in its sections: fill a test-plan sectio
 their results, and answer a related-issues section (the release PR usually closes
 none — say so). A body that skips the template's sections fails description checks
 such as CodeRabbit's.
+A repository without its own template uses the owner's default from the
+`<owner>/.github` repository, in the same locations; it is not in the clone, so
+read it with `gh api repos/<owner>/.github/contents/<path> --jq .content | base64 -d`.
 
 ## After PR merge
 
