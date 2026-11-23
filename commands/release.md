@@ -84,6 +84,17 @@ Update ALL version files detected in step 1 to the new version number. This may
 include files like `composer.json`, `package.json`, `ext_emconf.php`,
 `Documentation/Settings.cfg`, `version.go`, or others depending on the ecosystem.
 
+Then sweep the rest of the repository for the previous version string — the
+version files detected in step 1 are not every place that states it (a README
+compatibility table naming the latest release is the common miss):
+
+```bash
+git -C "$(git rev-parse --show-toplevel)" grep -nF '<previous version>' -- ':!CHANGELOG*' ':!*.lock' ':!*-lock.json' ':!*.lock.json'
+```
+
+Update each hit that names the current release, and leave a hit that is
+history (a "since" note, an upgrade guide) with its reason in the PR body.
+
 ### 6. Update CHANGELOG.md
 
 If a CHANGELOG.md exists:
@@ -106,6 +117,16 @@ Stage only the files that were modified in steps 5-7.
 Push the release branch to the remote and create a pull request targeting the main
 branch. The PR title should be `chore(release): vX.Y.Z` and the body should
 summarize the version changes.
+
+When the repository has a pull request template (`pull_request_template.md` in
+any letter case, or a `PULL_REQUEST_TEMPLATE/` directory, in `.github/`, `docs/`
+or the repository root), write the body in its sections: fill a test-plan section with the checks you ran locally and
+their results, and answer a related-issues section (the release PR usually closes
+none — say so). A body that skips the template's sections fails description checks
+such as CodeRabbit's.
+A repository without its own template uses the owner's default from the
+`<owner>/.github` repository, in the same locations; it is not in the clone, so
+read it with `gh api repos/<owner>/.github/contents/<path> --jq .content | base64 -d`.
 
 ### 10. Tag after merge
 
