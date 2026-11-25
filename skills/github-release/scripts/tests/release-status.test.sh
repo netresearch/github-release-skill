@@ -880,6 +880,7 @@ case "$1 $2" in
   "run list")
     case "$*" in
       *"--branch v1.17.0"*)
+        [ -z "${LATER_RUN:-}" ] || { echo "$LATER_RUN"; exit 0; }
         n=$(( $(cat "$d/count" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/count"
         if [ "$n" -ge 3 ]; then echo "completed/success"; else echo "in_progress/-"; fi ;;
       *) echo none ;;
@@ -898,7 +899,7 @@ if [ "$1" = api ]; then
     */releases/latest)
       if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
       [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
-      echo v1.17.0; exit 0 ;;
+      echo "${LATER_LATEST:-v1.17.0}"; exit 0 ;;
     # The release list and the contributor harvest of release-notes-status.sh.
     # Unanswered, both lookups fail, and a failed lookup is no longer ok.
     */releases\?*)
@@ -915,6 +916,8 @@ if [ "$1" = api ]; then
       [ -n "${LATER_COMPARE_FAILS:-}" ] && { echo 'gh: API rate limit exceeded for user ID 1.' >&2; exit 1; }
       exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
+    */contents/.github/workflows/release.yml*)
+      if [ -x "$d/gh-contents" ]; then "$d/gh-contents"; exit $?; fi; exit 1 ;;
     */contents/*)          exit 1 ;;
   esac
 fi
@@ -958,6 +961,100 @@ check  "a failed re-read keeps the value read before"  "latest rel  : v1.18.0" "
 check  "a failed re-read is reported"                  "could not be read again after the watch" "$fail_out"
 refute "a failed re-read does not turn into ok"        "NEXT: ok" "$fail_out"
 check  "a failed re-read on a stale worktree exits 1"  "status=1" "status=$st"
+
+# ---------------------------------------------------------------------------
+# --watch: wait until Packagist lists the version
+# ---------------------------------------------------------------------------
+# netresearch/retro-skill v3.8.0, 2026-11-25: `--watch` ended with exit 1 and
+# `missing on packagist` right after the workflow; Packagist listed the version
+# minutes later. The curl stub lists it from lookup REG_AFTER on; before that it
+# answers the package without it, and lookup REG_FAILS fails outright.
+printf '%s\n' '{"name": "acme/later", "type": "ai-agent-skill"}' >"$later/repo/composer.json"
+cat >"$later/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+n=$(( $(cat "$d/reg" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/reg"
+[ "$n" = "${REG_FAILS:-0}" ] && exit 7
+[ "$n" = "${REG_404:-0}" ] && { printf '{}\n404'; exit 0; }
+v='{"version":"v1.16.4"}'
+[ "$n" -ge "${REG_AFTER:-1}" ] && v="$v,{\"version\":\"v1.17.0\"}"
+printf '{"packages":{"acme/later":[%s]}}\n200' "$v"
+STUB
+chmod +x "$later/bin/curl"
+registry_run() { # registry_run <watch flag> <VAR=value>...
+  rm -f "$later/bin/reg" "$later/bin/wf"; echo 3 >"$later/bin/count"
+  local flag="$1" tag="${REG_TAG:-}"; shift
+  reg_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+            RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 "$@" \
+            bash --noprofile --norc "$SCRIPT" -R acme/later ${tag:+--tag "$tag"} ${flag:+"$flag"} 2>&1)
+  reg_st=$?
+}
+
+registry_run --watch REG_AFTER=3 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: the wait is reported"              "watch: v1.17.0 not served yet by: packagist" "$reg_out"
+check  "registry: served after the wait is ok"       "NEXT: ok" "$reg_out"
+check  "registry: served after the wait exits 0"     "status=0;" "status=$reg_st;"
+check  "registry: asked exactly until it was served" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_FAILS=2 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed lookup does not end the wait" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_FAILS=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed first lookup is waited for too" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_404=2 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a 404 for a known package is asked again" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_404=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: an unknown package is not waited for" "lookups=1;" "lookups=$(cat "$later/bin/reg");"
+
+REG_TAG=v1.17.0 registry_run --watch REG_AFTER=3 LATER_LATEST=v2.0.0 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: --tag on an older line is waited for" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 LATER_RUN=completed/failure RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed run is not waited for"    "lookups=1;" "lookups=$(cat "$later/bin/reg");"
+
+help_out=$(bash "$SCRIPT" --help 2>&1)
+check  "help names the registry timeout"             "RELEASE_STATUS_REGISTRY_TIMEOUT" "$help_out"
+check  "help ends with the exit codes"               "Exit: 0 = ok" "$help_out"
+
+registry_run --watch REG_AFTER=999999 RELEASE_STATUS_REGISTRY_TIMEOUT=0
+check  "registry: the wait is bounded"               "watch timed out while not served by: packagist" "$reg_out"
+check  "registry: a timeout is verify-publication"   "NEXT: verify-publication" "$reg_out"
+check  "registry: a timeout exits 1"                 "status=1;" "status=$reg_st;"
+
+registry_run "" REG_AFTER=3
+check  "registry: without --watch it asks once"      "lookups=1;" "lookups=$(cat "$later/bin/reg");"
+refute "registry: without --watch nothing is waited for" "watch:" "$reg_out"
+
+# The repository publishes to TER; release.yml cannot be read on the first try.
+printf '%s\n' '{"name": "acme/later", "version": "1.17.0", "extra": {"typo3/cms": {"extension-key": "later"}}}' >"$later/repo/composer.json"
+cat >"$later/bin/gh-contents" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+n=$(( $(cat "$d/wf" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/wf"
+if [ "$n" -le "${WF_FAILS:-0}" ]; then echo "${WF_ERROR:-gh: Server Error (HTTP 502)}" >&2; exit 1; fi
+printf 'token: TYPO3_TER_ACCESS_TOKEN\n' | base64
+STUB
+chmod +x "$later/bin/gh-contents"
+cat >"$later/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+case "$*" in
+  *extensions.typo3.org*)
+    n=$(( $(cat "$d/reg" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/reg"
+    v=1.16.4; [ "$n" -ge "${REG_AFTER:-1}" ] && v=1.17.0
+    printf '[[{"number":"%s"}]]' "$v" ;;
+  *) printf '{}\n404' ;;
+esac
+STUB
+registry_run --watch REG_AFTER=3 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "TER: waited for until it serves the version"    "lookups=3;" "lookups=$(cat "$later/bin/reg" 2>/dev/null);"
+check  "TER: the wait is reported"                      "not served yet by: TER" "$reg_out"
+registry_run --watch REG_AFTER=2 WF_FAILS=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "TER: an unread release.yml is asked again"      "lookups=2;" "lookups=$(cat "$later/bin/reg" 2>/dev/null);"
+registry_run --watch WF_FAILS=99 WF_ERROR="gh: Not Found (HTTP 404)" RELEASE_STATUS_REGISTRY_TIMEOUT=10
+refute "TER: no release.yml is not waited for"          "not served yet" "$reg_out"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
