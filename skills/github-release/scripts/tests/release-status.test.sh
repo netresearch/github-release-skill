@@ -975,6 +975,7 @@ cat >"$later/bin/curl" <<'STUB'
 d=$(dirname "$0")
 n=$(( $(cat "$d/reg" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/reg"
 [ "$n" = "${REG_FAILS:-0}" ] && exit 7
+[ "$n" = "${REG_404:-0}" ] && { printf '{}\n404'; exit 0; }
 v='{"version":"v1.16.4"}'
 [ "$n" -ge "${REG_AFTER:-1}" ] && v="$v,{\"version\":\"v1.17.0\"}"
 printf '{"packages":{"acme/later":[%s]}}\n200' "$v"
@@ -1000,6 +1001,12 @@ check  "registry: a failed lookup does not end the wait" "lookups=3;" "lookups=$
 
 registry_run --watch REG_AFTER=3 REG_FAILS=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
 check  "registry: a failed first lookup is waited for too" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_404=2 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a 404 for a known package is asked again" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_404=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: an unknown package is not waited for" "lookups=1;" "lookups=$(cat "$later/bin/reg");"
 
 REG_TAG=v1.17.0 registry_run --watch REG_AFTER=3 LATER_LATEST=v2.0.0 RELEASE_STATUS_REGISTRY_TIMEOUT=10
 check  "registry: --tag on an older line is waited for" "lookups=3;" "lookups=$(cat "$later/bin/reg");"

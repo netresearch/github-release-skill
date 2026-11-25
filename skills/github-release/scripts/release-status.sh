@@ -34,7 +34,8 @@
 # registries serve the version: it prints each state change to stderr and then
 # gives the normal verdict. RELEASE_STATUS_WATCH_INTERVAL (seconds, default 20),
 # RELEASE_STATUS_WATCH_TIMEOUT (default 2700, the workflow) and
-# RELEASE_STATUS_REGISTRY_TIMEOUT (default 900, the registries) tune it.
+# RELEASE_STATUS_REGISTRY_TIMEOUT (default 900, the registries) tune it; both
+# timeouts are read between two lookups.
 #
 # Exit: 0 = ok, 1 = action needed, 2 = usage/lookup error.
 set -euo pipefail
@@ -46,7 +47,7 @@ while [ $# -gt 0 ]; do
     --json) JSON=1; shift ;;
     --watch) WATCH=1; shift ;;
     --tag) { [ $# -ge 2 ] && [ -n "$2" ]; } || { echo "--tag needs a tag name" >&2; exit 2; }; TAG_ARG="$2"; shift 2 ;;
-    -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
     *) shift ;;
   esac
 done
@@ -440,7 +441,7 @@ if [ "$release_found" = 1 ]; then
 fi
 
 # --- phase 6: do the registries actually serve it? ---------------------------
-reg_missing=""; ter_declared=""
+reg_missing=""; pk_known=0; ter_declared=""
 read_registries() {
   reg_missing=""
   # "Packagist does not know this package" is not the same as "this version has
@@ -452,9 +453,10 @@ read_registries() {
     if [ "$pk_code" = "200" ]; then
       printf '%s' "$pk" | sed '$d' \
         | jq -e --arg v "$tag_ref" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
-        || reg_missing="$reg_missing packagist"
-    elif [ "$WATCH" = 1 ] && [ "$pk_code" != "404" ]; then
-      # A failed lookup does not say that it is served: ask again.
+        || { reg_missing="$reg_missing packagist"; pk_known=1; }
+    elif [ "$WATCH" = 1 ] && { [ "$pk_known" = 1 ] || [ "$pk_code" != "404" ]; }; then
+      # A failed lookup does not say that it is served, and neither does a 404
+      # for a package that was there before: ask again.
       reg_missing="$reg_missing packagist"
     fi
   fi
