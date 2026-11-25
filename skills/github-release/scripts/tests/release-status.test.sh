@@ -880,6 +880,7 @@ case "$1 $2" in
   "run list")
     case "$*" in
       *"--branch v1.17.0"*)
+        [ -z "${LATER_RUN:-}" ] || { echo "$LATER_RUN"; exit 0; }
         n=$(( $(cat "$d/count" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/count"
         if [ "$n" -ge 3 ]; then echo "completed/success"; else echo "in_progress/-"; fi ;;
       *) echo none ;;
@@ -898,7 +899,7 @@ if [ "$1" = api ]; then
     */releases/latest)
       if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
       [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }
-      echo v1.17.0; exit 0 ;;
+      echo "${LATER_LATEST:-v1.17.0}"; exit 0 ;;
     # The release list and the contributor harvest of release-notes-status.sh.
     # Unanswered, both lookups fail, and a failed lookup is no longer ok.
     */releases\?*)
@@ -979,10 +980,10 @@ STUB
 chmod +x "$later/bin/curl"
 registry_run() { # registry_run <watch flag> <VAR=value>...
   rm -f "$later/bin/reg"; echo 3 >"$later/bin/count"
-  local flag="$1"; shift
+  local flag="$1" tag="${REG_TAG:-}"; shift
   reg_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
             RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 "$@" \
-            bash --noprofile --norc "$SCRIPT" -R acme/later ${flag:+"$flag"} 2>&1)
+            bash --noprofile --norc "$SCRIPT" -R acme/later ${tag:+--tag "$tag"} ${flag:+"$flag"} 2>&1)
   reg_st=$?
 }
 
@@ -994,6 +995,19 @@ check  "registry: asked exactly until it was served" "lookups=3;" "lookups=$(cat
 
 registry_run --watch REG_AFTER=3 REG_FAILS=2 RELEASE_STATUS_REGISTRY_TIMEOUT=10
 check  "registry: a failed lookup does not end the wait" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_FAILS=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed first lookup is waited for too" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+REG_TAG=v1.17.0 registry_run --watch REG_AFTER=3 LATER_LATEST=v2.0.0 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: --tag on an older line is waited for" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 LATER_RUN=completed/failure RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed run is not waited for"    "lookups=1;" "lookups=$(cat "$later/bin/reg");"
+
+help_out=$(bash "$SCRIPT" --help 2>&1)
+check  "help names the registry timeout"             "RELEASE_STATUS_REGISTRY_TIMEOUT" "$help_out"
+check  "help ends with the exit codes"               "Exit: 0 = ok" "$help_out"
 
 registry_run --watch REG_AFTER=999999 RELEASE_STATUS_REGISTRY_TIMEOUT=0
 check  "registry: the wait is bounded"               "watch timed out while not served by: packagist" "$reg_out"
