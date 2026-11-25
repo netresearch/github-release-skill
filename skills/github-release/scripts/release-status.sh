@@ -461,9 +461,11 @@ read_registries() {
   # Only assert TER when the release workflow actually publishes there --
   # an extension key in composer.json alone is not a claim that it does.
   if [ -z "$ter_declared" ]; then
-    # Kept only when it was read: a failed call is asked again in the wait.
-    if wf_file=$(gh api "repos/$REPO/contents/.github/workflows/release.yml" --jq .content 2>/dev/null); then
+    if wf_file=$(gh api "repos/$REPO/contents/.github/workflows/release.yml" --jq .content 2>&1); then
       ter_declared=$(printf '%s' "$wf_file" | base64 -d 2>/dev/null | grep -c 'TYPO3_TER_ACCESS_TOKEN' || true)
+    elif [ "$WATCH" = 1 ] && [ -n "$extkey" ] && ! grep -q 'HTTP 404' <<<"$wf_file"; then
+      # Whether it publishes to TER is unknown: ask again.
+      reg_missing="$reg_missing TER"
     fi
   fi
   if [ -n "$extkey" ] && [ "${ter_declared:-0}" -gt 0 ]; then

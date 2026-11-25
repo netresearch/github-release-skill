@@ -916,6 +916,8 @@ if [ "$1" = api ]; then
       [ -n "${LATER_COMPARE_FAILS:-}" ] && { echo 'gh: API rate limit exceeded for user ID 1.' >&2; exit 1; }
       exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
+    */contents/.github/workflows/release.yml*)
+      if [ -x "$d/gh-contents" ]; then "$d/gh-contents"; exit $?; fi; exit 1 ;;
     */contents/*)          exit 1 ;;
   esac
 fi
@@ -979,7 +981,7 @@ printf '{"packages":{"acme/later":[%s]}}\n200' "$v"
 STUB
 chmod +x "$later/bin/curl"
 registry_run() { # registry_run <watch flag> <VAR=value>...
-  rm -f "$later/bin/reg"; echo 3 >"$later/bin/count"
+  rm -f "$later/bin/reg" "$later/bin/wf"; echo 3 >"$later/bin/count"
   local flag="$1" tag="${REG_TAG:-}"; shift
   reg_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
             RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 "$@" \
@@ -1017,6 +1019,35 @@ check  "registry: a timeout exits 1"                 "status=1;" "status=$reg_st
 registry_run "" REG_AFTER=3
 check  "registry: without --watch it asks once"      "lookups=1;" "lookups=$(cat "$later/bin/reg");"
 refute "registry: without --watch nothing is waited for" "watch:" "$reg_out"
+
+# The repository publishes to TER; release.yml cannot be read on the first try.
+printf '%s\n' '{"name": "acme/later", "version": "1.17.0", "extra": {"typo3/cms": {"extension-key": "later"}}}' >"$later/repo/composer.json"
+cat >"$later/bin/gh-contents" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+n=$(( $(cat "$d/wf" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/wf"
+if [ "$n" -le "${WF_FAILS:-0}" ]; then echo "${WF_ERROR:-gh: Server Error (HTTP 502)}" >&2; exit 1; fi
+printf 'token: TYPO3_TER_ACCESS_TOKEN\n' | base64
+STUB
+chmod +x "$later/bin/gh-contents"
+cat >"$later/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+case "$*" in
+  *extensions.typo3.org*)
+    n=$(( $(cat "$d/reg" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/reg"
+    v=1.16.4; [ "$n" -ge "${REG_AFTER:-1}" ] && v=1.17.0
+    printf '[[{"number":"%s"}]]' "$v" ;;
+  *) printf '{}\n404' ;;
+esac
+STUB
+registry_run --watch REG_AFTER=3 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "TER: waited for until it serves the version"    "lookups=3;" "lookups=$(cat "$later/bin/reg" 2>/dev/null);"
+check  "TER: the wait is reported"                      "not served yet by: TER" "$reg_out"
+registry_run --watch REG_AFTER=2 WF_FAILS=1 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "TER: an unread release.yml is asked again"      "lookups=2;" "lookups=$(cat "$later/bin/reg" 2>/dev/null);"
+registry_run --watch WF_FAILS=99 WF_ERROR="gh: Not Found (HTTP 404)" RELEASE_STATUS_REGISTRY_TIMEOUT=10
+refute "TER: no release.yml is not waited for"          "not served yet" "$reg_out"
 
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
