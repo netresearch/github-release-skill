@@ -24,7 +24,9 @@ gets skipped.
 
 Right after pushing a tag, add `--watch`: the script then waits until the tag's
 publishing workflow has completed and reports the verdict after it, instead of
-answering `await-release-workflow` at once.
+answering `await-release-workflow` at once. Once that run succeeded and the notes
+are done, it also waits up to 15 minutes (`RELEASE_STATUS_REGISTRY_TIMEOUT`, in
+seconds) until the registries serve the version.
 
 ### 1. List recent releases
 

@@ -30,7 +30,7 @@ Where the repository has a workflow that publishes the release, that workflow do
 
 `scripts/release-status.sh -R owner/repo` reports the phase and a computed
 `NEXT`, exiting 0 only when finished; after a tag push, `--watch` waits for
-the tag's publishing workflow first. That holds where a file states the
+the tag's publishing workflow first, then up to 15 minutes for the registries. That holds where a file states the
 version. A repository that states it nowhere takes it from the latest release,
 which until the workflow has created the release is still the previous one, so
 `--watch` would report that release as current and exit `ok` at once (measured
@@ -67,7 +67,7 @@ gh release create vX.Y.Z --title "vX.Y.Z" --verify-tag --notes-file <notes>
 
 **Run that second command under your own credential, never a workflow's.** It is the whole point of this branch of the flow: `gh` authenticated as `GITHUB_TOKEN` creates the release without firing `release: published`, so every downstream job stays silent and the release looks complete while carrying no provenance and no SBOM. Locally that means the `gh` you are logged into; from automation it means a PAT or a GitHub App installation token in `GH_TOKEN`, and `${{ github.token }}` is exactly the value that must not appear there.
 
-Steps 8 and 9 collapse into that second command: it publishes and carries the notes, so there is no CI-generated body to overhaul afterwards. Everything downstream — provenance, SBOM, registry publish — hangs off the `release: published` it fires, so verify it landed rather than assuming: `gh attestation verify <asset> --repo owner/repo` for the archive, `cosign verify` for an image. For a repository that states its version nowhere, `scripts/release-status.sh` takes the version from the latest release.
+Steps 8 and 9 collapse into that second command: it publishes and carries the notes, so there is no CI-generated body to overhaul afterwards. Everything downstream — provenance, SBOM, registry publish — hangs off the `release: published` it fires, so verify it landed rather than assuming: `gh attestation verify <asset> --repo owner/repo` for the archive (plus `--signer-workflow` when a reusable workflow signed it, see `references/supply-chain-security.md`), `cosign verify` for an image. For a repository that states its version nowhere, `scripts/release-status.sh` takes the version from the latest release.
 
 ## Commands
 

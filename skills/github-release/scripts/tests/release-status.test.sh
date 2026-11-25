@@ -959,6 +959,51 @@ check  "a failed re-read is reported"                  "could not be read again 
 refute "a failed re-read does not turn into ok"        "NEXT: ok" "$fail_out"
 check  "a failed re-read on a stale worktree exits 1"  "status=1" "status=$st"
 
+# ---------------------------------------------------------------------------
+# --watch: wait until Packagist lists the version
+# ---------------------------------------------------------------------------
+# netresearch/retro-skill v3.8.0, 2026-11-25: `--watch` ended with exit 1 and
+# `missing on packagist` right after the workflow; Packagist listed the version
+# minutes later. The curl stub lists it from lookup REG_AFTER on; before that it
+# answers the package without it, and lookup REG_FAILS fails outright.
+printf '%s\n' '{"name": "acme/later", "type": "ai-agent-skill"}' >"$later/repo/composer.json"
+cat >"$later/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+n=$(( $(cat "$d/reg" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/reg"
+[ "$n" = "${REG_FAILS:-0}" ] && exit 7
+v='{"version":"v1.16.4"}'
+[ "$n" -ge "${REG_AFTER:-1}" ] && v="$v,{\"version\":\"v1.17.0\"}"
+printf '{"packages":{"acme/later":[%s]}}\n200' "$v"
+STUB
+chmod +x "$later/bin/curl"
+registry_run() { # registry_run <watch flag> <VAR=value>...
+  rm -f "$later/bin/reg"; echo 3 >"$later/bin/count"
+  local flag="$1"; shift
+  reg_out=$(cd "$later/repo" && env -i PATH="$later/bin:/usr/bin:/bin" HOME="$later" \
+            RELEASE_STATUS_WATCH_INTERVAL=0 RELEASE_STATUS_WATCH_TIMEOUT=3 "$@" \
+            bash --noprofile --norc "$SCRIPT" -R acme/later ${flag:+"$flag"} 2>&1)
+  reg_st=$?
+}
+
+registry_run --watch REG_AFTER=3 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: the wait is reported"              "watch: v1.17.0 not served yet by: packagist" "$reg_out"
+check  "registry: served after the wait is ok"       "NEXT: ok" "$reg_out"
+check  "registry: served after the wait exits 0"     "status=0;" "status=$reg_st;"
+check  "registry: asked exactly until it was served" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=3 REG_FAILS=2 RELEASE_STATUS_REGISTRY_TIMEOUT=10
+check  "registry: a failed lookup does not end the wait" "lookups=3;" "lookups=$(cat "$later/bin/reg");"
+
+registry_run --watch REG_AFTER=999999 RELEASE_STATUS_REGISTRY_TIMEOUT=0
+check  "registry: the wait is bounded"               "watch timed out while not served by: packagist" "$reg_out"
+check  "registry: a timeout is verify-publication"   "NEXT: verify-publication" "$reg_out"
+check  "registry: a timeout exits 1"                 "status=1;" "status=$reg_st;"
+
+registry_run "" REG_AFTER=3
+check  "registry: without --watch it asks once"      "lookups=1;" "lookups=$(cat "$later/bin/reg");"
+refute "registry: without --watch nothing is waited for" "watch:" "$reg_out"
+
 # The guard is a case pattern over the value gh returned; a JSON error body
 # contains characters a tag cannot.
 tagshaped() { case "$1" in *[!A-Za-z0-9._-]* | "" | null) echo no ;; *) echo yes ;; esac; }

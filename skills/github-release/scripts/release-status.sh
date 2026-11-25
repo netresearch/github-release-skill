@@ -29,10 +29,12 @@
 # version file a tag pushed a minute ago is invisible and the verdict is about
 # the previous release. --tag takes the version from the tag you just pushed.
 #
-# --watch waits only while the tag exists and its publishing workflow has not
-# completed: it prints each state change to stderr and then gives the normal
-# verdict. RELEASE_STATUS_WATCH_INTERVAL (seconds, default 20) and
-# RELEASE_STATUS_WATCH_TIMEOUT (default 2700) tune it.
+# --watch waits while the tag exists and its publishing workflow has not
+# completed, and, once that run succeeded and the notes are done, until the
+# registries serve the version: it prints each state change to stderr and then
+# gives the normal verdict. RELEASE_STATUS_WATCH_INTERVAL (seconds, default 20),
+# RELEASE_STATUS_WATCH_TIMEOUT (default 2700, the workflow) and
+# RELEASE_STATUS_REGISTRY_TIMEOUT (default 900, the registries) tune it.
 #
 # Exit: 0 = ok, 1 = action needed, 2 = usage/lookup error.
 set -euo pipefail
@@ -438,8 +440,9 @@ if [ "$release_found" = 1 ]; then
 fi
 
 # --- phase 6: do the registries actually serve it? ---------------------------
-reg_missing=""
-if [ -n "$declared" ] && [ "$notes_next" = "ok" ]; then
+reg_missing=""; pk_known=0; ter_declared=""
+read_registries() {
+  reg_missing=""
   # "Packagist does not know this package" is not the same as "this version has
   # not landed yet": a skill repo (composer type ai-agent-skill) is never
   # published there, and asserting it would fail every such repo forever.
@@ -448,17 +451,43 @@ if [ -n "$declared" ] && [ "$notes_next" = "ok" ]; then
     if [ "$(printf '%s' "$pk" | tail -1)" = "200" ]; then
       printf '%s' "$pk" | sed '$d' \
         | jq -e --arg v "$tag_ref" '.packages[][]? | select(.version==$v)' >/dev/null 2>&1 \
-        || reg_missing="$reg_missing packagist"
+        || { reg_missing="$reg_missing packagist"; pk_known=1; }
+    elif [ "$pk_known" = 1 ]; then
+      # Asked again while waiting: a failed lookup does not say it is served.
+      reg_missing="$reg_missing packagist"
     fi
   fi
   # Only assert TER when the release workflow actually publishes there --
   # an extension key in composer.json alone is not a claim that it does.
-  ter_declared=$(gh api "repos/$REPO/contents/.github/workflows/release.yml" --jq .content 2>/dev/null \
-    | base64 -d 2>/dev/null | grep -c 'TYPO3_TER_ACCESS_TOKEN' || true)
+  if [ -z "$ter_declared" ]; then
+    ter_declared=$(gh api "repos/$REPO/contents/.github/workflows/release.yml" --jq .content 2>/dev/null \
+      | base64 -d 2>/dev/null | grep -c 'TYPO3_TER_ACCESS_TOKEN' || true)
+  fi
   if [ -n "$extkey" ] && [ "${ter_declared:-0}" -gt 0 ]; then
     curl -sS "https://extensions.typo3.org/api/v1/extension/${extkey}/versions" 2>/dev/null \
       | jq -e --arg v "$declared" '.[0][]? | select(.number==$v)' >/dev/null 2>&1 \
       || reg_missing="$reg_missing TER"
+  fi
+}
+if [ -n "$declared" ] && [ "$notes_next" = "ok" ]; then
+  read_registries
+  # A registry lists a new version minutes after the workflow that published it.
+  # Waiting is for that gap only: a released tag whose run succeeded.
+  if [ "$WATCH" = 1 ] && [ "$declared" = "${latest#v}" ] && [ "$wf_state" = "completed/success" ]; then
+    reg_deadline=$(( $(date +%s) + ${RELEASE_STATUS_REGISTRY_TIMEOUT:-900} ))
+    last=""
+    while [ -n "$reg_missing" ]; do
+      if [ "$reg_missing" != "$last" ]; then
+        printf 'watch: %s not served yet by:%s\n' "$tag_ref" "$reg_missing" >&2
+        last="$reg_missing"
+      fi
+      if [ "$(date +%s)" -ge "$reg_deadline" ]; then
+        add_note "watch timed out while not served by:$reg_missing"
+        break
+      fi
+      sleep "${RELEASE_STATUS_WATCH_INTERVAL:-20}"
+      read_registries
+    done
   fi
 fi
 
