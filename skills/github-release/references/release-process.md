@@ -234,7 +234,7 @@ has not declined. Where CI already appends a `## Security` block, put this there
 heading. Where the body keeps PR bullets, also append `— reported by @login in GHSA-xxxx-xxxx-xxxx` to the bullet
 of the fixing PR. Publish the advisory right after the release edit: until then the GHSA link is a 404 for readers.
 `release-notes-status.sh` reads the repository's published and draft advisories whose `patched_versions` hold the
-version (drafts only with admin or security-manager access) and reports `ADVISORY NOT NAMED OR CREDITED` for a GHSA
+version (drafts only with admin or security-manager access, or as a collaborator on the advisory) and reports `ADVISORY NOT NAMED OR CREDITED` for a GHSA
 id or a credited login missing from the body (netresearch/security-audit-skill v2.11.14 shipped without either).
 
 **Exception: a skill repository keeps the generated body.** Where `composer.json` has `"type": "ai-agent-skill"`, GitHub's
@@ -251,7 +251,7 @@ A reporter of an issue in another repository is written with the full reference
 (`reported by @bob in netresearch/retro-skill#201`). The harvest sees only issues the PRs close in this
 repository, so such a reporter is added by hand from the PR description, and the check below cannot report
 one that is left out: read the PR descriptions of the range for cross-repository `Fixes`/`Reported by` lines.
-`release-notes-status.sh` then reports the body as `ok — generated body kept` once every patched advisory it can read is named as above (a draft advisory is readable only with an admin or security-manager token, so with any other token `ok` does not cover drafts); a harvested reporter the body
+`release-notes-status.sh` then reports the body as `ok — generated body kept` once every patched advisory it can read is named as above (a draft advisory is readable with an admin or security-manager token, or by a collaborator on that advisory; with any other token `ok` does not cover drafts); a harvested reporter the body
 does not name is `MISSING CREDITS`, and a CI stub or an empty body still fails. It checks that the reporter is
 named, not on which bullet. The steps and the overhaul rules below apply to every other repository.
 
