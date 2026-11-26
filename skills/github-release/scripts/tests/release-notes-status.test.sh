@@ -346,6 +346,31 @@ check "blank lines and CR are empty"       1 \
       "$(empty_body "$(printf '\r\n**Full Changelog**: https://x/compare/a...b\r\n\r\n')")"
 check "a narrative is not empty"           0 "$(empty_body "$narrative")"
 
+# --- advisories the release patches ---------------------------------------------
+# netresearch/security-audit-skill v2.11.14 fixed GHSA-c8vv-4wxp-67cc and its
+# kept generated body named neither the advisory nor the reporter; this check
+# reported `ok`.
+adv_json='[
+ {"ghsa_id":"GHSA-aaaa-bbbb-cccc","state":"published",
+  "vulnerabilities":[{"patched_versions":"1.1.0"}],
+  "credits_detailed":[{"type":"reporter","user":{"login":"dave"}},
+                      {"type":"remediation_developer","user":{"login":"carol"}}]},
+ {"ghsa_id":"GHSA-dddd-eeee-ffff","state":"draft",
+  "vulnerabilities":[{"patched_versions":"v0.9.3, 1.1.0"}],
+  "credits_detailed":[{"type":"finder","user":{"login":"erin"}},
+                      {"type":"reporter","state":"declined","user":{"login":"frank"}}]},
+ {"ghsa_id":"GHSA-gggg-hhhh-iiii","state":"triage",
+  "vulnerabilities":[{"patched_versions":"1.1.0"}],"credits_detailed":[]},
+ {"ghsa_id":"GHSA-jjjj-kkkk-llll","state":"published",
+  "vulnerabilities":[{"patched_versions":"1.1.00"}],"credits_detailed":[]}]'
+check "advisories patched in v1.1.0, with finders and reporters" \
+      "GHSA-aaaa-bbbb-cccc @dave
+GHSA-dddd-eeee-ffff @erin" "$(advisories_patched_in "$adv_json" v1.1.0)"
+check "no advisory patched in another version" "" "$(advisories_patched_in "$adv_json" v1.0.0)"
+check "an empty list has none" "" "$(advisories_patched_in '[]' v1.1.0)"
+check "a patched version written with a leading v matches" "GHSA-mmmm-nnnn-oooo" \
+      "$(advisories_patched_in '[{"ghsa_id":"GHSA-mmmm-nnnn-oooo","state":"published","vulnerabilities":[{"patched_versions":"v1.1.0"}]}]' v1.1.0)"
+
 # --- the whole script against a stubbed forge -----------------------------------
 # The failures below sit in check_one, which needs gh, so gh is stubbed from a
 # fixture directory. Anything the stub does not expect exits non-zero rather
@@ -364,6 +389,9 @@ cat >"$fx/bin/gh" <<'STUB'
 #   compare-fails   present: only the compare call does
 #   composer.json   the file at the tag (absent: GitHub's 404)
 #   contents-fails  present: only the contents call answers like a rate limit
+#   advisories.json the repository's security advisories (absent: none)
+#   advisories-fails present: only the advisories call answers like a rate limit
+#   advisories-404  present: the advisories call answers GitHub's 404
 ratelimit() { echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1; }
 [ -e "$STUB/ratelimit" ] && ratelimit
 jqexpr="."; args=()
@@ -391,6 +419,11 @@ if [ "$1" = api ]; then
       [ -e "$STUB/contents-fails" ] && ratelimit
       [ -e "$STUB/composer.json" ] || { echo 'gh: Not Found (HTTP 404)' >&2; exit 1; }
       jq -n --arg c "$(base64 -w0 "$STUB/composer.json")" '{content: $c}' | jq -r "$jqexpr"
+      exit ;;
+    */security-advisories\?*)
+      [ -e "$STUB/advisories-fails" ] && ratelimit
+      [ -e "$STUB/advisories-404" ] && { echo 'gh: Not Found (HTTP 404)' >&2; exit 1; }
+      if [ -e "$STUB/advisories.json" ]; then jq -r "$jqexpr" "$STUB/advisories.json"; else echo '[]'; fi
       exit ;;
     */releases/latest) jq -r '.[0] | '"$jqexpr" "$STUB/releases.json"; exit ;;
     */releases\?*) jq -r "$jqexpr" "$STUB/releases.json"; exit ;;
@@ -545,5 +578,41 @@ touch "$fx/skillfail/contents-fails"
 out=$(rns "$fx/skillfail" v1.1.0)
 check "end to end: a failed composer.json lookup is reported" 1 "$(has 'lookup failed: composer.json at v1.1.0' "$out")"
 check "end to end: and exits 2"                               1 "$(has 'EXIT: 2' "$out")"
+
+# A release that patches an advisory names it and thanks its reporter, in a kept
+# generated body too.
+adv_fixture='[{"ghsa_id":"GHSA-aaaa-bbbb-cccc","state":"published",
+  "vulnerabilities":[{"patched_versions":"1.1.0"}],
+  "credits_detailed":[{"type":"reporter","user":{"login":"dave"}}]}]'
+fixture skilladv "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skilladv/composer.json"
+printf '%s\n' "$adv_fixture" >"$fx/skilladv/advisories.json"
+out=$(rns "$fx/skilladv" v1.1.0)
+check "end to end: an unnamed advisory is reported" 1 "$(has 'ADVISORY NOT NAMED OR CREDITED — GHSA-aaaa-bbbb-cccc @dave' "$out")"
+check "end to end: and needs work"                  1 "$(has 'EXIT: 1' "$out")"
+
+adv_body="## Security
+
+Fixes [GHSA-aaaa-bbbb-cccc](https://github.com/acme/lib/security/advisories/GHSA-aaaa-bbbb-cccc), reported by @dave.
+
+$github_generated"
+fixture skilladvok "$adv_body" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skilladvok/composer.json"
+printf '%s\n' "$adv_fixture" >"$fx/skilladvok/advisories.json"
+out=$(rns "$fx/skilladvok" v1.1.0)
+check "end to end: a named and credited advisory is ok" 1 "$(has 'EXIT: 0' "$out")"
+
+fixture skilladvfail "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skilladvfail/composer.json"
+touch "$fx/skilladvfail/advisories-fails"
+out=$(rns "$fx/skilladvfail" v1.1.0)
+check "end to end: a failed advisory lookup is reported" 1 "$(has 'lookup failed: security advisories' "$out")"
+check "end to end: and exits 2"                          1 "$(has 'EXIT: 2' "$out")"
+
+fixture skilladv404 "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skilladv404/composer.json"
+touch "$fx/skilladv404/advisories-404"
+out=$(rns "$fx/skilladv404" v1.1.0)
+check "end to end: a 404 from the advisories call means none" 1 "$(has 'EXIT: 0' "$out")"
 
 exit $fail
