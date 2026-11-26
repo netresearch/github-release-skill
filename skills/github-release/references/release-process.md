@@ -225,8 +225,9 @@ The tag push triggers the release workflow (e.g., `.github/workflows/release.yml
 After CI publishes the release, the agent overhauls the auto-generated description into a narrative format:
 
 **A release that patches a repository security advisory names it, in every repository, skill repositories
-included.** Set the advisory's `patched_versions` to the bare new version (`1.1.0`, not a range) before you run
-`release-notes-status.sh`; an advisory without it is invisible to the check. Then name the advisory at the top of
+included.** Add the bare new version (`1.1.0`, not a range) to the advisory's `patched_versions` before you run
+`release-notes-status.sh`, keeping the versions already listed (a backport adds `1.2.3` to `2.0.1`, comma-separated);
+an advisory without it is invisible to the check. Then name the advisory at the top of
 the body: in the narrative, or above the generated list in a skill repository, give the GHSA id as a link, what was
 vulnerable and in which versions, and an `@login` for everyone the advisory credits as finder or reporter and who
 has not declined. Where CI already appends a `## Security` block, put this there instead of adding a second
@@ -250,7 +251,7 @@ A reporter of an issue in another repository is written with the full reference
 (`reported by @bob in netresearch/retro-skill#201`). The harvest sees only issues the PRs close in this
 repository, so such a reporter is added by hand from the PR description, and the check below cannot report
 one that is left out: read the PR descriptions of the range for cross-repository `Fixes`/`Reported by` lines.
-`release-notes-status.sh` then reports the body as `ok — generated body kept` once every patched advisory is named as above; a harvested reporter the body
+`release-notes-status.sh` then reports the body as `ok — generated body kept` once every patched advisory it can read is named as above (a draft advisory is readable only with an admin or security-manager token, so with any other token `ok` does not cover drafts); a harvested reporter the body
 does not name is `MISSING CREDITS`, and a CI stub or an empty body still fails. It checks that the reporter is
 named, not on which bullet. The steps and the overhaul rules below apply to every other repository.
 
