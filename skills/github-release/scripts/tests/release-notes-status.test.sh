@@ -130,7 +130,7 @@ check "v1.36.1 credits @nilzen-dev" 1 "$(credited "$rewritten_gws" @nilzen-dev)"
 rewritten_brand=$(cat <<'BODY'
 ## Highlights
 
-The skill now describes how a branded standalone page is built, not only which colours, fonts and logo it uses, and ships a stylesheet and templates that implement it. The contrast audit detects dark schemes reliably and checks focus indicators and form-control boundaries against WCAG SC 1.4.11. The brand rules themselves (colours, Raleway/Open Sans, logo, footer, contrast roles) are unchanged, and hosted TYPO3 manuals keep their own profile.
+The skill now describes how a branded standalone page is built, not only which colours, fonts and logo it uses, and ships a stylesheet and templates that implement it. The contrast audit detects dark schemes reliably and checks focus indicators and form-control boundaries against WCAG SC 1.4.11. The brand rules themselves (colours, fonts, logo, footer, contrast roles) are unchanged, and hosted TYPO3 manuals keep their own profile.
 
 ## Page construction
 
