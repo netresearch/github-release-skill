@@ -368,6 +368,8 @@ check "advisories patched in v1.1.0, with finders and reporters" \
 GHSA-dddd-eeee-ffff @erin" "$(advisories_patched_in "$adv_json" v1.1.0)"
 check "no advisory patched in another version" "" "$(advisories_patched_in "$adv_json" v1.0.0)"
 check "an empty list has none" "" "$(advisories_patched_in '[]' v1.1.0)"
+check "a patched version written with a leading v matches" "GHSA-mmmm-nnnn-oooo" \
+      "$(advisories_patched_in '[{"ghsa_id":"GHSA-mmmm-nnnn-oooo","state":"published","vulnerabilities":[{"patched_versions":"v1.1.0"}]}]' v1.1.0)"
 
 # --- the whole script against a stubbed forge -----------------------------------
 # The failures below sit in check_one, which needs gh, so gh is stubbed from a
@@ -389,6 +391,7 @@ cat >"$fx/bin/gh" <<'STUB'
 #   contents-fails  present: only the contents call answers like a rate limit
 #   advisories.json the repository's security advisories (absent: none)
 #   advisories-fails present: only the advisories call answers like a rate limit
+#   advisories-404  present: the advisories call answers GitHub's 404
 ratelimit() { echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1; }
 [ -e "$STUB/ratelimit" ] && ratelimit
 jqexpr="."; args=()
@@ -419,6 +422,7 @@ if [ "$1" = api ]; then
       exit ;;
     */security-advisories\?*)
       [ -e "$STUB/advisories-fails" ] && ratelimit
+      [ -e "$STUB/advisories-404" ] && { echo 'gh: Not Found (HTTP 404)' >&2; exit 1; }
       if [ -e "$STUB/advisories.json" ]; then jq -r "$jqexpr" "$STUB/advisories.json"; else echo '[]'; fi
       exit ;;
     */releases/latest) jq -r '.[0] | '"$jqexpr" "$STUB/releases.json"; exit ;;
@@ -604,5 +608,11 @@ touch "$fx/skilladvfail/advisories-fails"
 out=$(rns "$fx/skilladvfail" v1.1.0)
 check "end to end: a failed advisory lookup is reported" 1 "$(has 'lookup failed: security advisories' "$out")"
 check "end to end: and exits 2"                          1 "$(has 'EXIT: 2' "$out")"
+
+fixture skilladv404 "$github_generated" "$nl_body"
+printf '%s\n' "$skill_composer" >"$fx/skilladv404/composer.json"
+touch "$fx/skilladv404/advisories-404"
+out=$(rns "$fx/skilladv404" v1.1.0)
+check "end to end: a 404 from the advisories call means none" 1 "$(has 'EXIT: 0' "$out")"
 
 exit $fail
