@@ -190,7 +190,8 @@ issue_reporters() { # <harvest output>
 
 # The repository advisories this release patches, one per line:
 #   <GHSA id> <@login>...
-# with the logins credited as finder or reporter. A release that fixes a
+# with the logins credited as finder or reporter, unless they declined. A
+# release that fixes a
 # reported vulnerability must name the advisory and thank whoever reported it,
 # in a kept generated body too: the generated list names PR authors only, and
 # netresearch/security-audit-skill v2.11.14 shipped without either while this
@@ -199,15 +200,17 @@ issue_reporters() { # <harvest output>
 # matches when it is one of the comma-separated `patched_versions`, with or
 # without a leading `v`. <advisories> is the API's JSON, one array per page.
 advisories_patched_in() { # <advisories JSON> <tag>
-  jq -r --arg v "${2#v}" '
+  local json="$1" version="${2#v}"
+  jq -r --arg v "$version" '
     .[] | select(.state == "published" or .state == "draft")
     | select([.vulnerabilities[]?.patched_versions // ""
               | split(",")[] | gsub("^\\s+|\\s+$"; "") | ltrimstr("v")]
              | index($v) != null)
     | [.ghsa_id] + [.credits_detailed[]?
                     | select(.type == "finder" or .type == "reporter")
+                    | select(.state != "declined")
                     | "@" + .user.login]
-    | join(" ")' <<<"$1"
+    | join(" ")' <<<"$json"
 }
 
 # gh's message for a failed call, last line only. A rate limit or an auth
