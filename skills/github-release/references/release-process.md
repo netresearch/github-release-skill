@@ -242,6 +242,15 @@ one that is left out: read the PR descriptions of the range for cross-repository
 does not name is `MISSING CREDITS`, and a CI stub or an empty body still fails. It checks that the reporter is
 named, not on which bullet. The steps and the overhaul rules below apply to every other repository.
 
+**A release that patches a repository security advisory names it, in every repository, skill repositories
+included.** Add a `## Security` section above the list: the GHSA id as a link, what was vulnerable and in which
+versions, and an `@login` for everyone the advisory credits as finder or reporter; then append
+`— reported by @login in GHSA-xxxx-xxxx-xxxx` to the bullet of the fixing PR. Set the advisory's
+`patched_versions` before the tag, so the check sees it. `release-notes-status.sh` reads the repository's
+published and draft advisories whose `patched_versions` contain the version, and reports
+`ADVISORY NOT NAMED OR CREDITED` for a GHSA id or a credited login missing from the body
+(netresearch/security-audit-skill v2.11.14 shipped without either).
+
 ```
 1. Wait for CI release workflow to complete successfully
 2. Review the commits included in the release (git log prev_tag..new_tag)

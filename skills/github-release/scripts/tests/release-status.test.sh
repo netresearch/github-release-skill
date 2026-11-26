@@ -149,6 +149,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
+    */security-advisories\?*) echo '[]'; exit 0 ;;
     */releases/latest)  echo "v6.4.0"; exit 0 ;;
     */git/ref/tags/v6.4.0) echo "tag"; exit 0 ;;
     */git/ref/tags/*)   exit 1 ;;
@@ -235,6 +236,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
+    */security-advisories\?*) echo '[]'; exit 0 ;;
     */releases/latest)     echo "v6.4.0"; exit 0 ;;
     */git/ref/tags/v6.4.0) echo "tag"; exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
@@ -313,6 +315,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
+    */security-advisories\?*) echo '[]'; exit 0 ;;
     */releases/latest)
       [ -n "${STUB_LATEST:-}" ] && { echo "$STUB_LATEST"; exit 0; }
       exit 1 ;;
@@ -600,6 +603,7 @@ for a in "$@"; do
   prev="$a"
 done
 case "$path" in
+  */security-advisories\?*) echo '[]'; exit 0 ;;
   */releases/latest)
     [ -n "${STUB_LATEST:-}" ] && { echo "$STUB_LATEST"; exit 0; }
     echo '{"message":"Not Found"}'; exit 1 ;;
@@ -785,6 +789,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
+    */security-advisories\?*) echo '[]'; exit 0 ;;
     */releases/latest)     cat "$(dirname "$0")/latest" 2>/dev/null || echo v1.0.0; exit 0 ;;
     */git/ref/tags/v1.0.0|*/git/ref/tags/v1.0.1) echo "tag"; exit 0 ;;
     */git/ref/tags/*)      exit 1 ;;
@@ -896,6 +901,7 @@ case "$1 $2" in
 esac
 if [ "$1" = api ]; then
   case "$2" in
+    */security-advisories\?*) echo '[]'; exit 0 ;;
     */releases/latest)
       if ! published; then echo "${LATER_BEFORE:-v1.16.4}"; exit 0; fi
       [ -n "${LATER_REREAD_FAILS:-}" ] && { echo '{"message":"Server Error"}'; exit 1; }

@@ -188,6 +188,28 @@ issue_reporters() { # <harvest output>
   grep -E '^issue reporters' <<<"$1" | grep -oE '@[A-Za-z0-9-]+' | sort -u || true
 }
 
+# The repository advisories this release patches, one per line:
+#   <GHSA id> <@login>...
+# with the logins credited as finder or reporter. A release that fixes a
+# reported vulnerability must name the advisory and thank whoever reported it,
+# in a kept generated body too: the generated list names PR authors only, and
+# netresearch/security-audit-skill v2.11.14 shipped without either while this
+# check reported `ok`. Drafts count, because the advisory is usually published
+# after the release; triage, closed and withdrawn advisories do not. A version
+# matches when it is one of the comma-separated `patched_versions`, with or
+# without a leading `v`. <advisories> is the API's JSON, one array per page.
+advisories_patched_in() { # <advisories JSON> <tag>
+  jq -r --arg v "${2#v}" '
+    .[] | select(.state == "published" or .state == "draft")
+    | select([.vulnerabilities[]?.patched_versions // ""
+              | split(",")[] | gsub("^\\s+|\\s+$"; "") | ltrimstr("v")]
+             | index($v) != null)
+    | [.ghsa_id] + [.credits_detailed[]?
+                    | select(.type == "finder" or .type == "reporter")
+                    | "@" + .user.login]
+    | join(" ")' <<<"$1"
+}
+
 # gh's message for a failed call, last line only. A rate limit or an auth
 # failure is not a missing release: reporting it as `not found` sends the
 # operator looking for a release that exists.
@@ -301,6 +323,24 @@ check_one() {
     fi
   fi
 
+  # 3a. Advisories this release patches: each is named by its GHSA id, and its
+  #     finders and reporters are @mentioned (advisories_patched_in). A 404 means
+  #     the repository has no advisory feature; any other failure is a failed
+  #     lookup, not "no advisories".
+  local advisories adv_missing="" line ghsa login
+  if ! advisories=$(gh api "repos/$REPO/security-advisories?per_page=100" --paginate 2>"$ERR"); then
+    if grep -qF 'HTTP 404' "$ERR"; then advisories='[]'; else
+      lookup_failed "security advisories"; return 2; fi
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    ghsa=${line%% *}
+    body_has "$body" -F "$ghsa" || adv_missing="$adv_missing $ghsa"
+    for login in ${line#"$ghsa"}; do
+      credit_mentioned "$body" "$login" || adv_missing="$adv_missing $login"
+    done
+  done <<<"$(advisories_patched_in "$advisories" "$tag")"
+
   # 4. A hand-written Contributors section duplicates the avatar row GitHub
   #    builds from inline mentions -- the rule is inline credit, never a section.
   local section=0
@@ -328,13 +368,14 @@ check_one() {
   [ "$raw" = 1 ] || [ "$stub" = 1 ] || [ "$empty" = 1 ] && next="overhaul-notes"
   [ "$next" = "ok" ] && [ -n "$harvest_failed" ] && next="credit-check-failed"
   [ "$next" = "ok" ] && [ -n "$missing" ] && next="add-credits"
+  [ "$next" = "ok" ] && [ -n "$adv_missing" ] && next="credit-advisory"
   [ "$next" = "ok" ] && [ "$section" = 1 ] && next="inline-the-credits"
   [ "$next" = "ok" ] && [ -n "$lost" ] && next="restore-ci-sections"
   [ "$next" = "ok" ] || rc=1
 
   if [ "$JSON" = 1 ]; then
     jq -nc --arg tag "$tag" --arg next "$next" --arg missing "${missing# }" \
-       --arg lost "${lost# }" --argjson raw "$raw" --argjson stub "$stub" \
+       --arg lost "${lost# }" --arg adv "${adv_missing# }" --argjson raw "$raw" --argjson stub "$stub" \
        --argjson empty "$empty" --arg harvest_failed "$harvest_failed" \
        --argjson section "$section" --arg draft "$draft" \
        --argjson kept "$kept" \
@@ -342,6 +383,7 @@ check_one() {
          generated_body_kept:($kept==1),
          empty:($empty==1),
          missing_credits:($missing|split(" ")|map(select(length>0))),
+         advisory_gaps:($adv|split(" ")|map(select(length>0))),
          credit_check_failed:(if $harvest_failed == "" then null else $harvest_failed end),
          lost_ci_sections:$lost, handwritten_contributors_section:($section==1),
          draft:($draft=="true")}'
@@ -364,6 +406,7 @@ check_one() {
         fi ;;
       credit-check-failed) printf 'CREDIT CHECK FAILED — %s\n' "$harvest_failed" ;;
       add-credits) printf 'MISSING CREDITS —%s never @mentioned in the body\n' "$missing" ;;
+      credit-advisory) printf 'ADVISORY NOT NAMED OR CREDITED —%s missing from the body\n' "$adv_missing" ;;
       inline-the-credits) printf 'hand-written Contributors section — credit inline instead\n' ;;
       restore-ci-sections) printf 'CI-APPENDED BLOCKS LOST —%s\n' "$lost" ;;
     esac
