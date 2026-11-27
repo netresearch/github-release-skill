@@ -1248,7 +1248,14 @@
           "type": "content",
           "pattern": "(?i)(changelog|api diff|api surface|breaking)"
         }
-      ]
+      ],
+      "samples": {
+        "passing": "Before choosing, I read the [Unreleased] section of the changelog and diffed the public API against v0.54.2: both feat: commits only add, and nothing is removed or changes behaviour. So the next version is 0.54.3. On 0.x the caret stops at the middle number: ^0.54 admits 0.54.* and refuses 0.55.0, so a 0.55.0 would make all six dependents widen their constraint and release before anyone could install it. Features and fixes go into the last number; only a breaking change raises the middle one.",
+        "failing": [
+          "There are two feat: commits, and conventional commits map feat to a minor bump, so the next version is 0.55.0.",
+          "Go with 0.54.3."
+        ]
+      }
     }
   ]
 }
