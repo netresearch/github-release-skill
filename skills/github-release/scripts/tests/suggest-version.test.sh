@@ -23,10 +23,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$HERE/../suggest-version.sh"
 
 fail=0
+pass() { # pass <name>
+  local name="$1"
+  printf 'ok   - %s\n' "$name"
+}
+
 check() { # check <name> <expected> <actual>
   local name="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then
-    printf 'ok   - %s\n' "$name"
+    pass "$name"
   else
     printf 'FAIL - %s\n       expected: [%s]\n       actual:   [%s]\n' "$name" "$expected" "$actual"
     fail=1
@@ -94,7 +99,8 @@ make_repo() {
 
 # run_script <repo> [script] -> the script's whole output, run in <repo>.
 run_script() {
-  (cd "$1" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE bash "${2:-$SCRIPT}")
+  local repo="$1" script="${2:-$SCRIPT}"
+  (cd "$repo" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE bash "$script")
 }
 
 # run_in <tag> <commit message>... -> the script's whole output.
@@ -166,12 +172,15 @@ check "a continued pre-release is reported as unknown, never as a release" \
 
 reason=$(run_in v0.3.0 "$FEAT" | grep '^reason:')
 case "$reason" in
-  *"changelog"*) printf 'ok   - %s\n' "0.x: the reason sends the reader to the changelog" ;;
+  *"changelog"*) pass "0.x: the reason sends the reader to the changelog" ;;
   *) printf 'FAIL - %s\n       actual: [%s]\n' "0.x: the reason sends the reader to the changelog" "$reason"; fail=1 ;;
 esac
 
 # fields <output> -> the "suggested:" and "bump:" lines of a run.
-fields() { grep -E '^(suggested|bump):' <<< "$1" | tr '\n' ' '; }
+fields() {
+  local output="$1"
+  grep -E '^(suggested|bump):' <<< "$output" | tr '\n' ' '
+}
 
 # Tags git-cliff would otherwise take for the last version: an unprefixed
 # version tag, and a lightweight marker tag on HEAD.
@@ -204,7 +213,7 @@ cp "$SCRIPT" "$lonely/suggest-version.sh"
 repo="$(make_repo v0.54.2 "$FEAT")"
 missing=$(run_script "$repo" "$lonely/suggest-version.sh")
 case "$(fields "$missing")$(grep '^reason:' <<< "$missing")" in
-  "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) printf 'ok   - %s\n' "without its configuration the bump is unknown" ;;
+  "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) pass "without its configuration the bump is unknown" ;;
   *) printf 'FAIL - %s\n       actual: [%s]\n' "without its configuration the bump is unknown" "$missing"; fail=1 ;;
 esac
 ln -s "$SCRIPT" "$lonely/linked.sh"
@@ -218,12 +227,13 @@ bin="$TMP/bin"
 mkdir -p "$bin"
 for tool in git dirname readlink; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
 run_bare() { # run_bare <bin dir> <repo> -> the script's output with only <bin dir> on PATH
-  (cd "$2" && env -i HOME="$TMP" PATH="$1" "$(command -v bash)" --noprofile --norc "$SCRIPT")
+  local path="$1" repo="$2"
+  (cd "$repo" && env -i HOME="$TMP" PATH="$path" "$(command -v bash)" --noprofile --norc "$SCRIPT")
 }
 repo="$(make_repo v0.54.2 "$FEAT")"
 no_tool=$(run_bare "$bin" "$repo" | grep -E '^(bump|reason):' | tr '\n' ' ')
 case "$no_tool" in
-  "bump:unknown reason:neither uvx nor git-cliff is installed"*) printf 'ok   - %s\n' "without uvx and git-cliff the bump is unknown" ;;
+  "bump:unknown reason:neither uvx nor git-cliff is installed"*) pass "without uvx and git-cliff the bump is unknown" ;;
   *) printf 'FAIL - %s\n       actual: [%s]\n' "without uvx and git-cliff the bump is unknown" "$no_tool"; fail=1 ;;
 esac
 
@@ -245,7 +255,7 @@ check "a failing uvx falls back to git-cliff on PATH" \
 
 # Nothing of the above wrote into a caller's repository.
 if [[ "$(caller_state)" == "$CALLER_BEFORE" ]]; then
-  printf 'ok   - %s\n' "the caller's repository is unchanged"
+  pass "the caller's repository is unchanged"
 else
   printf 'FAIL - %s\n' "the caller's repository is unchanged (GIT_DIR=${GIT_DIR:-})"; fail=1
 fi
