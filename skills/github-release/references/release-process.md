@@ -664,11 +664,11 @@ major and y were minor and patch together:
 commit, and suggests a patch for `feat:`. It reads commit subjects only, so its suggestion is the
 starting point for the read above, not the answer.
 
-Observed 2026-11-12 to 2026-11-24 on `netresearch/t3x-nr-llm`: twelve releases, 0.44.0 to 0.55.0,
-raised the middle number. Their release PRs gave "a minor version because of the new features" or
-"additions to the public surface take a minor during 0.x", and the changelog of 0.45.0 to 0.55.0
-has no BREAKING entry. Every one of those releases made the dependent extensions widen their
-constraint and release again. [netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475)
+Observed 2026-11-13 to 2026-11-24 on `netresearch/t3x-nr-llm`: 0.45.0 to 0.55.0 raised the middle
+number eleven times, and its changelog has no BREAKING entry in any of them. Six of the release PRs
+named new features or additions as the reason ("a minor version because of the new features",
+"additions to the public surface take a minor during 0.x"). Each such release requires the
+dependent extensions to widen their constraint and release before an installation can take it. [netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475)
 writes the rule down there and adds a CI check that refuses a release whose middle number disagrees with its
 `**BREAKING` changelog bullets.
 

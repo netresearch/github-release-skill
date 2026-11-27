@@ -6,10 +6,11 @@
 # Pins the 0.x rule: on a 0.x version the caret stops at the middle number
 # (`^0.54` admits 0.54.* only), so a middle bump is a new major for every
 # consumer. suggest-version.sh used to map `feat:` to the middle number on 0.x
-# too; netresearch/t3x-nr-llm released 0.44.0 to 0.55.0 as middle bumps
-# without a breaking entry, and each one made the dependent extensions widen
-# their constraint and release. On 0.x a feature is now a patch bump; only a
-# breaking commit raises the middle number. From 1.0.0 on, feat is a minor bump.
+# too; netresearch/t3x-nr-llm raised the middle number eleven times from 0.45.0
+# to 0.55.0 without a breaking entry, and each such release requires the
+# dependent extensions to widen their constraint and release. On 0.x a feature
+# is now a patch bump; only a breaking commit raises the middle number. From
+# 1.0.0 on, feat is a minor bump.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
