@@ -23,13 +23,16 @@ Report findings to the user before proceeding.
 
 ### 2. Suggest next version
 
-Run `suggest-version.sh` from the skill's scripts directory to analyze recent commits
-and suggest the next semantic version. Present the suggestion and let the user
+Run `suggest-version.sh` from the skill's scripts directory: it asks git-cliff
+(`uvx git-cliff --bumped-version`, with the skill's own configuration) for the next
+semantic version from the commits since the last tag. Present the suggestion and let the user
 confirm or override with their preferred version number.
 On a 0.x version, read `[Unreleased]`, the pending `changelog.d/` fragments
 (`removed`, `upgrading`, bullets opening with `**BREAKING`) and the API diff for a
-breaking change before presenting it: the middle number rises only for one
-(`references/release-process.md`).
+breaking change before presenting it: the middle number rises only for one, and
+those changelog BREAKING entries outrank git-cliff's suggestion
+(`references/release-process.md`, which also lists the inputs git-cliff answers
+differently).
 
 ### 3. Validate pre-release readiness
 

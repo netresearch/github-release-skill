@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+#
+# git-cliff configuration for suggest-version.sh. Passed with --config, so a
+# cliff.toml or [tool.git-cliff] section in the repository being released is
+# not read. Only the version bump is computed; no changelog is written.
+
+[git]
+conventional_commits = true
+# Unconventional commits still count, as a patch.
+filter_unconventional = false
+# Not split: a commit message stays one commit, so a `BREAKING CHANGE:` footer
+# belongs to its commit. Splitting by line would make squash-body bullets
+# count as commits of their own, but it drops every footer (measured with
+# git-cliff 2.14.2), and this organisation merges with merge commits, not
+# squashes.
+split_commits = false
+
+[bump]
+# On 0.y a feature raises the last number and a breaking change the middle
+# one; from 1.0.0 on feat is minor and breaking is major.
+features_always_bump_minor = false
+breaking_always_bump_major = false

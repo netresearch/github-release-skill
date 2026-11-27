@@ -2,17 +2,32 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
-# suggest-version.sh - Analyze git log since last version tag and suggest next semver version.
+# suggest-version.sh - Suggest the next semver version from the commits since
+# the last version tag, computed by git-cliff (`--bumped-version`) with the
+# configuration beside this script (suggest-version.cliff.toml).
 #
 # Output format:
 #   current:<version>
 #   suggested:<version>
 #   bump:<major|minor|patch|release|none|unknown>
-#     release: finish the pre-release the last tag names
+#     release: kept in the contract; git-cliff continues a pre-release
+#              (rc.1 -> rc.2) instead, which is reported as unknown
 #     none:    no commits since the last tag
+#     unknown: git-cliff is missing, failed, or suggested another pre-release
 #   reason:<explanation>
 #
+# git-cliff runs as `uvx git-cliff` (no version pinned: dev tooling runs its
+# newest release), or as a `git-cliff` binary on PATH when uv is missing.
+#
+# On 0.y (y >= 1) the suggestion maps feat and fix to the last number and a
+# breaking commit to the middle number; on 0.0.z git-cliff raises the last
+# number for every commit. It reads commit messages only; on 0.x the
+# package's changelog BREAKING entries and its API diff stay authoritative
+# (references/release-process.md).
 set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="$HERE/suggest-version.cliff.toml"
 
 # Find the last version tag matching v*
 last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
@@ -25,148 +40,70 @@ if [[ -z "$last_tag" ]]; then
     exit 0
 fi
 
-# Strip leading 'v' to get semver
 current="${last_tag#v}"
 echo "current:${current}"
 
-# Parse semver components. Build metadata (+...) carries no meaning for the
-# order; a pre-release (-...) is finished by releasing its own version unless
-# a commit after it demands more than that version already carries.
-core="${current%%+*}"
-prerelease=""
-if [[ "$core" == *-* ]]; then
-    prerelease="${core#*-}"
-    core="${core%%-*}"
-fi
-IFS='.' read -r major minor patch <<< "$core"
-major=${major:-0}
-minor=${minor:-0}
-patch=${patch:-0}
-number='^(0|[1-9][0-9]*)$'
-if ! [[ "$major" =~ $number && "$minor" =~ $number && "$patch" =~ $number ]]; then
+unknown() {
     echo "suggested:unknown"
     echo "bump:unknown"
-    echo "reason:${last_tag} is not a MAJOR.MINOR.PATCH version; choose the next version by hand"
+    echo "reason:$1"
+    exit 0
+}
+
+if command -v uvx >/dev/null 2>&1; then
+    cliff=(uvx git-cliff)
+elif command -v git-cliff >/dev/null 2>&1; then
+    cliff=(git-cliff)
+else
+    unknown "neither uvx nor git-cliff is installed; install uv (or git-cliff) or choose the next version by hand"
+fi
+
+if ! next=$("${cliff[@]}" --config "$CONFIG" --bumped-version 2>/dev/null); then
+    unknown "git-cliff could not compute a version from ${last_tag}; choose the next version by hand"
+fi
+next="${next##*$'\n'}"
+next="${next#v}"
+next="${next%%+*}"
+
+core="${current%%+*}"
+if [[ "$next" == *-* ]]; then
+    echo "suggested:${next}"
+    echo "bump:unknown"
+    echo "reason:${last_tag} is a pre-release; git-cliff suggests the next pre-release ${next}. To release, choose ${core%%-*} or, if a commit since demands more, a higher version by hand"
     exit 0
 fi
 
-# Get commits since last tag: whole messages, separated by an ASCII record
-# separator, because a BREAKING CHANGE footer sits in the body.
-commits=$(git log "${last_tag}..HEAD" --format='%B%x1e' 2>/dev/null)
+number='^(0|[1-9][0-9]*)$'
+IFS='.' read -r major minor patch <<< "${core%%-*}"
+IFS='.' read -r new_major new_minor new_patch <<< "$next"
+for part in "$major" "$minor" "$patch" "$new_major" "$new_minor" "$new_patch"; do
+    [[ "$part" =~ $number ]] || unknown "git-cliff answered ${next} for ${last_tag}, which is not MAJOR.MINOR.PATCH; choose the next version by hand"
+done
 
-if [[ -z "$prerelease" && -z "${commits//[$'\x1e\n']/}" ]]; then
+if [[ -z "$(git log "${last_tag}..HEAD" --format=%H 2>/dev/null)" ]]; then
     echo "suggested:${current}"
     echo "bump:none"
     echo "reason:no commits since ${last_tag}"
     exit 0
 fi
 
-# Count conventional commit types
-breaking=0
-feat=0
-fix=0
-other=0
-
-while IFS= read -r -d $'\x1e' message; do
-    message="${message#$'\n'}"
-    [[ -z "$message" ]] && continue
-    subject="${message%%$'\n'*}"
-    # Breaking: `!` before the colon in the subject or in a bullet of a squash
-    # body (`* feat(api)!: ...`), or a line that opens with `BREAKING CHANGE:` /
-    # `BREAKING-CHANGE:` (a footer, or the subject itself). A subject that only
-    # mentions a breaking change does not count.
-    if grep -qE '^[[:space:]]*[*-]?[[:space:]]*[a-z]+(\([^)]*\))?!:' <<< "$message" \
-        || grep -qE '^BREAKING[ -]CHANGE: ' <<< "$message"; then
-        ((breaking++)) || true
-    elif echo "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
-        ((feat++)) || true
-    elif echo "$subject" | grep -qE '^(fix|perf|refactor)(\([^)]*\))?:'; then
-        ((fix++)) || true
-    else
-        ((other++)) || true
-    fi
-done <<< "$commits"
-
-# Determine bump level
-if ((breaking > 0)); then
-    if ((major == 0)); then
-        # Pre-1.0.0: breaking changes bump the middle number
-        bump="minor"
-        new_major=$major
-        new_minor=$((minor + 1))
-        new_patch=0
-        reason="${breaking} breaking change(s) (pre-1.0.0: bumps minor)"
-    else
-        bump="major"
-        new_major=$((major + 1))
-        new_minor=0
-        new_patch=0
-        reason="${breaking} breaking change(s)"
-    fi
-elif ((feat > 0)) && ((major == 0)); then
-    # On 0.y with y >= 1 the caret stops at the middle number (^0.54 admits
-    # only 0.54.*), so raising it is a new major for every consumer. Features
-    # go into the last number; only a breaking change raises the middle one.
-    # On 0.0.z the caret admits only that exact version, so every release
-    # needs a widened constraint; the suggestion stays a patch there too.
-    bump="patch"
-    new_major=$major
-    new_minor=$minor
-    new_patch=$((patch + 1))
-    reason="${feat} feat commit(s) (pre-1.0.0: features bump patch; read the changelog and the API diff for a breaking change the commit subjects do not mark)"
-elif ((feat > 0)); then
+if ((new_major != major)); then
+    bump="major"
+elif ((new_minor != minor)); then
     bump="minor"
-    new_major=$major
-    new_minor=$((minor + 1))
-    new_patch=0
-    reason="${feat} feat commit(s)"
-elif ((fix > 0)); then
+elif ((new_patch != patch)); then
     bump="patch"
-    new_major=$major
-    new_minor=$minor
-    new_patch=$((patch + 1))
-    reason="${fix} fix/perf/refactor commit(s)"
 else
-    # No conventional commits recognized
-    if ((other > 0)); then
-        bump="unknown"
-        new_major=$major
-        new_minor=$minor
-        new_patch=$((patch + 1))
-        reason="${other} commit(s) without conventional commit prefixes; manual review recommended"
-    else
-        bump="unknown"
-        new_major=$major
-        new_minor=$minor
-        new_patch=$patch
-        reason="unable to determine bump from commit messages"
-    fi
+    unknown "git-cliff found nothing to bump in the commits since ${last_tag}; choose the next version by hand"
 fi
 
-# After a pre-release tag, its own version is next unless a commit since
-# demands a higher level than that version already carries over its line:
-# X.0.0 carries a major, X.Y.0 a minor, X.Y.Z a patch; on 0.x a 0.Y.0 carries
-# the middle (breaking) level. Otherwise bump from the base version as above.
-if [[ -n "$prerelease" ]]; then
-    level() { case "$1" in major) echo 3 ;; minor) echo 2 ;; patch) echo 1 ;; *) echo 0 ;; esac; }
-    if ((patch != 0)); then
-        carried="patch"
-    elif ((major == 0)) || ((minor != 0)); then
-        carried="minor"
-    else
-        carried="major"
-    fi
-    if (($(level "$bump") <= $(level "$carried"))); then
-        new_major=$major
-        new_minor=$minor
-        new_patch=$patch
-        reason="${last_tag} is a pre-release (${prerelease}); no commit since demands more than its release ${major}.${minor}.${patch}"
-        bump="release"
-    fi
+reason="git-cliff: ${bump} bump from ${last_tag}"
+if ((major == 0 && minor == 0)); then
+    reason="${reason} (0.0.z: git-cliff bumps the last number for every commit, breaking ones included; the changelog BREAKING entries and the API diff decide, read them before choosing)"
+elif ((major == 0)); then
+    reason="${reason} (0.x: feat and fix bump the last number, a breaking commit the middle one; the changelog BREAKING entries and the API diff decide, read them before choosing)"
 fi
 
-suggested="${new_major}.${new_minor}.${new_patch}"
-
-echo "suggested:${suggested}"
+echo "suggested:${next}"
 echo "bump:${bump}"
 echo "reason:${reason}"

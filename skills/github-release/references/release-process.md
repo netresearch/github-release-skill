@@ -37,8 +37,9 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
    - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major);
      on 0.y (y >= 1) one level down: BREAKING CHANGE → middle number, feat and fix →
      last number (see "On 0.x, Raise the Middle Number Only for a Breaking Change");
-     on 0.0.z the same mapping (BREAKING CHANGE → 0.1.0, feat and fix → 0.0.z+1),
-     although the caret there admits only the exact version
+     on 0.0.z `scripts/suggest-version.sh` (git-cliff) suggests 0.0.z+1 for every
+     commit, breaking ones included, although the caret there admits only the
+     exact version
    - From explicit user input ("bump to 2.0.0")
 3. Create release branch:
    git checkout -b release/vX.Y.Z
@@ -670,12 +671,28 @@ x were the major and y were minor and patch together:
 On 0.0.z the caret admits only that exact version (`^0.0.3` takes 0.0.3 alone), so every release
 needs a widened constraint; leave 0.0.z before other packages depend on the package.
 
-`scripts/suggest-version.sh` follows this: on 0.x it raises the middle number only for a breaking
-commit (`!` before the colon, also in a bullet of a squash body, or a line opening with
-`BREAKING CHANGE:`) and suggests a patch for `feat:`. After a pre-release tag it suggests the
-release of that version unless a commit since demands more than that version carries (a breaking
-commit after `v1.3.0-rc.1` gives 2.0.0). It reads commit messages only, so
-its suggestion is the starting point for the read above, not the answer.
+`scripts/suggest-version.sh` asks git-cliff (`uvx git-cliff --bumped-version`, no version pinned;
+a `git-cliff` binary on PATH when uv is missing) with the configuration beside it,
+`scripts/suggest-version.cliff.toml`: `features_always_bump_minor = false` and
+`breaking_always_bump_major = false`, so on 0.y a breaking commit (`!` before the colon or a
+`BREAKING CHANGE:` footer) raises the middle number and `feat:` the last one. The configuration
+is passed with `--config`, so a `cliff.toml` in the repository being released is not read. The
+script prints `current:`, `suggested:` and `bump:` as before.
+
+On 0.x the package's changelog BREAKING entries and its API diff stay authoritative: the script
+reads commit messages only, so its suggestion is the starting point for the read above, not the
+answer. Where git-cliff answers differently from this rule (measured with git-cliff 2.14.2), the
+script reports git-cliff's answer and does not correct it:
+
+- On 0.0.z it raises the last number for every commit, breaking ones included.
+- A subject that opens with `BREAKING CHANGE:` (no type) is no breaking commit.
+- Bullets of a squash body (`* feat(api)!: ...`) are not read as commits. `split_commits` would
+  read them, but it also drops every `BREAKING CHANGE:` footer, so the configuration leaves it off.
+- After a pre-release tag it suggests the next pre-release (`v0.54.2-rc.1` gives `0.54.2-rc.2`,
+  also after a breaking commit). The script reports that as `bump:unknown`; choose the release
+  version by hand.
+- `BREAKING CHANGE: none` counts as breaking, as the Conventional Commits specification reads a
+  footer.
 
 Observed 2026-11-13 to 2026-11-24 on `netresearch/t3x-nr-llm`: 0.45.0 to 0.55.0 raised the middle
 number eleven times, and its changelog has no BREAKING entry in any of them. Six of the release PRs
