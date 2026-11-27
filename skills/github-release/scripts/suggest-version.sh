@@ -78,6 +78,15 @@ if ((breaking > 0)); then
         new_patch=0
         reason="${breaking} breaking change(s)"
     fi
+elif ((feat > 0)) && ((major == 0)); then
+    # Pre-1.0.0: the caret stops at the middle number (^0.54 admits only
+    # 0.54.*), so raising it is a new major for every consumer. Features go
+    # into the last number; only a breaking change raises the middle one.
+    bump="patch"
+    new_major=$major
+    new_minor=$minor
+    new_patch=$((patch + 1))
+    reason="${feat} feat commit(s) (pre-1.0.0: features bump patch; read the changelog and the API diff for a breaking change the commit subjects do not mark)"
 elif ((feat > 0)); then
     bump="minor"
     new_major=$major

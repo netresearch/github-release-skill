@@ -34,7 +34,9 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 0. Triage open issues from the current work stream (see "Issue gate" below)
 1. Detect ecosystem (see ecosystem-detection.md)
 2. Determine next version number:
-   - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major)
+   - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major);
+     on 0.x one level down: BREAKING CHANGE → middle number, feat and fix → last
+     number (see "On 0.x, Raise the Middle Number Only for a Breaking Change")
    - From explicit user input ("bump to 2.0.0")
 3. Create release branch:
    git checkout -b release/vX.Y.Z
@@ -638,6 +640,37 @@ Measured in this fleet on 2026-09-20: `nr_passkeys_be` 1.0.0 removed two `RateLi
 methods after a grep that covered only its own repository. `nr_passkeys_fe` called both, at three
 sites. The broken pair was unreachable only because the consumer's `^0.12` constraint refused the
 new major — luck, not order.
+
+## On 0.x, Raise the Middle Number Only for a Breaking Change
+
+On a 0.x version the caret stops at the middle number (next section), so for a package other
+packages depend on, the middle number does the job of the major. Version 0.x.y as if x were the
+major and y were minor and patch together:
+
+- **Raise the middle number only for a breaking change.** Breaking means a removed or changed
+  public API (a breaking diff in the package's API snapshot, if it keeps one) or a behaviour change
+  that consumers have to handle — a new status value or enum case they must know, a contract that
+  now fails where it passed.
+- **Features and fixes go into the last number**, additive API and additive schema changes
+  (new columns or tables with defaults) included. A `feat:` commit is not a reason to raise the
+  middle number on 0.x.
+- **Before choosing the bump, read the package's own changelog and API diff for a breaking
+  change.** Commit subjects miss most of them: a `feat:` can break, and few breaking commits carry
+  `!` or `BREAKING CHANGE`. Read the unreleased changelog section, and diff the API snapshot (or the
+  public signatures) between the last tag and `HEAD`. If the package marks breaking entries in its
+  changelog, a middle bump without one is the wrong version.
+
+`scripts/suggest-version.sh` follows this: on 0.x it raises the middle number only for a breaking
+commit, and suggests a patch for `feat:`. It reads commit subjects only, so its suggestion is the
+starting point for the read above, not the answer.
+
+Observed 2026-11-12 to 2026-11-24 on `netresearch/t3x-nr-llm`: twelve releases, 0.44.0 to 0.55.0,
+raised the middle number. Their release PRs gave "a minor version because of the new features" or
+"additions to the public surface take a minor during 0.x", and the changelog of 0.45.0 to 0.55.0
+has no BREAKING entry. Every one of those releases made the dependent extensions widen their
+constraint and release again. [netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475)
+writes the rule down there and adds a CI check that refuses a release whose middle number disagrees with its
+`**BREAKING` changelog bullets.
 
 ## A 0.x Minor Release: Every Consumer Pinned to the Previous Minor Refuses It
 
