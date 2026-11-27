@@ -296,6 +296,34 @@ case "$(fields "$ignored")$(grep '^reason:' <<< "$ignored")" in
   *) printf 'FAIL - %s\n       actual: [%s]\n' "a .cliffignore makes the bump unknown" "$ignored"; fail=1 ;;
 esac
 
+# git-cliff also drops every commit listed in .git-blame-ignore-revs at the
+# repository root, and every commit that changes only that file, once the file
+# lists a commit. A list that touches no commit of the range changes nothing.
+unknown_for() { # unknown_for <name> <output> <file named in the reason>
+  local name="$1" output="$2" file="$3"
+  case "$(fields "$output")$(grep '^reason:' <<< "$output")" in
+    "suggested:unknown bump:unknown reason:"*"$file"*) pass "$name" ;;
+    *) printf 'FAIL - %s\n       actual: [%s]\n' "$name" "$output"; fail=1 ;;
+  esac
+}
+repo="$(make_repo v0.54.2 "$FEAT" 'fix!: reject the old option')"
+breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+printf '# formatting\n%s\n' "${breaking_sha:0:10}" > "$repo/.git-blame-ignore-revs"
+unknown_for "a .git-blame-ignore-revs listing a commit of the range makes the bump unknown" \
+  "$(run_script "$repo")" ".git-blame-ignore-revs"
+repo="$(make_repo v0.54.2 "$FEAT")"
+old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
+git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
+git_in "$repo" commit -q -m 'fix!: drop the old option' || setup_failed "commit"
+unknown_for "a breaking commit that changes only .git-blame-ignore-revs makes the bump unknown" \
+  "$(run_script "$repo")" ".git-blame-ignore-revs"
+repo="$(make_repo v0.54.2 'fix!: reject the old option')"
+old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
+check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
+  "$MIDDLE_BUMP" "$(fields "$(run_script "$repo")")"
+
 # Nothing of the above wrote into a caller's repository.
 if [[ "$(caller_state)" == "$CALLER_BEFORE" ]]; then
   pass "the caller's repository is unchanged"

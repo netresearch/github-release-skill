@@ -16,7 +16,8 @@
 #     unknown: git-cliff is missing or failed, the configuration is missing,
 #              the commits carry nothing to bump (only chore, docs, ci, test,
 #              style, build or untyped commits), a .cliffignore sits at the
-#              repository root, or git-cliff suggested another pre-release
+#              repository root, .git-blame-ignore-revs hides a commit of the
+#              range from git-cliff, or git-cliff suggested another pre-release
 #   reason:<explanation>
 #
 # git-cliff runs as `uvx git-cliff@latest`, which resolves the newest release
@@ -75,6 +76,31 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [[ -n "$root" ]] && [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
     unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; move the file away for the suggestion, or choose the next version by hand"
+fi
+
+# git-cliff also drops every commit listed in .git-blame-ignore-revs at the
+# repository root (abbreviated hashes included), and, once the file lists any
+# commit, every commit that changes only that file. Refuse only when that hits
+# a commit of the range: the file is common and usually lists old reformats.
+blame_file="$root/.git-blame-ignore-revs"
+if [[ -n "$root" && -r "$blame_file" ]]; then
+    listed=$(grep -v -E '^[[:space:]]*(#|$)' "$blame_file" | tr -d '[:blank:]\r' || true)
+    if [[ -n "$listed" ]]; then
+        while read -r sha; do
+            hidden=false
+            while read -r id; do
+                if [[ -n "$id" && "$sha" == "$id"* ]]; then
+                    hidden=true
+                fi
+            done <<< "$listed"
+            if ! $hidden && [[ "$(git diff-tree --no-commit-id --name-only -r --root -m "$sha" | sort -u)" == ".git-blame-ignore-revs" ]]; then
+                hidden=true
+            fi
+            if $hidden; then
+                unknown "git-cliff would skip commit ${sha:0:12} because of ${blame_file}; review the commits since ${last_tag} and choose the next version by hand"
+            fi
+        done < <(git rev-list "${last_tag}..HEAD")
+    fi
 fi
 
 # cliff_next <command>... -> git-cliff's answer, or a non-zero status. The
