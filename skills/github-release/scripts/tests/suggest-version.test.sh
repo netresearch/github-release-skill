@@ -128,6 +128,8 @@ check "0.x: a breaking commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT" 'feat(api)!: remove Foo::bar()')"
 check "0.x: ! on a fix commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 'fix!: reject the old option')"
+# Also pins split_commits = false: split by line, the footer is a commit of
+# its own without a type and is dropped, which gives the patch bump.
 check "0.x: a BREAKING CHANGE footer on a feat commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
 check "0.x: a BREAKING-CHANGE footer counts as well" \
@@ -192,6 +194,14 @@ repo="$(make_repo v0.54.2 "$FEAT")"
 git_in "$repo" tag ci-marker || setup_failed "tag ci-marker"
 check "a lightweight marker tag is not the last version" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 "$FEAT")"
+git_in "$repo" tag v1 || setup_failed "tag v1"
+check "an interface tag such as v1 is not the last version" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 "$FEAT")"
+git_in "$repo" tag -a v0.60 -m v0.60 || setup_failed "tag v0.60"
+check "a two-part tag such as v0.60 is not the last version" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 
 # Commits that change nothing a release carries give no confident bump.
 for subject in 'chore: bump a tool' 'docs: fix a typo' 'ci: cache the build' 'test: cover a case' 'a commit without a type'; do
@@ -252,6 +262,39 @@ printf '#!/bin/sh\necho v0.54.3\n' > "$fallback/git-cliff"
 chmod +x "$fallback/uvx" "$fallback/git-cliff"
 check "a failing uvx falls back to git-cliff on PATH" \
   "$PATCH_BUMP" "$(fields "$(run_bare "$fallback" "$(make_repo v0.54.2 "$FEAT")")")"
+
+# git-cliff layers --config over its embedded default, which skips
+# chore(deps...), chore(pr) and chore(pull) commits even when they are
+# breaking. The configuration's own parsers decide instead: a breaking one
+# counts, a range of only dependency updates is no confident bump.
+check "a breaking chore(deps) commit raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'chore(deps)!: drop PHP 8.1')"
+check "a chore(deps) commit with a BREAKING CHANGE footer raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 $'chore(deps): update foo/bar to 3.0\n\nBREAKING CHANGE: foo/bar 2 is gone.')"
+check "a breaking chore(pr) commit raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'chore(pr)!: drop the old option')"
+check "a range of only dependency updates is no confident bump" \
+  "suggested:unknown bump:unknown " "$(suggest v0.54.2 'chore(deps): update foo/bar to 2.1')"
+check "a dependency update beside a fix gives the fix bump" \
+  "$PATCH_BUMP" "$(suggest v0.54.2 'chore(deps): update foo/bar to 2.1' 'fix: handle an empty list')"
+
+# GIT_CLIFF_* and GIT_CLIFF__* variables of the caller would override the
+# configuration (a third layer) and the command line; the script drops them.
+check "GIT_CLIFF__GIT__SPLIT_COMMITS from the environment does not drop a footer" \
+  "$MIDDLE_BUMP" "$(export GIT_CLIFF__GIT__SPLIT_COMMITS=true; suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
+repo="$(make_repo v0.54.2 "$FEAT" 'fix!: reject the old option')"
+breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+check "GIT_CLIFF_SKIP_COMMIT from the environment does not hide a breaking commit" \
+  "$MIDDLE_BUMP" "$(export GIT_CLIFF_SKIP_COMMIT="$breaking_sha"; fields "$(run_script "$repo")")"
+
+# git-cliff drops every commit a .cliffignore at the repository root lists, and
+# has no option to read another file, so the script refuses to suggest.
+printf '%s\n' "$breaking_sha" > "$repo/.cliffignore"
+ignored=$(run_script "$repo")
+case "$(fields "$ignored")$(grep '^reason:' <<< "$ignored")" in
+  "suggested:unknown bump:unknown reason:"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
+  *) printf 'FAIL - %s\n       actual: [%s]\n' "a .cliffignore makes the bump unknown" "$ignored"; fail=1 ;;
+esac
 
 # Nothing of the above wrote into a caller's repository.
 if [[ "$(caller_state)" == "$CALLER_BEFORE" ]]; then

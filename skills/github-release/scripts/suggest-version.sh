@@ -15,8 +15,8 @@
 #     none:    no commits since the last tag
 #     unknown: git-cliff is missing or failed, the configuration is missing,
 #              the commits carry nothing to bump (only chore, docs, ci, test,
-#              style, build or untyped commits), or git-cliff suggested
-#              another pre-release
+#              style, build or untyped commits), a .cliffignore sits at the
+#              repository root, or git-cliff suggested another pre-release
 #   reason:<explanation>
 #
 # git-cliff runs as `uvx git-cliff@latest`, which resolves the newest release
@@ -36,8 +36,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CONFIG="$HERE/suggest-version.cliff.toml"
 
-# Find the last version tag matching v*
-last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+# Find the last version tag: vMAJOR.MINOR.PATCH, a pre-release suffix allowed.
+# An interface tag such as v1 or a two-part v0.60 is no release.
+last_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)
 
 if [[ -z "$last_tag" ]]; then
     echo "current:none"
@@ -68,10 +69,26 @@ fi
 # (feat bumps the middle number on 0.x) and answer as if nothing were wrong.
 [[ -r "$CONFIG" ]] || unknown "the git-cliff configuration ${CONFIG} is missing; reinstall the skill or choose the next version by hand"
 
-# cliff_next <command>... -> git-cliff's answer, or a non-zero status.
-cliff_next() {
+# git-cliff drops every commit listed in a .cliffignore at the repository root
+# and has no option to read another file; a branch could hide a breaking
+# commit there.
+root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -n "$root" ]] && [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
+    unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; move the file away for the suggestion, or choose the next version by hand"
+fi
+
+# cliff_next <command>... -> git-cliff's answer, or a non-zero status. The
+# caller's GIT_CLIFF_* variables would set options (GIT_CLIFF_SKIP_COMMIT) and
+# GIT_CLIFF__* ones would override the configuration (GIT_CLIFF__GIT__SPLIT_COMMITS),
+# so the run gets neither.
+cliff_next() (
+    for name in $(compgen -e); do
+        if [[ "$name" == GIT_CLIFF* ]]; then
+            unset "$name"
+        fi
+    done
     "$@" --config "$CONFIG" --bumped-version 2>/dev/null
-}
+)
 
 have_uvx=false; have_cliff=false
 command -v uvx >/dev/null 2>&1 && have_uvx=true

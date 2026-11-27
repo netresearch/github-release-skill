@@ -679,16 +679,28 @@ configuration beside it, `scripts/suggest-version.cliff.toml`:
 - `features_always_bump_minor = false` and `breaking_always_bump_major = false`, so on 0.y a
   breaking commit (`!` before the colon or a `BREAKING CHANGE:` footer) raises the middle number
   and `feat:` the last one.
-- `tag_pattern = "^v[0-9]"`, so git-cliff reads the same last tag as the script's
-  `git describe --match 'v*'`; an unprefixed version tag or a marker tag is no release.
+- `tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+"`, so git-cliff reads the same last tag as the
+  script's `git describe --match 'v[0-9]*.[0-9]*.[0-9]*'`; an unprefixed version tag, a marker
+  tag or an interface tag such as `v1` is no release. A pre-release tag counts.
 - `chore`, `docs`, `ci`, `test`, `style` and `build` commits are skipped unless they are breaking,
   and commits without a conventional type are not counted. A range of only such commits gives
-  `bump:unknown` with "review them and choose the next version by hand", not a patch.
+  `bump:unknown` with "review them and choose the next version by hand", not a patch. Dependency
+  updates (`chore(deps): ...`) are such commits too.
+- Its own `commit_parsers` and `protect_breaking_commits = true`. git-cliff layers `--config`
+  over its embedded default, whose parsers skip `chore(deps...)`, `chore(pr)` and `chore(pull)`
+  commits even when they are breaking; with these settings `chore(deps)!:` raises the middle
+  number.
+- `split_commits = false`: split by line, a `BREAKING CHANGE:` footer is a line without a type
+  and is dropped, so the breaking commit would give a patch.
 
 The configuration is passed with `--config`, so a `cliff.toml` in the repository being released
 is not read; without it the script reports `bump:unknown` instead of falling back to git-cliff's
-defaults. A range without commits gives `bump:none` before any tool is looked up. The script
-prints `current:`, `suggested:` and `bump:` as before.
+defaults. The caller's `GIT_CLIFF_*` and `GIT_CLIFF__*` variables are dropped for the run: they
+would set options such as `GIT_CLIFF_SKIP_COMMIT` or override the configuration, such as
+`GIT_CLIFF__GIT__SPLIT_COMMITS`. A `.cliffignore` at the repository root makes the script report
+`bump:unknown`: git-cliff skips every commit the file lists and has no option to read another
+file, so a branch could hide a breaking commit there. A range without commits gives `bump:none`
+before any tool is looked up. The script prints `current:`, `suggested:` and `bump:` as before.
 
 On 0.x the package's changelog BREAKING entries and its API diff stay authoritative: the script
 reads commit messages only, so its suggestion is the starting point for the read above, not the
