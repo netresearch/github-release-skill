@@ -671,13 +671,24 @@ x were the major and y were minor and patch together:
 On 0.0.z the caret admits only that exact version (`^0.0.3` takes 0.0.3 alone), so every release
 needs a widened constraint; leave 0.0.z before other packages depend on the package.
 
-`scripts/suggest-version.sh` asks git-cliff (`uvx git-cliff --bumped-version`, no version pinned;
-a `git-cliff` binary on PATH when uv is missing) with the configuration beside it,
-`scripts/suggest-version.cliff.toml`: `features_always_bump_minor = false` and
-`breaking_always_bump_major = false`, so on 0.y a breaking commit (`!` before the colon or a
-`BREAKING CHANGE:` footer) raises the middle number and `feat:` the last one. The configuration
-is passed with `--config`, so a `cliff.toml` in the repository being released is not read. The
-script prints `current:`, `suggested:` and `bump:` as before.
+`scripts/suggest-version.sh` asks git-cliff (`uvx git-cliff@latest --bumped-version`, which
+resolves the newest release on each run, where a bare `uvx git-cliff` would reuse a cached or
+installed copy; a `git-cliff` binary on PATH when uv is missing or that run fails) with the
+configuration beside it, `scripts/suggest-version.cliff.toml`:
+
+- `features_always_bump_minor = false` and `breaking_always_bump_major = false`, so on 0.y a
+  breaking commit (`!` before the colon or a `BREAKING CHANGE:` footer) raises the middle number
+  and `feat:` the last one.
+- `tag_pattern = "^v[0-9]"`, so git-cliff reads the same last tag as the script's
+  `git describe --match 'v*'`; an unprefixed version tag or a marker tag is no release.
+- `chore`, `docs`, `ci`, `test`, `style` and `build` commits are skipped unless they are breaking,
+  and commits without a conventional type are not counted. A range of only such commits gives
+  `bump:unknown` with "review them and choose the next version by hand", not a patch.
+
+The configuration is passed with `--config`, so a `cliff.toml` in the repository being released
+is not read; without it the script reports `bump:unknown` instead of falling back to git-cliff's
+defaults. A range without commits gives `bump:none` before any tool is looked up. The script
+prints `current:`, `suggested:` and `bump:` as before.
 
 On 0.x the package's changelog BREAKING entries and its API diff stay authoritative: the script
 reads commit messages only, so its suggestion is the starting point for the read above, not the
@@ -685,7 +696,8 @@ answer. Where git-cliff answers differently from this rule (measured with git-cl
 script reports git-cliff's answer and does not correct it:
 
 - On 0.0.z it raises the last number for every commit, breaking ones included.
-- A subject that opens with `BREAKING CHANGE:` (no type) is no breaking commit.
+- A subject that opens with `BREAKING CHANGE:` (no type) is no conventional commit, so the
+  script reports `bump:unknown` for a range of only such commits.
 - Bullets of a squash body (`* feat(api)!: ...`) are not read as commits. `split_commits` would
   read them, but it also drops every `BREAKING CHANGE:` footer, so the configuration leaves it off.
 - After a pre-release tag it suggests the next pre-release (`v0.54.2-rc.1` gives `0.54.2-rc.2`,

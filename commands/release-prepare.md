@@ -24,7 +24,7 @@ Report findings to the user before proceeding.
 ### 2. Suggest next version
 
 Run `suggest-version.sh` from the skill's scripts directory: it asks git-cliff
-(`uvx git-cliff --bumped-version`, with the skill's own configuration) for the next
+(`uvx git-cliff@latest --bumped-version`, with the skill's own configuration) for the next
 semantic version from the commits since the last tag. Present the suggestion and let the user
 confirm or override with their preferred version number.
 On a 0.x version, read `[Unreleased]`, the pending `changelog.d/` fragments

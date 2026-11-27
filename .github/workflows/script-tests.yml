@@ -29,7 +29,7 @@ jobs:
       # runner image does not ship it: a pinned release, checked against the
       # sha256 file published with that release. Renovate bumps UV_VERSION
       # through the custom manager in renovate.json. uvx comes from the same
-      # archive: suggest-version.sh runs git-cliff as `uvx git-cliff`.
+      # archive: suggest-version.sh runs git-cliff as `uvx git-cliff@latest`.
       pre-command: |
         # renovate: datasource=github-releases depName=astral-sh/uv
         UV_VERSION=0.13.9

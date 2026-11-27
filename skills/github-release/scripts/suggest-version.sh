@@ -13,11 +13,16 @@
 #     release: kept in the contract; git-cliff continues a pre-release
 #              (rc.1 -> rc.2) instead, which is reported as unknown
 #     none:    no commits since the last tag
-#     unknown: git-cliff is missing, failed, or suggested another pre-release
+#     unknown: git-cliff is missing or failed, the configuration is missing,
+#              the commits carry nothing to bump (only chore, docs, ci, test,
+#              style, build or untyped commits), or git-cliff suggested
+#              another pre-release
 #   reason:<explanation>
 #
-# git-cliff runs as `uvx git-cliff` (no version pinned: dev tooling runs its
-# newest release), or as a `git-cliff` binary on PATH when uv is missing.
+# git-cliff runs as `uvx git-cliff@latest`, which resolves the newest release
+# on each run (a bare `uvx git-cliff` reuses a cached or installed copy), as
+# dev tooling here runs its newest release. A `git-cliff` binary on PATH is
+# used when uv is missing or that run fails.
 #
 # On 0.y (y >= 1) the suggestion maps feat and fix to the last number and a
 # breaking commit to the middle number; on 0.0.z git-cliff raises the last
@@ -26,7 +31,9 @@
 # (references/release-process.md).
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The configuration sits beside the real file, also when this script is
+# called through a symlink.
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CONFIG="$HERE/suggest-version.cliff.toml"
 
 # Find the last version tag matching v*
@@ -50,15 +57,30 @@ unknown() {
     exit 0
 }
 
-if command -v uvx >/dev/null 2>&1; then
-    cliff=(uvx git-cliff)
-elif command -v git-cliff >/dev/null 2>&1; then
-    cliff=(git-cliff)
-else
-    unknown "neither uvx nor git-cliff is installed; install uv (or git-cliff) or choose the next version by hand"
+if [[ -z "$(git log "${last_tag}..HEAD" --format=%H 2>/dev/null)" ]]; then
+    echo "suggested:${current}"
+    echo "bump:none"
+    echo "reason:no commits since ${last_tag}"
+    exit 0
 fi
 
-if ! next=$("${cliff[@]}" --config "$CONFIG" --bumped-version 2>/dev/null); then
+# Without its configuration git-cliff would fall back to its own defaults
+# (feat bumps the middle number on 0.x) and answer as if nothing were wrong.
+[[ -r "$CONFIG" ]] || unknown "the git-cliff configuration ${CONFIG} is missing; reinstall the skill or choose the next version by hand"
+
+# cliff_next <command>... -> git-cliff's answer, or a non-zero status.
+cliff_next() {
+    "$@" --config "$CONFIG" --bumped-version 2>/dev/null
+}
+
+have_uvx=false; have_cliff=false
+command -v uvx >/dev/null 2>&1 && have_uvx=true
+command -v git-cliff >/dev/null 2>&1 && have_cliff=true
+if ! $have_uvx && ! $have_cliff; then
+    unknown "neither uvx nor git-cliff is installed; install uv (or git-cliff) or choose the next version by hand"
+fi
+if ! { $have_uvx && next=$(cliff_next uvx git-cliff@latest); } \
+    && ! { $have_cliff && next=$(cliff_next git-cliff); }; then
     unknown "git-cliff could not compute a version from ${last_tag}; choose the next version by hand"
 fi
 next="${next##*$'\n'}"
@@ -80,11 +102,11 @@ for part in "$major" "$minor" "$patch" "$new_major" "$new_minor" "$new_patch"; d
     [[ "$part" =~ $number ]] || unknown "git-cliff answered ${next} for ${last_tag}, which is not MAJOR.MINOR.PATCH; choose the next version by hand"
 done
 
-if [[ -z "$(git log "${last_tag}..HEAD" --format=%H 2>/dev/null)" ]]; then
-    echo "suggested:${current}"
-    echo "bump:none"
-    echo "reason:no commits since ${last_tag}"
-    exit 0
+# git-cliff answers with the last version when it counted nothing to bump; an
+# answer below the last tag means it read another tag than `git describe`.
+if ((new_major < major || (new_major == major && new_minor < minor) \
+    || (new_major == major && new_minor == minor && new_patch <= patch))); then
+    unknown "git-cliff counted nothing to bump in the commits since ${last_tag} (only chore, docs, ci, test, style, build or untyped commits); review them and choose the next version by hand"
 fi
 
 if ((new_major != major)); then
@@ -93,8 +115,6 @@ elif ((new_minor != minor)); then
     bump="minor"
 elif ((new_patch != patch)); then
     bump="patch"
-else
-    unknown "git-cliff found nothing to bump in the commits since ${last_tag}; choose the next version by hand"
 fi
 
 reason="git-cliff: ${bump} bump from ${last_tag}"

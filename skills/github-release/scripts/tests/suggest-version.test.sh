@@ -45,28 +45,63 @@ known() { # known <name> <wanted> <actual>
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# run_in <tag> <commit message>... -> the script's whole output, from a fresh
-# repository whose last tag is <tag> followed by the commits. A message may span
-# several lines (subject, blank line, body with footers).
-run_in() {
+# A setup step that fails aborts the whole test with exit 2. Most setups run
+# inside a command substitution, where `exit` would end only that subshell, so
+# the subshell signals the test's own process as well.
+TEST_PID=$$
+trap 'exit 2' USR1
+setup_failed() {
+  echo "SETUP FAILED - $1" >&2
+  kill -s USR1 "$TEST_PID"
+  exit 2
+}
+
+# A hook or a linked worktree exports GIT_DIR, which would override -C and send
+# every write below into the caller's repository. Record its state, so the end
+# of the test can prove nothing landed there.
+caller_state() {
+  if [[ -n "${GIT_DIR:-}" ]]; then
+    git rev-parse --verify -q HEAD 2>/dev/null; git tag -l 2>/dev/null
+  fi
+}
+CALLER_BEFORE="$(caller_state)"
+
+# git_in <repo> <git args>... : git on a test repository only. env -u keeps a
+# caller's GIT_DIR out; the -c flags keep a signing or hook setup of the
+# machine out of the probe.
+git_in() {
+  local repo="$1"; shift
+  env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "$repo" \
+    -c user.email=t@example.org -c user.name=T -c commit.gpgsign=false \
+    -c tag.gpgsign=false -c tag.forceSignAnnotated=false -c core.hooksPath=/dev/null "$@"
+}
+
+# make_repo <tag> <commit message>... -> the path of a fresh repository whose
+# last tag is <tag> followed by the commits. A message may span several lines
+# (subject, blank line, body with footers).
+make_repo() {
   local tag="$1"; shift
   local repo="$TMP/repo-$RANDOM$RANDOM"
   mkdir -p "$repo"
-  # env -u: a hook or a linked worktree exports GIT_DIR, which would override -C.
-  # The -c flags keep a signing or hook setup of the machine out of the probe.
-  local g=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "$repo" -c user.email=t@example.org -c user.name=T -c commit.gpgsign=false -c tag.gpgsign=false -c tag.forceSignAnnotated=false -c core.hooksPath=/dev/null)
-  if ! { "${g[@]}" init -q && "${g[@]}" commit -q --allow-empty -m "chore: initial" && "${g[@]}" tag -a "$tag" -m "$tag"; }; then
-    echo "SETUP FAILED - could not create the repository with tag $tag" >&2
-    exit 2
-  fi
+  { git_in "$repo" init -q && git_in "$repo" commit -q --allow-empty -m "chore: initial" \
+    && git_in "$repo" tag -a "$tag" -m "$tag"; } || setup_failed "could not create the repository with tag $tag"
   local s
   for s in "$@"; do
-    if ! "${g[@]}" commit -q --allow-empty -m "$s"; then
-      echo "SETUP FAILED - could not commit: $s" >&2
-      exit 2
-    fi
+    git_in "$repo" commit -q --allow-empty -m "$s" || setup_failed "could not commit: $s"
   done
-  (cd "$repo" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE bash "$SCRIPT")
+  echo "$repo"
+}
+
+# run_script <repo> [script] -> the script's whole output, run in <repo>.
+run_script() {
+  (cd "$1" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE bash "${2:-$SCRIPT}")
+}
+
+# run_in <tag> <commit message>... -> the script's whole output.
+run_in() {
+  local repo
+  repo="$(make_repo "$@")" || exit 2
+  run_script "$repo"
 }
 
 # suggest <tag> <commit subject>... -> the "suggested:" and "bump:" lines only.
@@ -135,22 +170,84 @@ case "$reason" in
   *) printf 'FAIL - %s\n       actual: [%s]\n' "0.x: the reason sends the reader to the changelog" "$reason"; fail=1 ;;
 esac
 
+# fields <output> -> the "suggested:" and "bump:" lines of a run.
+fields() { grep -E '^(suggested|bump):' <<< "$1" | tr '\n' ' '; }
+
+# Tags git-cliff would otherwise take for the last version: an unprefixed
+# version tag, and a lightweight marker tag on HEAD.
+repo="$(make_repo v0.54.2 "$FEAT")"
+git_in "$repo" tag -a 0.60.0 -m 0.60.0 || setup_failed "tag 0.60.0"
+check "an unprefixed version tag is not the last version" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 "$FEAT")"
+git_in "$repo" tag ci-marker || setup_failed "tag ci-marker"
+check "a lightweight marker tag is not the last version" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+
+# Commits that change nothing a release carries give no confident bump.
+for subject in 'chore: bump a tool' 'docs: fix a typo' 'ci: cache the build' 'test: cover a case' 'a commit without a type'; do
+  check "a range of only '$subject' is no confident bump" \
+    "suggested:unknown bump:unknown " "$(suggest v0.54.2 "$subject")"
+done
+check "chore beside feat still gives the feat bump" \
+  "$PATCH_BUMP" "$(suggest v0.54.2 'chore: bump a tool' "$FEAT")"
+check "a breaking chore commit still raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'chore!: drop the old option')"
+check "a chore commit with a BREAKING CHANGE footer still raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 $'chore: drop the old option\n\nBREAKING CHANGE: the option is gone.')"
+
+# The script finds its configuration beside its real file, also through a
+# symlink, and refuses to guess without it.
+lonely="$TMP/lonely"
+mkdir -p "$lonely"
+cp "$SCRIPT" "$lonely/suggest-version.sh"
+repo="$(make_repo v0.54.2 "$FEAT")"
+missing=$(run_script "$repo" "$lonely/suggest-version.sh")
+case "$(fields "$missing")$(grep '^reason:' <<< "$missing")" in
+  "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) printf 'ok   - %s\n' "without its configuration the bump is unknown" ;;
+  *) printf 'FAIL - %s\n       actual: [%s]\n' "without its configuration the bump is unknown" "$missing"; fail=1 ;;
+esac
+ln -s "$SCRIPT" "$lonely/linked.sh"
+check "a symlinked script still finds its configuration" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo" "$lonely/linked.sh")")"
+
 # Without uvx and git-cliff the script says so instead of guessing. The PATH
-# holds git and dirname only; env -i and --noprofile keep a login profile from
-# adding ~/.local/bin back.
+# holds git, dirname and readlink only; env -i and --noprofile keep a login
+# profile from adding ~/.local/bin back.
 bin="$TMP/bin"
 mkdir -p "$bin"
-ln -s "$(command -v git)" "$bin/git"
-ln -s "$(command -v dirname)" "$bin/dirname"
-repo="$TMP/no-tool"
-git init -q "$repo"
-git -C "$repo" -c user.email=t@example.org -c user.name=T -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --allow-empty -m "chore: initial"
-git -C "$repo" -c user.email=t@example.org -c user.name=T -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag -a v0.54.2 -m v0.54.2
-git -C "$repo" -c user.email=t@example.org -c user.name=T -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --allow-empty -m "$FEAT"
-no_tool=$(cd "$repo" && env -i HOME="$TMP" PATH="$bin" "$(command -v bash)" --noprofile --norc "$SCRIPT" | grep -E '^(bump|reason):' | tr '\n' ' ')
+for tool in git dirname readlink; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
+run_bare() { # run_bare <bin dir> <repo> -> the script's output with only <bin dir> on PATH
+  (cd "$2" && env -i HOME="$TMP" PATH="$1" "$(command -v bash)" --noprofile --norc "$SCRIPT")
+}
+repo="$(make_repo v0.54.2 "$FEAT")"
+no_tool=$(run_bare "$bin" "$repo" | grep -E '^(bump|reason):' | tr '\n' ' ')
 case "$no_tool" in
   "bump:unknown reason:neither uvx nor git-cliff is installed"*) printf 'ok   - %s\n' "without uvx and git-cliff the bump is unknown" ;;
   *) printf 'FAIL - %s\n       actual: [%s]\n' "without uvx and git-cliff the bump is unknown" "$no_tool"; fail=1 ;;
 esac
+
+# An empty range is no bump, whatever tool is present and whatever the tag.
+check "no commits and no tool is no bump" \
+  "suggested:0.54.2 bump:none " "$(fields "$(run_bare "$bin" "$(make_repo v0.54.2)")")"
+check "no commits after a pre-release tag is no bump" \
+  "suggested:0.54.2-rc.1 bump:none " "$(suggest v0.54.2-rc.1)"
+
+# A uvx that fails falls back to a git-cliff binary on PATH.
+fallback="$TMP/fallback-bin"
+mkdir -p "$fallback"
+for tool in git dirname readlink; do ln -s "$(command -v "$tool")" "$fallback/$tool"; done
+printf '#!/bin/sh\nexit 1\n' > "$fallback/uvx"
+printf '#!/bin/sh\necho v0.54.3\n' > "$fallback/git-cliff"
+chmod +x "$fallback/uvx" "$fallback/git-cliff"
+check "a failing uvx falls back to git-cliff on PATH" \
+  "$PATCH_BUMP" "$(fields "$(run_bare "$fallback" "$(make_repo v0.54.2 "$FEAT")")")"
+
+# Nothing of the above wrote into a caller's repository.
+if [[ "$(caller_state)" == "$CALLER_BEFORE" ]]; then
+  printf 'ok   - %s\n' "the caller's repository is unchanged"
+else
+  printf 'FAIL - %s\n' "the caller's repository is unchanged (GIT_DIR=${GIT_DIR:-})"; fail=1
+fi
 
 exit "$fail"

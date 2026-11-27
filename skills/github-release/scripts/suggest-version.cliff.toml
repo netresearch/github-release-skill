@@ -7,14 +7,26 @@
 
 [git]
 conventional_commits = true
-# Unconventional commits still count, as a patch.
-filter_unconventional = false
+# A commit without a conventional type (a merge commit, "fix typo") is not
+# counted; a range of only such commits gives no bump, which the script
+# reports as unknown.
+filter_unconventional = true
 # Not split: a commit message stays one commit, so a `BREAKING CHANGE:` footer
 # belongs to its commit. Splitting by line would make squash-body bullets
 # count as commits of their own, but it drops every footer (measured with
 # git-cliff 2.14.2), and this organisation merges with merge commits, not
 # squashes.
 split_commits = false
+# The same tags as `git describe --match 'v*'` in the script: an unprefixed
+# version tag or a marker tag such as `ci-marker` is no release.
+tag_pattern = "^v[0-9]"
+# Commits that change nothing a release carries are skipped, so a range of
+# only such commits gives no bump. A breaking one still counts: the first
+# parser keeps it.
+commit_parsers = [
+  { field = "breaking", pattern = "^true$", group = "breaking" },
+  { message = "^(chore|docs|ci|test|style|build)(\\([^)]*\\))?:", skip = true },
+]
 
 [bump]
 # On 0.y a feature raises the last number and a breaking change the middle
