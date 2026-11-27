@@ -28,6 +28,12 @@ pass() { # pass <name>
   printf 'ok   - %s\n' "$name"
 }
 
+failed() { # failed <name> <actual>
+  local name="$1" actual="$2"
+  printf 'FAIL - %s\n       actual: [%s]\n' "$name" "$actual"
+  fail=1
+}
+
 check() { # check <name> <expected> <actual>
   local name="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then
@@ -119,6 +125,7 @@ suggest() {
 MIDDLE_BUMP='suggested:0.55.0 bump:minor '
 PATCH_BUMP='suggested:0.54.3 bump:patch '
 FEAT='feat: add a thing'
+BREAKING_FIX='fix!: reject the old option'
 
 check "0.x: feat is a patch bump" \
   "$PATCH_BUMP" "$(suggest v0.54.2 "$FEAT" 'fix: repair a thing')"
@@ -127,7 +134,7 @@ check "0.x: fix is a patch bump" \
 check "0.x: a breaking commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT" 'feat(api)!: remove Foo::bar()')"
 check "0.x: ! on a fix commit raises the middle number" \
-  "$MIDDLE_BUMP" "$(suggest v0.54.2 'fix!: reject the old option')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 "$BREAKING_FIX")"
 # Also pins split_commits = false: split by line, the footer is a commit of
 # its own without a type and is dropped, which gives the patch bump.
 check "0.x: a BREAKING CHANGE footer on a feat commit raises the middle number" \
@@ -168,14 +175,14 @@ known "1.x: after a pre-release tag the release of that version is next" \
 known "1.x: a breaking commit after a minor pre-release raises the major" \
   "suggested:2.0.0 bump:major " "$(suggest v1.3.0-rc.1 'feat!: remove a thing')"
 known "0.x: a breaking commit after a patch pre-release raises the middle number" \
-  "$MIDDLE_BUMP" "$(suggest v0.54.2-rc.1 'fix!: reject the old option')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2-rc.1 "$BREAKING_FIX")"
 check "a continued pre-release is reported as unknown, never as a release" \
   "suggested:0.54.2-rc.2 bump:unknown " "$(suggest v0.54.2-rc.1 "$FEAT")"
 
 reason=$(run_in v0.3.0 "$FEAT" | grep '^reason:')
 case "$reason" in
   *"changelog"*) pass "0.x: the reason sends the reader to the changelog" ;;
-  *) printf 'FAIL - %s\n       actual: [%s]\n' "0.x: the reason sends the reader to the changelog" "$reason"; fail=1 ;;
+  *) failed "0.x: the reason sends the reader to the changelog" "$reason" ;;
 esac
 
 # fields <output> -> the "suggested:" and "bump:" lines of a run.
@@ -224,7 +231,7 @@ repo="$(make_repo v0.54.2 "$FEAT")"
 missing=$(run_script "$repo" "$lonely/suggest-version.sh")
 case "$(fields "$missing")$(grep '^reason:' <<< "$missing")" in
   "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) pass "without its configuration the bump is unknown" ;;
-  *) printf 'FAIL - %s\n       actual: [%s]\n' "without its configuration the bump is unknown" "$missing"; fail=1 ;;
+  *) failed "without its configuration the bump is unknown" "$missing" ;;
 esac
 ln -s "$SCRIPT" "$lonely/linked.sh"
 check "a symlinked script still finds its configuration" \
@@ -244,7 +251,7 @@ repo="$(make_repo v0.54.2 "$FEAT")"
 no_tool=$(run_bare "$bin" "$repo" | grep -E '^(bump|reason):' | tr '\n' ' ')
 case "$no_tool" in
   "bump:unknown reason:neither uvx nor git-cliff is installed"*) pass "without uvx and git-cliff the bump is unknown" ;;
-  *) printf 'FAIL - %s\n       actual: [%s]\n' "without uvx and git-cliff the bump is unknown" "$no_tool"; fail=1 ;;
+  *) failed "without uvx and git-cliff the bump is unknown" "$no_tool" ;;
 esac
 
 # An empty range is no bump, whatever tool is present and whatever the tag.
@@ -282,7 +289,7 @@ check "a dependency update beside a fix gives the fix bump" \
 # configuration (a third layer) and the command line; the script drops them.
 check "GIT_CLIFF__GIT__SPLIT_COMMITS from the environment does not drop a footer" \
   "$MIDDLE_BUMP" "$(export GIT_CLIFF__GIT__SPLIT_COMMITS=true; suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
-repo="$(make_repo v0.54.2 "$FEAT" 'fix!: reject the old option')"
+repo="$(make_repo v0.54.2 "$FEAT" "$BREAKING_FIX")"
 breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
 check "GIT_CLIFF_SKIP_COMMIT from the environment does not hide a breaking commit" \
   "$MIDDLE_BUMP" "$(export GIT_CLIFF_SKIP_COMMIT="$breaking_sha"; fields "$(run_script "$repo")")"
@@ -293,7 +300,7 @@ printf '%s\n' "$breaking_sha" > "$repo/.cliffignore"
 ignored=$(run_script "$repo")
 case "$(fields "$ignored")$(grep '^reason:' <<< "$ignored")" in
   "suggested:unknown bump:unknown reason:"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
-  *) printf 'FAIL - %s\n       actual: [%s]\n' "a .cliffignore makes the bump unknown" "$ignored"; fail=1 ;;
+  *) failed "a .cliffignore makes the bump unknown" "$ignored" ;;
 esac
 
 # git-cliff also drops every commit listed in .git-blame-ignore-revs at the
@@ -303,10 +310,10 @@ unknown_for() { # unknown_for <name> <output> <file named in the reason>
   local name="$1" output="$2" file="$3"
   case "$(fields "$output")$(grep '^reason:' <<< "$output")" in
     "suggested:unknown bump:unknown reason:"*"$file"*) pass "$name" ;;
-    *) printf 'FAIL - %s\n       actual: [%s]\n' "$name" "$output"; fail=1 ;;
+    *) failed "$name" "$output" ;;
   esac
 }
-repo="$(make_repo v0.54.2 "$FEAT" 'fix!: reject the old option')"
+repo="$(make_repo v0.54.2 "$FEAT" "$BREAKING_FIX")"
 breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
 printf '# formatting\n%s\n' "${breaking_sha:0:10}" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs listing a commit of the range makes the bump unknown" \
@@ -318,7 +325,7 @@ git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
 git_in "$repo" commit -q -m 'fix!: drop the old option' || setup_failed "commit"
 unknown_for "a breaking commit that changes only .git-blame-ignore-revs makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
-repo="$(make_repo v0.54.2 'fix!: reject the old option')"
+repo="$(make_repo v0.54.2 "$BREAKING_FIX")"
 old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
 printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
 check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
