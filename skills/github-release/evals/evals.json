@@ -1228,11 +1228,11 @@
     {
       "id": 44,
       "prompt": "Release our Composer package netresearch/nr-llm. The last tag is v0.54.2; since then there are two feat: commits and one fix:. Six other extensions require ^0.54. What version is next?",
-      "expected_output": "Read the package's changelog ([Unreleased]) and diff its public API against v0.54.2 for a breaking change before choosing. If neither shows one, recommend 0.54.3: on 0.x the caret admits only the current middle number (^0.54 takes 0.54.* only), so 0.55.0 would force all six dependents to widen their constraint and release. Features and fixes go into the last number on 0.x; only a breaking change raises the middle number.",
+      "expected_output": "Read the [Unreleased] section of the changelog, the pending changelog.d/ fragments (removed and upgrading sections, bullets that open with **BREAKING) and the public API diff against v0.54.2 for a breaking change before choosing. If none shows one, recommend 0.54.3: on 0.x the caret admits only the current middle number (^0.54 takes 0.54.* only), so 0.55.0 would force all six dependents to widen their constraint and release. Features and fixes go into the last number on 0.x; only a breaking change raises the middle number.",
       "expectations": [
         "Recommends 0.54.3 when no breaking change is found",
         "Explains that ^0.54 refuses 0.55.0, so a middle bump forces the dependents to widen their constraint",
-        "Checks the changelog or the API diff for a breaking change before choosing",
+        "Checks [Unreleased], the pending changelog.d/ fragments or the API diff for a breaking change before choosing",
         "Does NOT: Recommend 0.55.0 because the commits contain feat:"
       ],
       "assertions": [
@@ -1246,11 +1246,15 @@
         },
         {
           "type": "content",
-          "pattern": "(?i)(changelog|api diff|api surface|breaking)"
+          "pattern": "(?i)(\\[unreleased\\]|changelog\\.d|api diff|diff(ed)? (of )?the (public )?api)"
+        },
+        {
+          "type": "must_not",
+          "pattern": "(?i)(next version is|release it as|go with|recommend(ed)?|bump to|so)\\s+(v)?0\\.55\\.0"
         }
       ],
       "samples": {
-        "passing": "Before choosing, I read the [Unreleased] section of the changelog and diffed the public API against v0.54.2: both feat: commits only add, and nothing is removed or changes behaviour. So the next version is 0.54.3. On 0.x the caret stops at the middle number: ^0.54 admits 0.54.* and refuses 0.55.0, so a 0.55.0 would make all six dependents widen their constraint and release before anyone could install it. Features and fixes go into the last number; only a breaking change raises the middle one.",
+        "passing": "Before choosing, I read [Unreleased] and the pending changelog.d/ fragments and diffed the public API against v0.54.2: both feat: commits only add, nothing is removed and no fragment carries a **BREAKING bullet. So the next version is 0.54.3. On 0.x the caret stops at the middle number: ^0.54 admits 0.54.* and refuses 0.55.0, so a 0.55.0 would make all six dependents widen their constraint and release before anyone could install it. Features and fixes go into the last number; only a breaking change raises the middle one.",
         "failing": [
           "There are two feat: commits, and conventional commits map feat to a minor bump, so the next version is 0.55.0.",
           "Go with 0.54.3."

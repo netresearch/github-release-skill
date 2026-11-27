@@ -35,8 +35,8 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 1. Detect ecosystem (see ecosystem-detection.md)
 2. Determine next version number:
    - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major);
-     on 0.x one level down: BREAKING CHANGE → middle number, feat and fix → last
-     number (see "On 0.x, Raise the Middle Number Only for a Breaking Change")
+     on 0.y (y >= 1) one level down: BREAKING CHANGE → middle number, feat and fix →
+     last number (see "On 0.x, Raise the Middle Number Only for a Breaking Change")
    - From explicit user input ("bump to 2.0.0")
 3. Create release branch:
    git checkout -b release/vX.Y.Z
@@ -643,34 +643,44 @@ new major — luck, not order.
 
 ## On 0.x, Raise the Middle Number Only for a Breaking Change
 
-On a 0.x version the caret stops at the middle number (next section), so for a package other
-packages depend on, the middle number does the job of the major. Version 0.x.y as if x were the
-major and y were minor and patch together:
+On a 0.y version with y >= 1 the caret stops at the middle number (next section), so for a
+package other packages depend on, the middle number does the job of the major. Version 0.x.y as if
+x were the major and y were minor and patch together:
 
-- **Raise the middle number only for a breaking change.** Breaking means a removed or changed
-  public API (a breaking diff in the package's API snapshot, if it keeps one) or a behaviour change
-  that consumers have to handle — a new status value or enum case they must know, a contract that
-  now fails where it passed.
-- **Features and fixes go into the last number**, additive API and additive schema changes
-  (new columns or tables with defaults) included. A `feat:` commit is not a reason to raise the
-  middle number on 0.x.
+- **Raise the middle number only for a breaking change, and then by one to 0.x+1.0.** Breaking
+  means a removed or changed public API (a breaking diff in the package's API snapshot, if it keeps
+  one), a new method on a public interface (every implementation outside the package lacks it), a
+  new case of a public enum (every exhaustive match without a default arm fails on it), or a
+  behaviour change that consumers have to handle — a new status value they must know, a contract
+  that now fails where it passed.
+- **Features and fixes go into the last number**, additive API (a new class, interface or enum, a
+  new method of a class) and additive schema changes (new columns or tables with defaults)
+  included. A `feat:` commit is not a reason to raise the middle number on 0.x.
 - **Before choosing the bump, read the package's own changelog and API diff for a breaking
-  change.** Commit subjects miss most of them: a `feat:` can break, and few breaking commits carry
-  `!` or `BREAKING CHANGE`. Read the unreleased changelog section, and diff the API snapshot (or the
-  public signatures) between the last tag and `HEAD`. If the package marks breaking entries in its
-  changelog, a middle bump without one is the wrong version.
+  change.** Commit messages miss most of them: a `feat:` can break without `!` or a
+  `BREAKING CHANGE:` footer. Read the `[Unreleased]` section **and**, where the repository keeps
+  them, the pending `changelog.d/` fragments, which the release collects only after the version is
+  chosen: a `removed` or `upgrading` fragment, and any bullet that opens with `**BREAKING`, is a
+  candidate. Then diff the API snapshot (or the public signatures) between the last tag and `HEAD`.
+  If the package marks breaking entries in its changelog, a middle bump without one is the wrong
+  version.
+
+On 0.0.z the caret admits only that exact version (`^0.0.3` takes 0.0.3 alone), so every release
+needs a widened constraint; leave 0.0.z before other packages depend on the package.
 
 `scripts/suggest-version.sh` follows this: on 0.x it raises the middle number only for a breaking
-commit, and suggests a patch for `feat:`. It reads commit subjects only, so its suggestion is the
-starting point for the read above, not the answer.
+commit (`!` before the colon, or a `BREAKING CHANGE:` footer) and suggests a patch for `feat:`.
+After a pre-release tag it suggests the release of that version. It reads commit messages only, so
+its suggestion is the starting point for the read above, not the answer.
 
 Observed 2026-11-13 to 2026-11-24 on `netresearch/t3x-nr-llm`: 0.45.0 to 0.55.0 raised the middle
 number eleven times, and its changelog has no BREAKING entry in any of them. Six of the release PRs
 named new features or additions as the reason ("a minor version because of the new features",
 "additions to the public surface take a minor during 0.x"). Each such release requires the
-dependent extensions to widen their constraint and release before an installation can take it. [netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475)
-writes the rule down there and adds a CI check that refuses a release whose middle number disagrees with its
-`**BREAKING` changelog bullets.
+dependent extensions to widen their constraint and release before an installation can take it.
+[netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475) proposes the
+rule there, with a CI check that refuses a release whose middle number disagrees with its
+`- **BREAKING` changelog bullets.
 
 ## A 0.x Minor Release: Every Consumer Pinned to the Previous Minor Refuses It
 

@@ -26,8 +26,10 @@ Report findings to the user before proceeding.
 Run `suggest-version.sh` from the skill's scripts directory to analyze recent commits
 and suggest the next semantic version. Present the suggestion and let the user
 confirm or override with their preferred version number.
-On a 0.x version, read the package's changelog and API diff for a breaking change
-before presenting it: the middle number rises only for one (`references/release-process.md`).
+On a 0.x version, read `[Unreleased]`, the pending `changelog.d/` fragments
+(`removed`, `upgrading`, bullets opening with `**BREAKING`) and the API diff for a
+breaking change before presenting it: the middle number rises only for one
+(`references/release-process.md`).
 
 ### 3. Validate pre-release readiness
 
