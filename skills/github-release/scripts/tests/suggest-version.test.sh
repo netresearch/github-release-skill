@@ -17,10 +17,11 @@ SCRIPT="$HERE/../suggest-version.sh"
 
 fail=0
 check() { # check <name> <expected> <actual>
-  if [ "$2" = "$3" ]; then
-    printf 'ok   - %s\n' "$1"
+  local name="$1" expected="$2" actual="$3"
+  if [[ "$expected" == "$actual" ]]; then
+    printf 'ok   - %s\n' "$name"
   else
-    printf 'FAIL - %s\n       expected: [%s]\n       actual:   [%s]\n' "$1" "$2" "$3"
+    printf 'FAIL - %s\n       expected: [%s]\n       actual:   [%s]\n' "$name" "$expected" "$actual"
     fail=1
   fi
 }
