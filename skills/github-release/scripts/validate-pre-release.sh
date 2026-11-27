@@ -115,7 +115,7 @@ if [[ -d changelog.d ]]; then
 fi
 if ((fragment_count > 0)); then
     check "WARN" "Changelog fragments collected" \
-        "${fragment_count} fragment(s) in changelog.d/ — run the collect step (composer changelog:collect) in the release commit before renaming [Unreleased]"
+        "${fragment_count} fragment(s) in changelog.d/ — run the collect step in the release commit before renaming [Unreleased] (composer changelog:collect where composer.json defines it; roll-changelog.py CHANGELOG.md <version> from the skill-repo skill in a skill repository, which also renames it)"
 fi
 if [[ -f CHANGELOG.md ]]; then
     if grep -qiE '^#+ *\[?Unreleased\]?' CHANGELOG.md; then

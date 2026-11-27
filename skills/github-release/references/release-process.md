@@ -41,12 +41,22 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 4. Bump all version files for the detected ecosystem
 5. Update CHANGELOG.md. Where the repository keeps entries as fragments in
    changelog.d/ (one file <branch-slug>.<section>.md per change), run its
-   collect step FIRST (`composer changelog:collect`): it folds the fragments
-   into [Unreleased] and deletes them. Skipped, the release ships without
-   those notes. scripts/validate-pre-release.sh only warns about leftover
-   fragments. What fails such a release commit is the repository's own
-   check (`composer ci:test:changelog` in netresearch/t3x-nr-llm and
-   t3x-nr-vault). Read every collected entry against the current tree before
+   collect step FIRST. Where composer.json defines the script (TYPO3
+   extensions), that is `composer changelog:collect`: it folds the fragments
+   into [Unreleased] and deletes them. A skill repository (composer type
+   ai-agent-skill) runs `roll-changelog.py CHANGELOG.md <version>` from the
+   skill-repo skill instead; the fleet release driver runs it at the bump, so
+   run it by hand only when the bump did not (a second run exits 1 on the
+   empty [Unreleased]). It folds the fragments in, deletes them and moves
+   [Unreleased] under the new version, so the section step below is already
+   done. Read its output for the footer: "updated link-reference definitions"
+   means the footer step is done too; a WARNING about link-reference
+   definitions means it left the footer unchanged, and the footer step below
+   is still yours. Skipped, the release ships without those notes.
+   scripts/validate-pre-release.sh only warns about leftover fragments. What
+   fails such a release commit is the repository's own check (`composer
+   ci:test:changelog` in the netresearch TYPO3 extensions that keep
+   changelog.d/). Read every collected entry against the current tree before
    committing: a fragment describes the state of its own PR, and a later PR
    can change the rule it states without touching the fragment (t3x-nr-vault
    1.4.0: one entry gave a weaker old-key retention rule than the key

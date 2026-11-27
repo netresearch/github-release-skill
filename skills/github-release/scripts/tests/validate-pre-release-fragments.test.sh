@@ -61,5 +61,6 @@ out=$(changelog_lines)
 check "fragments count as unreleased content" "PASS  CHANGELOG.md [Unreleased] has content (empty, but 2 fragment(s) in changelog.d/)" "$out"
 check "fragments carry a collect reminder" "WARN  Changelog fragments collected (2 fragment(s)" "$out"
 check "the reminder names the collect command" "composer changelog:collect" "$out"
+check "the reminder names the skill-repository roll" "roll-changelog.py CHANGELOG.md <version>" "$out"
 
 exit "$fail"
