@@ -59,34 +59,39 @@ suggest() {
   run_in "$@" | grep -E '^(suggested|bump):' | tr '\n' ' '
 }
 
+# Repeated expectations and messages, named once.
+MIDDLE_BUMP='suggested:0.55.0 bump:minor '
+PATCH_BUMP='suggested:0.54.3 bump:patch '
+FEAT='feat: add a thing'
+
 check "0.x: feat is a patch bump" \
-  "suggested:0.54.3 bump:patch " "$(suggest v0.54.2 'feat: add a thing' 'fix: repair a thing')"
+  "$PATCH_BUMP" "$(suggest v0.54.2 "$FEAT" 'fix: repair a thing')"
 check "0.x: fix is a patch bump" \
-  "suggested:0.54.3 bump:patch " "$(suggest v0.54.2 'fix: repair a thing')"
+  "$PATCH_BUMP" "$(suggest v0.54.2 'fix: repair a thing')"
 check "0.x: a breaking commit raises the middle number" \
-  "suggested:0.55.0 bump:minor " "$(suggest v0.54.2 'feat: add a thing' 'feat(api)!: remove Foo::bar()')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT" 'feat(api)!: remove Foo::bar()')"
 check "0.x: BREAKING CHANGE in the subject raises the middle number" \
-  "suggested:0.55.0 bump:minor " "$(suggest v0.54.2 'refactor: BREAKING CHANGE drop the old option')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'refactor: BREAKING CHANGE drop the old option')"
 check "0.x: a BREAKING CHANGE footer on a feat commit raises the middle number" \
-  "suggested:0.55.0 bump:minor " "$(suggest v0.54.2 $'feat: add a thing\n\nBREAKING CHANGE: Foo::bar() is gone.')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
 check "0.x: a BREAKING-CHANGE footer counts as well" \
-  "suggested:0.55.0 bump:minor " "$(suggest v0.54.2 $'fix: repair a thing\n\nBREAKING-CHANGE: the option is renamed.')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 $'fix: repair a thing\n\nBREAKING-CHANGE: the option is renamed.')"
 check "0.x: ! on a fix commit raises the middle number" \
-  "suggested:0.55.0 bump:minor " "$(suggest v0.54.2 'fix!: reject the old option')"
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'fix!: reject the old option')"
 check "0.x: a body that only mentions breaking changes is no footer" \
-  "suggested:0.54.3 bump:patch " "$(suggest v0.54.2 $'feat: add a thing\n\nNo breaking change here.')"
+  "$PATCH_BUMP" "$(suggest v0.54.2 "$FEAT"$'\n\nNo breaking change here.')"
 check "0.x: after a pre-release tag the release of that version is next" \
-  "suggested:0.54.2 bump:release " "$(suggest v0.54.2-rc.1 'feat: add a thing')"
+  "suggested:0.54.2 bump:release " "$(suggest v0.54.2-rc.1 "$FEAT")"
 check "1.x: after a pre-release tag the release of that version is next" \
   "suggested:1.3.0 bump:release " "$(suggest v1.3.0-beta.2 'fix: repair a thing')"
 check "1.x: build metadata is no pre-release" \
-  "suggested:1.3.0 bump:minor " "$(suggest v1.2.3+build.7 'feat: add a thing')"
+  "suggested:1.3.0 bump:minor " "$(suggest v1.2.3+build.7 "$FEAT")"
 check "1.x: feat is a minor bump" \
-  "suggested:1.3.0 bump:minor " "$(suggest v1.2.3 'feat: add a thing')"
+  "suggested:1.3.0 bump:minor " "$(suggest v1.2.3 "$FEAT")"
 check "1.x: a breaking commit is a major bump" \
   "suggested:2.0.0 bump:major " "$(suggest v1.2.3 'feat!: remove a thing')"
 
-reason=$(run_in v0.3.0 'feat: add a thing' | grep '^reason:')
+reason=$(run_in v0.3.0 "$FEAT" | grep '^reason:')
 case "$reason" in
   *"changelog"*) printf 'ok   - %s\n' "0.x: the reason sends the reader to the changelog" ;;
   *) printf 'FAIL - %s\n       actual: [%s]\n' "0.x: the reason sends the reader to the changelog" "$reason"; fail=1 ;;
