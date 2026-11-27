@@ -50,8 +50,9 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
    version, footer link-references included, so the section and footer steps
    below are already done. Skipped, the release ships without those notes.
    scripts/validate-pre-release.sh only warns about leftover fragments. What
-   fails such a release commit is the repository's own check (`composer ci:test:changelog` in netresearch/t3x-nr-llm and
-   t3x-nr-vault). Read every collected entry against the current tree before
+   fails such a release commit is the repository's own check (`composer
+   ci:test:changelog` in the netresearch TYPO3 extensions that keep
+   changelog.d/). Read every collected entry against the current tree before
    committing: a fragment describes the state of its own PR, and a later PR
    can change the rule it states without touching the fragment (t3x-nr-vault
    1.4.0: one entry gave a weaker old-key retention rule than the key
