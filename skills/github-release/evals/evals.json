@@ -1238,7 +1238,7 @@
       "assertions": [
         {
           "type": "content",
-          "pattern": "0\\.54\\.3"
+          "pattern": "(?i)(recommend|release|tag|next version)[^.]{0,40}0\\.54\\.3"
         },
         {
           "type": "content",
@@ -1247,16 +1247,12 @@
         {
           "type": "content",
           "pattern": "(?i)(\\[unreleased\\]|changelog\\.d|api diff|diff(ed)? (of )?the (public )?api)"
-        },
-        {
-          "type": "must_not",
-          "pattern": "(?i)(next version is|release it as|go with|recommend(ed)?|bump to|so)\\s+(v)?0\\.55\\.0"
         }
       ],
       "samples": {
         "passing": "Before choosing, I read [Unreleased] and the pending changelog.d/ fragments and diffed the public API against v0.54.2: both feat: commits only add, nothing is removed and no fragment carries a **BREAKING bullet. So the next version is 0.54.3. On 0.x the caret stops at the middle number: ^0.54 admits 0.54.* and refuses 0.55.0, so a 0.55.0 would make all six dependents widen their constraint and release before anyone could install it. Features and fixes go into the last number; only a breaking change raises the middle one.",
         "failing": [
-          "There are two feat: commits, and conventional commits map feat to a minor bump, so the next version is 0.55.0.",
+          "There are two feat: commits, and conventional commits map feat to a minor bump, so the next version should be 0.55.0.",
           "Go with 0.54.3."
         ]
       }

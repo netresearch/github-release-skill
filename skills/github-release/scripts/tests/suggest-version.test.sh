@@ -70,8 +70,14 @@ check "0.x: fix is a patch bump" \
   "$PATCH_BUMP" "$(suggest v0.54.2 'fix: repair a thing')"
 check "0.x: a breaking commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT" 'feat(api)!: remove Foo::bar()')"
-check "0.x: BREAKING CHANGE in the subject raises the middle number" \
-  "$MIDDLE_BUMP" "$(suggest v0.54.2 'refactor: BREAKING CHANGE drop the old option')"
+check "0.x: a subject that opens with BREAKING CHANGE: raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 'BREAKING CHANGE: drop the old option')"
+check "0.x: a subject that only mentions a breaking change is no breaking commit" \
+  "$PATCH_BUMP" "$(suggest v0.54.2 'fix: explain why this is no breaking change')"
+check "0.x: a squash body listing a ! commit raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT (#12)"$'\n\n* feat: add the part\n* feat(api)!: drop Foo::bar()')"
+check "0.x: a squash body with - bullets counts as well" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT (#12)"$'\n\n- fix!: reject the old option')"
 check "0.x: a BREAKING CHANGE footer on a feat commit raises the middle number" \
   "$MIDDLE_BUMP" "$(suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
 check "0.x: a BREAKING-CHANGE footer counts as well" \
@@ -84,6 +90,18 @@ check "0.x: after a pre-release tag the release of that version is next" \
   "suggested:0.54.2 bump:release " "$(suggest v0.54.2-rc.1 "$FEAT")"
 check "1.x: after a pre-release tag the release of that version is next" \
   "suggested:1.3.0 bump:release " "$(suggest v1.3.0-beta.2 'fix: repair a thing')"
+check "1.x: a breaking commit after a minor pre-release raises the major" \
+  "suggested:2.0.0 bump:major " "$(suggest v1.3.0-rc.1 'feat!: remove a thing')"
+check "1.x: a feat after a patch pre-release raises the minor" \
+  "suggested:1.3.0 bump:minor " "$(suggest v1.2.4-rc.1 "$FEAT")"
+check "1.x: a breaking commit after a major pre-release keeps that release" \
+  "suggested:2.0.0 bump:release " "$(suggest v2.0.0-rc.1 'feat!: remove a thing')"
+check "0.x: a breaking commit after a patch pre-release raises the middle number" \
+  "$MIDDLE_BUMP" "$(suggest v0.54.2-rc.1 'fix!: reject the old option')"
+check "0.x: a breaking commit after a middle pre-release keeps that release" \
+  "suggested:0.55.0 bump:release " "$(suggest v0.55.0-rc.1 'fix!: reject the old option')"
+check "1.x: a leading zero is not a version number" \
+  "suggested:unknown bump:unknown " "$(suggest v1.02.3 "$FEAT")"
 check "1.x: build metadata is no pre-release" \
   "suggested:1.3.0 bump:minor " "$(suggest v1.2.3+build.7 "$FEAT")"
 check "1.x: feat is a minor bump" \

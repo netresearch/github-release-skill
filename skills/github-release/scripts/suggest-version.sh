@@ -7,7 +7,9 @@
 # Output format:
 #   current:<version>
 #   suggested:<version>
-#   bump:<major|minor|patch|unknown>
+#   bump:<major|minor|patch|release|none|unknown>
+#     release: finish the pre-release the last tag names
+#     none:    no commits since the last tag
 #   reason:<explanation>
 #
 set -euo pipefail
@@ -28,7 +30,8 @@ current="${last_tag#v}"
 echo "current:${current}"
 
 # Parse semver components. Build metadata (+...) carries no meaning for the
-# order; a pre-release (-...) is finished by releasing its own version.
+# order; a pre-release (-...) is finished by releasing its own version unless
+# a commit after it demands more than that version already carries.
 core="${current%%+*}"
 prerelease=""
 if [[ "$core" == *-* ]]; then
@@ -39,17 +42,11 @@ IFS='.' read -r major minor patch <<< "$core"
 major=${major:-0}
 minor=${minor:-0}
 patch=${patch:-0}
-if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
+number='^(0|[1-9][0-9]*)$'
+if ! [[ "$major" =~ $number && "$minor" =~ $number && "$patch" =~ $number ]]; then
     echo "suggested:unknown"
     echo "bump:unknown"
     echo "reason:${last_tag} is not a MAJOR.MINOR.PATCH version; choose the next version by hand"
-    exit 0
-fi
-
-if [[ -n "$prerelease" ]]; then
-    echo "suggested:${major}.${minor}.${patch}"
-    echo "bump:release"
-    echo "reason:${last_tag} is a pre-release (${prerelease}); its release ${major}.${minor}.${patch} is next — choose another version by hand if the commits since change what that release is"
     exit 0
 fi
 
@@ -57,7 +54,7 @@ fi
 # separator, because a BREAKING CHANGE footer sits in the body.
 commits=$(git log "${last_tag}..HEAD" --format='%B%x1e' 2>/dev/null)
 
-if [[ -z "${commits//[$'\x1e\n']/}" ]]; then
+if [[ -z "$prerelease" && -z "${commits//[$'\x1e\n']/}" ]]; then
     echo "suggested:${current}"
     echo "bump:none"
     echo "reason:no commits since ${last_tag}"
@@ -74,9 +71,11 @@ while IFS= read -r -d $'\x1e' message; do
     message="${message#$'\n'}"
     [[ -z "$message" ]] && continue
     subject="${message%%$'\n'*}"
-    # Breaking: `!` before the colon, BREAKING CHANGE in the subject, or a
-    # `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer line in the body.
-    if grep -qE '^[a-z]+(\([^)]*\))?!:' <<< "$subject" || grep -qi 'BREAKING CHANGE' <<< "$subject" \
+    # Breaking: `!` before the colon in the subject or in a bullet of a squash
+    # body (`* feat(api)!: ...`), or a line that opens with `BREAKING CHANGE:` /
+    # `BREAKING-CHANGE:` (a footer, or the subject itself). A subject that only
+    # mentions a breaking change does not count.
+    if grep -qE '^[[:space:]]*[*-]?[[:space:]]*[a-z]+(\([^)]*\))?!:' <<< "$message" \
         || grep -qE '^BREAKING[ -]CHANGE: ' <<< "$message"; then
         ((breaking++)) || true
     elif echo "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
@@ -141,6 +140,28 @@ else
         new_minor=$minor
         new_patch=$patch
         reason="unable to determine bump from commit messages"
+    fi
+fi
+
+# After a pre-release tag, its own version is next unless a commit since
+# demands a higher level than that version already carries over its line:
+# X.0.0 carries a major, X.Y.0 a minor, X.Y.Z a patch; on 0.x a 0.Y.0 carries
+# the middle (breaking) level. Otherwise bump from the base version as above.
+if [[ -n "$prerelease" ]]; then
+    level() { case "$1" in major) echo 3 ;; minor) echo 2 ;; patch) echo 1 ;; *) echo 0 ;; esac; }
+    if ((patch != 0)); then
+        carried="patch"
+    elif ((major == 0)) || ((minor != 0)); then
+        carried="minor"
+    else
+        carried="major"
+    fi
+    if (($(level "$bump") <= $(level "$carried"))); then
+        new_major=$major
+        new_minor=$minor
+        new_patch=$patch
+        reason="${last_tag} is a pre-release (${prerelease}); no commit since demands more than its release ${major}.${minor}.${patch}"
+        bump="release"
     fi
 fi
 

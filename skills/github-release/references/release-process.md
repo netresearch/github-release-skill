@@ -36,7 +36,9 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 2. Determine next version number:
    - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major);
      on 0.y (y >= 1) one level down: BREAKING CHANGE → middle number, feat and fix →
-     last number (see "On 0.x, Raise the Middle Number Only for a Breaking Change")
+     last number (see "On 0.x, Raise the Middle Number Only for a Breaking Change");
+     on 0.0.z the same mapping (BREAKING CHANGE → 0.1.0, feat and fix → 0.0.z+1),
+     although the caret there admits only the exact version
    - From explicit user input ("bump to 2.0.0")
 3. Create release branch:
    git checkout -b release/vX.Y.Z
@@ -669,8 +671,10 @@ On 0.0.z the caret admits only that exact version (`^0.0.3` takes 0.0.3 alone), 
 needs a widened constraint; leave 0.0.z before other packages depend on the package.
 
 `scripts/suggest-version.sh` follows this: on 0.x it raises the middle number only for a breaking
-commit (`!` before the colon, or a `BREAKING CHANGE:` footer) and suggests a patch for `feat:`.
-After a pre-release tag it suggests the release of that version. It reads commit messages only, so
+commit (`!` before the colon, also in a bullet of a squash body, or a line opening with
+`BREAKING CHANGE:`) and suggests a patch for `feat:`. After a pre-release tag it suggests the
+release of that version unless a commit since demands more than that version carries (a breaking
+commit after `v1.3.0-rc.1` gives 2.0.0). It reads commit messages only, so
 its suggestion is the starting point for the read above, not the answer.
 
 Observed 2026-11-13 to 2026-11-24 on `netresearch/t3x-nr-llm`: 0.45.0 to 0.55.0 raised the middle
