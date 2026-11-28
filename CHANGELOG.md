@@ -14,6 +14,23 @@ their notes were not backfilled here rather than reconstructed after the fact.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-28
+
+### Added
+
+- `release-notes-status.sh` reports `ADVISORY NOT NAMED OR CREDITED` when a release patches a repository security advisory (published or draft, by its `patched_versions`) and the body lacks the GHSA id or an `@login` the advisory credits as finder or reporter; a failed advisory lookup exits 2. `SKILL.md` and `release-process.md` Phase 5 set the advisory's `patched_versions` before the tag, name the GHSA and its reporters in the body, and publish the advisory after the release edit. The rule applies to skill repositories too (#250)
+- `/release` and `/release-prepare` search the whole repository, from its root, for the previous version string in step 5 before the release PR, and write the release PR body in the sections of the pull request template in step 9: the repository's own, or the owner's default from `<owner>/.github` (#247)
+- `release-status.sh --watch` waits until Packagist and TER serve the version once the release workflow has succeeded and the notes are done, for at most 15 minutes (`RELEASE_STATUS_REGISTRY_TIMEOUT`). `SKILL.md` says that `gh attestation verify` needs `--signer-workflow` when a reusable workflow signed the asset (#248)
+
+### Changed
+
+- On a 0.x version, `suggest-version.sh` suggests a patch bump for `feat:` commits and raises the middle number only for a breaking commit; `release-process.md` and step 2 of the release flow say to raise the middle number of a 0.x package only for a breaking change, after reading its changelog and API diff. Under 0.x the caret admits only the current middle number (`^0.54` takes 0.54.* only), so each needless middle bump requires every consumer to widen its constraint and release (#256)
+- `suggest-version.sh` asks git-cliff (`uvx git-cliff@latest --bumped-version`, or a `git-cliff` binary on PATH) for the next version, with the skill's own configuration `suggest-version.cliff.toml`, instead of parsing commit messages itself. The output keeps `current:`, `suggested:` and `bump:`; without uv and git-cliff, without that configuration, for a range of only chore, docs, ci, test, style, build or untyped commits (dependency updates included), while a `.cliffignore` sits at the repository root, when `.git-blame-ignore-revs` hides a commit of the range (whatever its type, so a hidden `style:` commit is refused too), or outside a work tree, it reports `bump:unknown`. It computes over the whole repository also when run from a subdirectory. A breaking `chore(deps)!:` commit still raises the middle number, the caller's `GIT_CLIFF_*` variables are dropped, and an interface tag such as `v1` is no longer read as the last version. The inputs git-cliff answers differently from the 0.x rule (0.0.z, a subject that opens with `BREAKING CHANGE:`, squash-body bullets, pre-release tags) are listed in `release-process.md`; on 0.x the changelog BREAKING entries stay authoritative (#256)
+
+### Fixed
+
+- the release flow in `SKILL.md`, Phase 1 of `references/release-process.md` and the fragment reminder of `validate-pre-release.sh` name the collect step per repository kind: `composer changelog:collect` where `composer.json` defines it (TYPO3 extensions), `roll-changelog.py CHANGELOG.md <version>` from the skill-repo skill in a skill repository, which also writes the release section (#254)
+
 ## [1.6.3] - 2026-11-20
 
 ### Changed
@@ -300,7 +317,8 @@ their notes were not backfilled here rather than reconstructed after the fact.
   ([#92](https://github.com/netresearch/github-release-skill/issues/92)).
 - The `netresearch/skill-repo-skill` pre-commit hook moves to v2.0.1.
 
-[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.6.3...HEAD
+[Unreleased]: https://github.com/netresearch/github-release-skill/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/netresearch/github-release-skill/compare/v1.6.3...v1.7.0
 [1.6.3]: https://github.com/netresearch/github-release-skill/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/netresearch/github-release-skill/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/netresearch/github-release-skill/compare/v1.6.0...v1.6.1
