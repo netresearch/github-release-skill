@@ -109,7 +109,14 @@ if [[ -r "$blame_file" ]]; then
                     hidden=true
                 fi
             done <<< "$listed"
-            if [[ "$(git diff-tree --no-commit-id --name-only -r --root -m "$sha" | sort -u)" == ".git-blame-ignore-revs" ]]; then
+            # As git-cliff does: a commit against its first parent only, the
+            # root commit as all of its files.
+            if git rev-parse -q --verify "${sha}^1" >/dev/null; then
+                changed=$(git diff-tree --no-commit-id --name-only -r "${sha}^1" "$sha")
+            else
+                changed=$(git diff-tree --no-commit-id --name-only -r --root "$sha")
+            fi
+            if [[ "$changed" == ".git-blame-ignore-revs" ]]; then
                 hidden=true
             fi
             if $hidden; then
