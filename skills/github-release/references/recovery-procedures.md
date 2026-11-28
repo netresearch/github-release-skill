@@ -480,6 +480,6 @@ Run these checks before starting any release:
         | awk -F: '{print $1}' | sort | uniq -c | sort -rn
       ```
       Red flags for a patch bump:
-      - any `feat` entries at all (implies minor at minimum)
-      - any `BREAKING CHANGE` in the full message body: `git log <prev-tag>..HEAD --grep='BREAKING CHANGE'` (implies major)
+      - any `feat` entries at all (implies minor at minimum from 1.0.0 on; on 0.y with y >= 1 a feature stays in the last number, see [On 0.x, Raise the Middle Number Only for a Breaking Change](release-process.md#on-0x-raise-the-middle-number-only-for-a-breaking-change))
+      - any `BREAKING CHANGE` in the full message body: `git log <prev-tag>..HEAD --grep='BREAKING CHANGE'` (implies major from 1.0.0 on; on 0.y with y >= 1 the middle number, and on 0.x the changelog BREAKING entries decide, see the same section)
       - total commit count significantly larger than previous patch releases on this project (harder to eyeball — useful as a "pause and re-read the log" signal)

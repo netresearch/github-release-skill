@@ -44,7 +44,7 @@ branch it compares with the newest release of that branch's major line.
 ## Release Flow
 
 1. **Detect ecosystem** — find the project type's version files (see `references/ecosystem-detection.md`)
-2. **Determine next version** — from conventional commits or user input (major/minor/patch)
+2. **Determine next version** — `scripts/suggest-version.sh` (git-cliff) or user input (major/minor/patch). On 0.x the middle number rises only for a breaking change and `feat` bumps the last number; `[Unreleased]`, the pending `changelog.d/` fragments and the API diff decide, and they outrank git-cliff's suggestion (`references/release-process.md`)
 3. **Bump version files** — every ecosystem-specific one, consistently
 4. **Update CHANGELOG.md** — if the repository keeps entries as fragments in `changelog.d/`, first run its collect step: `composer changelog:collect` where `composer.json` defines that script (TYPO3 extensions); in a skill repository (composer type `ai-agent-skill`), `roll-changelog.py CHANGELOG.md <version>` from the skill-repo skill, which also writes the release section; the fleet release driver runs it at the bump, so run it by hand only when the bump did not. Then add a release section with date and changes, unless the roll already wrote it
 5. **Create release branch and PR** — `release/vX.Y.Z`, always via PR (branch protection typically blocks direct pushes) If the release patches a repository security advisory, add the bare new version to its `patched_versions` now, keeping the versions already listed.

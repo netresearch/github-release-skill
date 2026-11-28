@@ -19,7 +19,7 @@ This skill prevents these mistakes structurally via hooks and provides the corre
 
 - **Guard hooks**: Block `gh release delete`, `gh release edit` beyond notes, a `gh release create` that could create the tag (i.e. without `--verify-tag`), and lightweight tag creation — at the tool level
 - **Ecosystem detection**: Auto-detect project type (TYPO3, PHP, Node.js, Go, Python, Rust, skill repos)
-- **Version management**: Suggest next semver version from conventional commits, update all version files
+- **Version management**: Suggest next semver version from conventional commits (computed by git-cliff), update all version files
 - **Release orchestration**: Version bump PR → merge → signed tag → CI handles the rest
 - **Health checks**: Validate release workflow, tag integrity, supply chain security
 - **CI templates**: Release workflow templates with SBOM, cosign, attestation support

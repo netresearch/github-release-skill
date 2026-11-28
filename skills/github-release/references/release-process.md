@@ -34,7 +34,12 @@ grep -rln "on:" .github/workflows | xargs grep -ln "release:" ; grep -rn "gh rel
 0. Triage open issues from the current work stream (see "Issue gate" below)
 1. Detect ecosystem (see ecosystem-detection.md)
 2. Determine next version number:
-   - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major)
+   - From conventional commits (feat → minor, fix → patch, BREAKING CHANGE → major);
+     on 0.y (y >= 1) one level down: BREAKING CHANGE → middle number, feat and fix →
+     last number (see "On 0.x, Raise the Middle Number Only for a Breaking Change");
+     on 0.0.z `scripts/suggest-version.sh` (git-cliff) suggests 0.0.z+1 for every
+     commit, breaking ones included, although the caret there admits only the
+     exact version
    - From explicit user input ("bump to 2.0.0")
 3. Create release branch:
    git checkout -b release/vX.Y.Z
@@ -638,6 +643,101 @@ Measured in this fleet on 2026-09-20: `nr_passkeys_be` 1.0.0 removed two `RateLi
 methods after a grep that covered only its own repository. `nr_passkeys_fe` called both, at three
 sites. The broken pair was unreachable only because the consumer's `^0.12` constraint refused the
 new major — luck, not order.
+
+## On 0.x, Raise the Middle Number Only for a Breaking Change
+
+On a 0.y version with y >= 1 the caret stops at the middle number (next section), so for a
+package other packages depend on, the middle number does the job of the major. Version 0.x.y as if
+x were the major and y were minor and patch together:
+
+- **Raise the middle number only for a breaking change, and then by one to 0.x+1.0.** Breaking
+  means a removed or changed public API (a breaking diff in the package's API snapshot, if it keeps
+  one), a new method on a public interface (every implementation outside the package lacks it), a
+  new case of a public enum (every exhaustive match without a default arm fails on it), or a
+  behaviour change that consumers have to handle — a new status value they must know, a contract
+  that now fails where it passed.
+- **Features and fixes go into the last number**, additive API (a new class, interface or enum, a
+  new method of a class) and additive schema changes (new columns or tables with defaults)
+  included. A `feat:` commit is not a reason to raise the middle number on 0.x.
+- **Before choosing the bump, read the package's own changelog and API diff for a breaking
+  change.** Commit messages miss most of them: a `feat:` can break without `!` or a
+  `BREAKING CHANGE:` footer. Read the `[Unreleased]` section **and**, where the repository keeps
+  them, the pending `changelog.d/` fragments, which the release collects only after the version is
+  chosen: a `removed` or `upgrading` fragment, and any bullet that opens with `**BREAKING`, is a
+  candidate. Then diff the API snapshot (or the public signatures) between the last tag and `HEAD`.
+  If the package marks breaking entries in its changelog, a middle bump without one is the wrong
+  version.
+
+On 0.0.z the caret admits only that exact version (`^0.0.3` takes 0.0.3 alone), so every release
+needs a widened constraint; leave 0.0.z before other packages depend on the package.
+
+`scripts/suggest-version.sh` asks git-cliff (`uvx git-cliff@latest --bumped-version`, which
+resolves the newest release on each run, where a bare `uvx git-cliff` would reuse a cached or
+installed copy; a `git-cliff` binary on PATH when uv is missing or that run fails) with the
+configuration beside it, `scripts/suggest-version.cliff.toml`:
+
+- `features_always_bump_minor = false` and `breaking_always_bump_major = false`, so on 0.y a
+  breaking commit (`!` before the colon or a `BREAKING CHANGE:` footer) raises the middle number
+  and `feat:` the last one.
+- `tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+"`, so git-cliff reads the same last tag as the
+  script's `git describe --match 'v[0-9]*.[0-9]*.[0-9]*'`; an unprefixed version tag, a marker
+  tag or an interface tag such as `v1` is no release. A pre-release tag counts.
+- `chore`, `docs`, `ci`, `test`, `style` and `build` commits are skipped unless they are breaking,
+  and commits without a conventional type are not counted. A range of only such commits gives
+  `bump:unknown` with "review them and choose the next version by hand", not a patch. Dependency
+  updates (`chore(deps): ...`) are such commits too.
+- Its own `commit_parsers` and `protect_breaking_commits = true`. git-cliff layers `--config`
+  over its embedded default, whose parsers skip `chore(deps...)`, `chore(pr)` and `chore(pull)`
+  commits even when they are breaking; with these settings `chore(deps)!:` raises the middle
+  number.
+- `split_commits = false`: split by line, a `BREAKING CHANGE:` footer is a line without a type
+  and is dropped, so the breaking commit would give a patch.
+
+The configuration is passed with `--config`, so a `cliff.toml` in the repository being released is
+not read; without it the script reports `bump:unknown` instead of falling back to git-cliff's
+defaults. The caller's `GIT_CLIFF_*` and `GIT_CLIFF__*` variables are dropped for the run: they
+would set options such as `GIT_CLIFF_SKIP_COMMIT` or override the configuration, such as
+`GIT_CLIFF__GIT__SPLIT_COMMITS`. A `.cliffignore` at the repository root makes the script report
+`bump:unknown`: git-cliff skips every commit the file lists and has no option to read another file,
+so a branch could hide a breaking commit there; choose the version by hand, or run git-cliff in a
+temporary clone without the file, never move a file in the release worktree. git-cliff also drops
+every commit listed in `.git-blame-ignore-revs` at the repository root and, once that file lists a
+commit, every commit that changes only that file. When that hits any commit of the range (full or
+abbreviated hash), the script reports `bump:unknown`, names the commit and says to choose the
+version by hand. It does not ask which hidden commits git-cliff would count, so a hidden `style:`
+commit, which git-cliff skips anyway, is refused too; that over-refusal is the accepted cost. A
+list of older commits (the usual reformats) changes nothing. Outside a work tree (a plain
+directory, a bare repository) the script prints `current:unknown` and `bump:unknown`; without any
+version tag it prints `current:none` and suggests 0.1.0. An answer below the last tag is reported
+as git-cliff having read another tag. git-cliff gets `--repository` with the repository root: run
+from a subdirectory, it would count only the commits that touch that directory. A range without
+commits gives `bump:none` before any tool is looked up. The script prints `current:`, `suggested:`
+and `bump:` as before.
+
+On 0.x the package's changelog BREAKING entries and its API diff stay authoritative: the script
+reads commit messages only, so its suggestion is the starting point for the read above, not the
+answer. Where git-cliff answers differently from this rule (measured with git-cliff 2.14.2), the
+script reports git-cliff's answer and does not correct it:
+
+- On 0.0.z it raises the last number for every commit, breaking ones included.
+- A subject that opens with `BREAKING CHANGE:` (no type) is no conventional commit, so the
+  script reports `bump:unknown` for a range of only such commits.
+- Bullets of a squash body (`* feat(api)!: ...`) are not read as commits. `split_commits` would
+  read them, but it also drops every `BREAKING CHANGE:` footer, so the configuration leaves it off.
+- After a pre-release tag it suggests the next pre-release (`v0.54.2-rc.1` gives `0.54.2-rc.2`,
+  also after a breaking commit). The script reports that as `bump:unknown`; choose the release
+  version by hand.
+- `BREAKING CHANGE: none` counts as breaking, as the Conventional Commits specification reads a
+  footer.
+
+Observed 2026-11-13 to 2026-11-24 on `netresearch/t3x-nr-llm`: 0.45.0 to 0.55.0 raised the middle
+number eleven times, and its changelog has no BREAKING entry in any of them. Six of the release PRs
+named new features or additions as the reason ("a minor version because of the new features",
+"additions to the public surface take a minor during 0.x"). Each such release requires the
+dependent extensions to widen their constraint and release before an installation can take it.
+[netresearch/t3x-nr-llm#1475](https://github.com/netresearch/t3x-nr-llm/pull/1475) proposes the
+rule there, with a CI check that refuses a release whose middle number disagrees with its
+`- **BREAKING` changelog bullets.
 
 ## A 0.x Minor Release: Every Consumer Pinned to the Previous Minor Refuses It
 
