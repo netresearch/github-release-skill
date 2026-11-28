@@ -74,14 +74,28 @@ fi
 # and has no option to read another file; a branch could hide a breaking
 # commit there.
 root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[[ -n "$root" ]] || unknown "not inside a git work tree; run the script from the root of the repository being released"
 if [[ -n "$root" ]] && [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
-    unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; move the file away for the suggestion, or choose the next version by hand"
+    unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; choose the next version by hand, or run git-cliff in a temporary clone without that file"
 fi
 
 # git-cliff also drops every commit listed in .git-blame-ignore-revs at the
 # repository root (abbreviated hashes included), and, once the file lists any
 # commit, every commit that changes only that file. Refuse only when that hits
-# a commit of the range: the file is common and usually lists old reformats.
+# a commit of the range that git-cliff would count: the file is common and
+# usually lists old reformats, and a hidden commit the configuration skips
+# anyway (an untyped one, or chore, docs, ci, test, style or build that is not
+# breaking) changes nothing.
+counts() { # counts <sha> -> true when git-cliff would count the commit
+    local message subject
+    message=$(git log -1 --format=%B "$1")
+    subject="${message%%$'\n'*}"
+    if [[ "$subject" =~ ^[A-Za-z]+(\([^\)]*\))?!: ]] || grep -q -E '^BREAKING[ -]CHANGE:' <<< "$message"; then
+        return 0
+    fi
+    [[ "$subject" =~ ^[A-Za-z]+(\([^\)]*\))?: ]] \
+        && ! [[ "$subject" =~ ^(chore|docs|ci|test|style|build)(\([^\)]*\))?: ]]
+}
 blame_file="$root/.git-blame-ignore-revs"
 if [[ -n "$root" && -r "$blame_file" ]]; then
     listed=$(grep -v -E '^[[:space:]]*(#|$)' "$blame_file" | tr -d '[:blank:]\r' || true)
@@ -96,7 +110,7 @@ if [[ -n "$root" && -r "$blame_file" ]]; then
             if ! $hidden && [[ "$(git diff-tree --no-commit-id --name-only -r --root -m "$sha" | sort -u)" == ".git-blame-ignore-revs" ]]; then
                 hidden=true
             fi
-            if $hidden; then
+            if $hidden && counts "$sha"; then
                 unknown "git-cliff would skip commit ${sha:0:12} because of ${blame_file}; review the commits since ${last_tag} and choose the next version by hand"
             fi
         done < <(git rev-list "${last_tag}..HEAD")
@@ -113,7 +127,9 @@ cliff_next() (
             unset "$name"
         fi
     done
-    "$@" --config "$CONFIG" --bumped-version 2>/dev/null
+    # Run from a subdirectory, git-cliff would count only the commits that
+    # touch it; --repository makes it read the whole repository.
+    "$@" --repository "$root" --config "$CONFIG" --bumped-version 2>/dev/null
 )
 
 have_uvx=false; have_cliff=false
@@ -131,6 +147,9 @@ next="${next#v}"
 next="${next%%+*}"
 
 core="${current%%+*}"
+if [[ "$next" == "$core" ]]; then
+    unknown "git-cliff counted nothing to bump in the commits since ${last_tag} (only chore, docs, ci, test, style, build or untyped commits); review them and choose the next version by hand"
+fi
 if [[ "$next" == *-* ]]; then
     echo "suggested:${next}"
     echo "bump:unknown"

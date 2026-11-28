@@ -302,6 +302,12 @@ case "$(fields "$ignored")$(grep '^reason:' <<< "$ignored")" in
   "suggested:unknown bump:unknown reason:"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
   *) failed "a .cliffignore makes the bump unknown" "$ignored" ;;
 esac
+# The refusal never tells the agent to move a file in the release worktree.
+case "$(grep '^reason:' <<< "$ignored")" in
+  *"move"*) failed "the .cliffignore reason points at a temporary clone, never at moving the file" "$ignored" ;;
+  *"temporary clone"*) pass "the .cliffignore reason points at a temporary clone, never at moving the file" ;;
+  *) failed "the .cliffignore reason points at a temporary clone, never at moving the file" "$ignored" ;;
+esac
 
 # git-cliff also drops every commit listed in .git-blame-ignore-revs at the
 # repository root, and every commit that changes only that file, once the file
@@ -330,6 +336,50 @@ old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-pa
 printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
 check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
   "$MIDDLE_BUMP" "$(fields "$(run_script "$repo")")"
+# A hidden commit that git-cliff would skip anyway changes nothing either.
+repo="$(make_repo v0.54.2 "$FEAT" 'style: reformat the sources')"
+style_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+printf '%s\n' "$style_sha" > "$repo/.git-blame-ignore-revs"
+check "a .git-blame-ignore-revs that hides only a style commit changes nothing" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 "$FEAT")"
+old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
+git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
+git_in "$repo" commit -q -m 'chore: ignore the reformat in blame' || setup_failed "commit"
+check "a chore commit that changes only .git-blame-ignore-revs changes nothing" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 'fix: handle an empty list' "$FEAT")"
+feat_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+printf '%s\n' "$feat_sha" > "$repo/.git-blame-ignore-revs"
+unknown_for "a .git-blame-ignore-revs that hides a feat commit makes the bump unknown" \
+  "$(run_script "$repo")" ".git-blame-ignore-revs"
+repo="$(make_repo v0.54.2 "$FEAT" $'docs: rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
+docs_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+printf '%s\n' "$docs_sha" > "$repo/.git-blame-ignore-revs"
+unknown_for "a .git-blame-ignore-revs that hides a docs commit with a breaking footer makes the bump unknown" \
+  "$(run_script "$repo")" ".git-blame-ignore-revs"
+
+# Run from a subdirectory, git-cliff would count only the commits that touch
+# it. The script computes over the whole repository.
+repo="$(make_repo v0.54.2)"
+mkdir -p "$repo/Classes" "$repo/Documentation"
+echo api > "$repo/Classes/Api.php"
+git_in "$repo" add Classes/Api.php || setup_failed "add"
+git_in "$repo" commit -q -m 'feat(api)!: drop Api::old()' || setup_failed "commit"
+echo doc > "$repo/Documentation/Index.rst"
+git_in "$repo" add Documentation/Index.rst || setup_failed "add"
+git_in "$repo" commit -q -m 'fix: correct a link' || setup_failed "commit"
+check "run from a subdirectory, the bump counts every commit of the repository" \
+  "$MIDDLE_BUMP" "$(fields "$(run_script "$repo/Documentation")")"
+
+# After a pre-release tag, a range git-cliff counts nothing in is no next
+# pre-release.
+pre=$(run_in v0.54.2-rc.1 'chore: bump a tool')
+case "$(fields "$pre")$(grep '^reason:' <<< "$pre")" in
+  "suggested:unknown bump:unknown reason:"*"nothing to bump"*) pass "after a pre-release, a chore-only range counts nothing to bump" ;;
+  *) failed "after a pre-release, a chore-only range counts nothing to bump" "$pre" ;;
+esac
 
 # Nothing of the above wrote into a caller's repository.
 if [[ "$(caller_state)" == "$CALLER_BEFORE" ]]; then

@@ -23,7 +23,7 @@ Report findings to the user before proceeding.
 
 ### 2. Suggest next version
 
-Run `suggest-version.sh` from the skill's scripts directory: it asks git-cliff
+Run `<skill scripts dir>/suggest-version.sh` from the root of the repository being released: it asks git-cliff
 (`uvx git-cliff@latest --bumped-version`, with the skill's own configuration) for the next
 semantic version from the commits since the last tag. Present the suggestion and let the user
 confirm or override with their preferred version number.
