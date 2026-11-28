@@ -350,19 +350,14 @@ old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
 printf '%s\n' "$old_sha" > "$repo/$BLAME"
 check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
   "$MIDDLE_BUMP" "$(fields "$(run_script "$repo")")"
-# A hidden commit that git-cliff would skip anyway changes nothing either.
+# Known limit, accepted: the script does not ask which hidden commits git-cliff
+# would count, so a hidden style: commit is refused too, although git-cliff
+# skips it anyway. Choosing the version by hand is the cost.
 repo="$(make_repo v0.54.2 "$FEAT" 'style: reformat the sources')"
 style_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$style_sha" > "$repo/$BLAME"
-check "a .git-blame-ignore-revs that hides only a style commit changes nothing" \
-  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
-repo="$(make_repo v0.54.2 "$FEAT")"
-old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
-printf '%s\n' "$old_sha" > "$repo/$BLAME"
-git_in "$repo" add "$BLAME" || setup_failed "add"
-git_in "$repo" commit -q -m 'chore: ignore the reformat in blame' || setup_failed "commit"
-check "a chore commit that changes only .git-blame-ignore-revs changes nothing" \
-  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+unknown_for "a .git-blame-ignore-revs that hides a style commit makes the bump unknown (over-refusal)" \
+  "$(run_script "$repo")" "$BLAME"
 repo="$(make_repo v0.54.2 'chore: bump a tool' "$FEAT")"
 feat_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$feat_sha" > "$repo/$BLAME"
@@ -379,22 +374,27 @@ l10n_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$l10n_sha" > "$repo/$BLAME"
 unknown_for "a .git-blame-ignore-revs that hides a breaking l10n! commit makes the bump unknown" \
   "$(run_script "$repo")" "$BLAME"
-repo="$(make_repo v0.54.2 "$FEAT" $'Rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
-untyped_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$untyped_sha" > "$repo/$BLAME"
-check "a .git-blame-ignore-revs that hides an untyped commit with a breaking footer changes nothing" \
-  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 "$FEAT" 'l10n!: drop the German strings')"
 l10n_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$l10n_sha" > "$repo/$BLAME"
 blame_out=$(run_script "$repo")
 case "$(reason_of "$blame_out")" in
-  *"0.54.3"*"0.55.0"*) pass "the .git-blame-ignore-revs reason names both versions" ;;
-  *) failed "the .git-blame-ignore-revs reason names both versions" "$blame_out" ;;
+  *"${l10n_sha:0:12}"*"by hand"*) pass "the .git-blame-ignore-revs reason names the commit and says to choose by hand" ;;
+  *) failed "the .git-blame-ignore-revs reason names the commit and says to choose by hand" "$blame_out" ;;
 esac
-git_in "$repo" worktree prune || setup_failed "worktree prune"
-check "the check without .git-blame-ignore-revs leaves no worktree behind" \
-  "1" "$(git_in "$repo" worktree list --porcelain | grep -c '^worktree ')"
+
+# The check only reads the repository: another worktree whose directory is
+# gone stays registered, and an unusable TMPDIR does not abort the run.
+repo="$(make_repo v0.54.2 "$FEAT")"
+git_in "$repo" worktree add -q --detach "$repo-other" HEAD || setup_failed "worktree add"
+rm -rf "$repo-other"
+old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
+printf '%s\n' "$old_sha" > "$repo/$BLAME"
+run_script "$repo" > /dev/null
+check "a run with .git-blame-ignore-revs keeps an absent worktree registered" \
+  "1" "$(git_in "$repo" worktree list --porcelain | grep -c "^worktree $repo-other\$")"
+check "an unusable TMPDIR does not abort the .git-blame-ignore-revs check" \
+  "$PATCH_BUMP" "$(export TMPDIR="$TMP/missing-tmpdir"; fields "$(run_script "$repo")")"
 
 # Outside a work tree the script says so instead of suggesting a first release.
 plain="$TMP/plain"

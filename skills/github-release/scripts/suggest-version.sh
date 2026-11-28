@@ -8,6 +8,8 @@
 #
 # Output format:
 #   current:<version>
+#     none:    no version tag yet (then suggested:0.1.0)
+#     unknown: not inside a work tree (a plain directory, a bare repository)
 #   suggested:<version>
 #   bump:<major|minor|patch|release|none|unknown>
 #     release: kept in the contract; git-cliff continues a pre-release
@@ -16,9 +18,10 @@
 #     unknown: git-cliff is missing or failed, the configuration is missing,
 #              the commits carry nothing to bump (only chore, docs, ci, test,
 #              style, build or untyped commits), a .cliffignore sits at the
-#              repository root, .git-blame-ignore-revs changes git-cliff's
-#              answer, git-cliff read another tag, the script runs outside a
-#              work tree, or git-cliff suggested another pre-release
+#              repository root, .git-blame-ignore-revs hides a commit of the
+#              range (whatever its type), git-cliff read another tag, the
+#              script runs outside a work tree, or git-cliff suggested another
+#              pre-release
 #   reason:<explanation>
 #
 # git-cliff runs as `uvx git-cliff@latest`, which resolves the newest release
@@ -89,6 +92,33 @@ if [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
     unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; choose the next version by hand, or run git-cliff in a temporary clone without that file"
 fi
 
+# git-cliff also drops every commit listed in .git-blame-ignore-revs at the
+# repository root (abbreviated hashes included) and, once the file lists a
+# commit, every commit that changes only that file. The script refuses when
+# that hits any commit of the range, whatever its type: a hidden style: commit
+# git-cliff would skip anyway is refused too, which is the accepted cost of not
+# guessing which commits git-cliff counts.
+blame_file="$root/.git-blame-ignore-revs"
+if [[ -r "$blame_file" ]]; then
+    listed=$(grep -v -E '^[[:space:]]*(#|$)' "$blame_file" | tr -d '[:blank:]\r' || true)
+    if [[ -n "$listed" ]]; then
+        while read -r sha; do
+            hidden=false
+            while read -r id; do
+                if [[ -n "$id" && "$sha" == "$id"* ]]; then
+                    hidden=true
+                fi
+            done <<< "$listed"
+            if [[ "$(git diff-tree --no-commit-id --name-only -r --root -m "$sha" | sort -u)" == ".git-blame-ignore-revs" ]]; then
+                hidden=true
+            fi
+            if $hidden; then
+                unknown "git-cliff would skip commit ${sha:0:12} because of ${blame_file}; choose the next version by hand"
+            fi
+        done < <(git rev-list "${last_tag}..HEAD")
+    fi
+fi
+
 # cliff_next <repository> <command>... -> git-cliff's answer for <repository>,
 # or a non-zero status. The caller's GIT_CLIFF_* variables would set options
 # (GIT_CLIFF_SKIP_COMMIT) and GIT_CLIFF__* ones would override the
@@ -126,24 +156,6 @@ cliff_at() {
 }
 
 next=$(cliff_at "$root") || unknown "git-cliff could not compute a version from ${last_tag}; choose the next version by hand"
-
-# git-cliff drops every commit listed in .git-blame-ignore-revs at the
-# repository root and, once the file lists a commit, every commit that changes
-# only that file. The file is common and usually lists old reformats, so
-# git-cliff itself decides whether it matters: it computes again on the same
-# HEAD in a temporary worktree without the file, and the two answers must
-# agree.
-if [[ -e "$root/.git-blame-ignore-revs" || -L "$root/.git-blame-ignore-revs" ]]; then
-    probe=$(mktemp -d)
-    trap 'git worktree remove --force "$probe" >/dev/null 2>&1; rm -rf "$probe"; git worktree prune >/dev/null 2>&1' EXIT
-    git -c core.hooksPath=/dev/null worktree add -q --detach --no-checkout "$probe" HEAD >/dev/null 2>&1 \
-        || unknown "could not create a temporary worktree to check ${root}/.git-blame-ignore-revs; choose the next version by hand"
-    rm -f "$probe/.git-blame-ignore-revs"
-    without=$(cliff_at "$probe") || unknown "git-cliff could not compute a version without ${root}/.git-blame-ignore-revs; choose the next version by hand"
-    if [[ "$without" != "$next" ]]; then
-        unknown "git-cliff answers ${next} with ${root}/.git-blame-ignore-revs and ${without} without it: the file hides commits git-cliff counts; review the commits since ${last_tag} and choose the next version by hand"
-    fi
-fi
 
 core="${current%%+*}"
 if [[ "$next" == "$core" ]]; then

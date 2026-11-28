@@ -693,23 +693,26 @@ configuration beside it, `scripts/suggest-version.cliff.toml`:
 - `split_commits = false`: split by line, a `BREAKING CHANGE:` footer is a line without a type
   and is dropped, so the breaking commit would give a patch.
 
-The configuration is passed with `--config`, so a `cliff.toml` in the repository being released
-is not read; without it the script reports `bump:unknown` instead of falling back to git-cliff's
+The configuration is passed with `--config`, so a `cliff.toml` in the repository being released is
+not read; without it the script reports `bump:unknown` instead of falling back to git-cliff's
 defaults. The caller's `GIT_CLIFF_*` and `GIT_CLIFF__*` variables are dropped for the run: they
 would set options such as `GIT_CLIFF_SKIP_COMMIT` or override the configuration, such as
 `GIT_CLIFF__GIT__SPLIT_COMMITS`. A `.cliffignore` at the repository root makes the script report
-`bump:unknown`: git-cliff skips every commit the file lists and has no option to read another
-file, so a branch could hide a breaking commit there; choose the version by hand, or run git-cliff
-in a temporary clone without the file, never move a file in the release worktree. git-cliff also
-drops every commit listed in `.git-blame-ignore-revs` at the repository root and, once that file
-lists a commit, every commit that changes only that file. When that file exists, git-cliff computes
-a second time on the same HEAD in a temporary detached worktree without it (removed again on
-exit); when the two answers differ, the script reports `bump:unknown` with both versions. A list
-of older commits (the usual reformats) or of commits git-cliff skips anyway changes nothing.
-Outside a work tree (a plain directory, a bare repository) the script reports `bump:unknown`, and
-an answer below the last tag is reported as git-cliff having read another tag. git-cliff gets `--repository` with the repository root: run from a
-subdirectory, it would count only the commits that touch that directory. A range without commits
-gives `bump:none` before any tool is looked up. The script prints `current:`, `suggested:` and `bump:` as before.
+`bump:unknown`: git-cliff skips every commit the file lists and has no option to read another file,
+so a branch could hide a breaking commit there; choose the version by hand, or run git-cliff in a
+temporary clone without the file, never move a file in the release worktree. git-cliff also drops
+every commit listed in `.git-blame-ignore-revs` at the repository root and, once that file lists a
+commit, every commit that changes only that file. When that hits any commit of the range (full or
+abbreviated hash), the script reports `bump:unknown`, names the commit and says to choose the
+version by hand. It does not ask which hidden commits git-cliff would count, so a hidden `style:`
+commit, which git-cliff skips anyway, is refused too; that over-refusal is the accepted cost. A
+list of older commits (the usual reformats) changes nothing. Outside a work tree (a plain
+directory, a bare repository) the script prints `current:unknown` and `bump:unknown`; without any
+version tag it prints `current:none` and suggests 0.1.0. An answer below the last tag is reported
+as git-cliff having read another tag. git-cliff gets `--repository` with the repository root: run
+from a subdirectory, it would count only the commits that touch that directory. A range without
+commits gives `bump:none` before any tool is looked up. The script prints `current:`, `suggested:`
+and `bump:` as before.
 
 On 0.x the package's changelog BREAKING entries and its API diff stay authoritative: the script
 reads commit messages only, so its suggestion is the starting point for the read above, not the
