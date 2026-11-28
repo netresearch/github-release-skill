@@ -103,6 +103,18 @@ make_repo() {
   echo "$repo"
 }
 
+# sha_of <repo> <revision> -> the full hash; a failure aborts the test.
+sha_of() {
+  local repo="$1" revision="$2"
+  git_in "$repo" rev-parse "$revision" || setup_failed "no revision $revision"
+}
+
+# reason_of <output> -> the "reason:" line of a run.
+reason_of() {
+  local output="$1"
+  grep '^reason:' <<< "$output"
+}
+
 # run_script <repo> [script] -> the script's whole output, run in <repo>.
 run_script() {
   local repo="$1" script="${2:-$SCRIPT}"
@@ -179,7 +191,7 @@ known "0.x: a breaking commit after a patch pre-release raises the middle number
 check "a continued pre-release is reported as unknown, never as a release" \
   "suggested:0.54.2-rc.2 bump:unknown " "$(suggest v0.54.2-rc.1 "$FEAT")"
 
-reason=$(run_in v0.3.0 "$FEAT" | grep '^reason:')
+reason=$(reason_of "$(run_in v0.3.0 "$FEAT")")
 case "$reason" in
   *"changelog"*) pass "0.x: the reason sends the reader to the changelog" ;;
   *) failed "0.x: the reason sends the reader to the changelog" "$reason" ;;
@@ -229,7 +241,7 @@ mkdir -p "$lonely"
 cp "$SCRIPT" "$lonely/suggest-version.sh"
 repo="$(make_repo v0.54.2 "$FEAT")"
 missing=$(run_script "$repo" "$lonely/suggest-version.sh")
-case "$(fields "$missing")$(grep '^reason:' <<< "$missing")" in
+case "$(fields "$missing")$(reason_of "$missing")" in
   "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) pass "without its configuration the bump is unknown" ;;
   *) failed "without its configuration the bump is unknown" "$missing" ;;
 esac
@@ -290,7 +302,7 @@ check "a dependency update beside a fix gives the fix bump" \
 check "GIT_CLIFF__GIT__SPLIT_COMMITS from the environment does not drop a footer" \
   "$MIDDLE_BUMP" "$(export GIT_CLIFF__GIT__SPLIT_COMMITS=true; suggest v0.54.2 "$FEAT"$'\n\nBREAKING CHANGE: Foo::bar() is gone.')"
 repo="$(make_repo v0.54.2 "$FEAT" "$BREAKING_FIX")"
-breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+breaking_sha="$(sha_of "$repo" HEAD)"
 check "GIT_CLIFF_SKIP_COMMIT from the environment does not hide a breaking commit" \
   "$MIDDLE_BUMP" "$(export GIT_CLIFF_SKIP_COMMIT="$breaking_sha"; fields "$(run_script "$repo")")"
 
@@ -298,12 +310,12 @@ check "GIT_CLIFF_SKIP_COMMIT from the environment does not hide a breaking commi
 # has no option to read another file, so the script refuses to suggest.
 printf '%s\n' "$breaking_sha" > "$repo/.cliffignore"
 ignored=$(run_script "$repo")
-case "$(fields "$ignored")$(grep '^reason:' <<< "$ignored")" in
+case "$(fields "$ignored")$(reason_of "$ignored")" in
   "suggested:unknown bump:unknown reason:"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
   *) failed "a .cliffignore makes the bump unknown" "$ignored" ;;
 esac
 # The refusal never tells the agent to move a file in the release worktree.
-case "$(grep '^reason:' <<< "$ignored")" in
+case "$(reason_of "$ignored")" in
   *"move"*) failed "the .cliffignore reason points at a temporary clone, never at moving the file" "$ignored" ;;
   *"temporary clone"*) pass "the .cliffignore reason points at a temporary clone, never at moving the file" ;;
   *) failed "the .cliffignore reason points at a temporary clone, never at moving the file" "$ignored" ;;
@@ -314,48 +326,48 @@ esac
 # lists a commit. A list that touches no commit of the range changes nothing.
 unknown_for() { # unknown_for <name> <output> <file named in the reason>
   local name="$1" output="$2" file="$3"
-  case "$(fields "$output")$(grep '^reason:' <<< "$output")" in
+  case "$(fields "$output")$(reason_of "$output")" in
     "suggested:unknown bump:unknown reason:"*"$file"*) pass "$name" ;;
     *) failed "$name" "$output" ;;
   esac
 }
 repo="$(make_repo v0.54.2 "$FEAT" "$BREAKING_FIX")"
-breaking_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+breaking_sha="$(sha_of "$repo" HEAD)"
 printf '# formatting\n%s\n' "${breaking_sha:0:10}" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs listing a commit of the range makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
 repo="$(make_repo v0.54.2 "$FEAT")"
-old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
 printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
 git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
 git_in "$repo" commit -q -m 'fix!: drop the old option' || setup_failed "commit"
 unknown_for "a breaking commit that changes only .git-blame-ignore-revs makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
 repo="$(make_repo v0.54.2 "$BREAKING_FIX")"
-old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
 printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
 check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
   "$MIDDLE_BUMP" "$(fields "$(run_script "$repo")")"
 # A hidden commit that git-cliff would skip anyway changes nothing either.
 repo="$(make_repo v0.54.2 "$FEAT" 'style: reformat the sources')"
-style_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+style_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$style_sha" > "$repo/.git-blame-ignore-revs"
 check "a .git-blame-ignore-revs that hides only a style commit changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 "$FEAT")"
-old_sha="$(git_in "$repo" rev-parse 'v0.54.2^{commit}')" || setup_failed "rev-parse"
+old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
 printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
 git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
 git_in "$repo" commit -q -m 'chore: ignore the reformat in blame' || setup_failed "commit"
 check "a chore commit that changes only .git-blame-ignore-revs changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 'fix: handle an empty list' "$FEAT")"
-feat_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+feat_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$feat_sha" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs that hides a feat commit makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
 repo="$(make_repo v0.54.2 "$FEAT" $'docs: rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
-docs_sha="$(git_in "$repo" rev-parse HEAD)" || setup_failed "rev-parse"
+docs_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$docs_sha" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs that hides a docs commit with a breaking footer makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
@@ -376,7 +388,7 @@ check "run from a subdirectory, the bump counts every commit of the repository" 
 # After a pre-release tag, a range git-cliff counts nothing in is no next
 # pre-release.
 pre=$(run_in v0.54.2-rc.1 'chore: bump a tool')
-case "$(fields "$pre")$(grep '^reason:' <<< "$pre")" in
+case "$(fields "$pre")$(reason_of "$pre")" in
   "suggested:unknown bump:unknown reason:"*"nothing to bump"*) pass "after a pre-release, a chore-only range counts nothing to bump" ;;
   *) failed "after a pre-release, a chore-only range counts nothing to bump" "$pre" ;;
 esac
