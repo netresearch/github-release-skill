@@ -138,6 +138,8 @@ MIDDLE_BUMP='suggested:0.55.0 bump:minor '
 PATCH_BUMP='suggested:0.54.3 bump:patch '
 FEAT='feat: add a thing'
 BREAKING_FIX='fix!: reject the old option'
+UNKNOWN_REASON='suggested:unknown bump:unknown reason:'
+BLAME=.git-blame-ignore-revs
 
 check "0.x: feat is a patch bump" \
   "$PATCH_BUMP" "$(suggest v0.54.2 "$FEAT" 'fix: repair a thing')"
@@ -242,7 +244,7 @@ cp "$SCRIPT" "$lonely/suggest-version.sh"
 repo="$(make_repo v0.54.2 "$FEAT")"
 missing=$(run_script "$repo" "$lonely/suggest-version.sh")
 case "$(fields "$missing")$(reason_of "$missing")" in
-  "suggested:unknown bump:unknown reason:"*"suggest-version.cliff.toml"*) pass "without its configuration the bump is unknown" ;;
+  "$UNKNOWN_REASON"*"suggest-version.cliff.toml"*) pass "without its configuration the bump is unknown" ;;
   *) failed "without its configuration the bump is unknown" "$missing" ;;
 esac
 ln -s "$SCRIPT" "$lonely/linked.sh"
@@ -311,7 +313,7 @@ check "GIT_CLIFF_SKIP_COMMIT from the environment does not hide a breaking commi
 printf '%s\n' "$breaking_sha" > "$repo/.cliffignore"
 ignored=$(run_script "$repo")
 case "$(fields "$ignored")$(reason_of "$ignored")" in
-  "suggested:unknown bump:unknown reason:"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
+  "$UNKNOWN_REASON"*".cliffignore"*) pass "a .cliffignore makes the bump unknown" ;;
   *) failed "a .cliffignore makes the bump unknown" "$ignored" ;;
 esac
 # The refusal never tells the agent to move a file in the release worktree.
@@ -327,64 +329,64 @@ esac
 unknown_for() { # unknown_for <name> <output> <file named in the reason>
   local name="$1" output="$2" file="$3"
   case "$(fields "$output")$(reason_of "$output")" in
-    "suggested:unknown bump:unknown reason:"*"$file"*) pass "$name" ;;
+    "$UNKNOWN_REASON"*"$file"*) pass "$name" ;;
     *) failed "$name" "$output" ;;
   esac
 }
 repo="$(make_repo v0.54.2 "$FEAT" "$BREAKING_FIX")"
 breaking_sha="$(sha_of "$repo" HEAD)"
-printf '# formatting\n%s\n' "${breaking_sha:0:10}" > "$repo/.git-blame-ignore-revs"
+printf '# formatting\n%s\n' "${breaking_sha:0:10}" > "$repo/$BLAME"
 unknown_for "a .git-blame-ignore-revs listing a commit of the range makes the bump unknown" \
-  "$(run_script "$repo")" ".git-blame-ignore-revs"
+  "$(run_script "$repo")" "$BLAME"
 repo="$(make_repo v0.54.2 "$FEAT")"
 old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
-printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
-git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
+printf '%s\n' "$old_sha" > "$repo/$BLAME"
+git_in "$repo" add "$BLAME" || setup_failed "add"
 git_in "$repo" commit -q -m 'fix!: drop the old option' || setup_failed "commit"
 unknown_for "a breaking commit that changes only .git-blame-ignore-revs makes the bump unknown" \
-  "$(run_script "$repo")" ".git-blame-ignore-revs"
+  "$(run_script "$repo")" "$BLAME"
 repo="$(make_repo v0.54.2 "$BREAKING_FIX")"
 old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
-printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$old_sha" > "$repo/$BLAME"
 check "a .git-blame-ignore-revs that lists no commit of the range changes nothing" \
   "$MIDDLE_BUMP" "$(fields "$(run_script "$repo")")"
 # A hidden commit that git-cliff would skip anyway changes nothing either.
 repo="$(make_repo v0.54.2 "$FEAT" 'style: reformat the sources')"
 style_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$style_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$style_sha" > "$repo/$BLAME"
 check "a .git-blame-ignore-revs that hides only a style commit changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 "$FEAT")"
 old_sha="$(sha_of "$repo" 'v0.54.2^{commit}')"
-printf '%s\n' "$old_sha" > "$repo/.git-blame-ignore-revs"
-git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
+printf '%s\n' "$old_sha" > "$repo/$BLAME"
+git_in "$repo" add "$BLAME" || setup_failed "add"
 git_in "$repo" commit -q -m 'chore: ignore the reformat in blame' || setup_failed "commit"
 check "a chore commit that changes only .git-blame-ignore-revs changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 'chore: bump a tool' "$FEAT")"
 feat_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$feat_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$feat_sha" > "$repo/$BLAME"
 unknown_for "a .git-blame-ignore-revs that hides a feat commit makes the bump unknown" \
-  "$(run_script "$repo")" ".git-blame-ignore-revs"
+  "$(run_script "$repo")" "$BLAME"
 repo="$(make_repo v0.54.2 "$FEAT" $'docs: rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
 docs_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$docs_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$docs_sha" > "$repo/$BLAME"
 unknown_for "a .git-blame-ignore-revs that hides a docs commit with a breaking footer makes the bump unknown" \
-  "$(run_script "$repo")" ".git-blame-ignore-revs"
+  "$(run_script "$repo")" "$BLAME"
 
 repo="$(make_repo v0.54.2 'fix: handle an empty list' 'l10n!: drop the German strings')"
 l10n_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$l10n_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$l10n_sha" > "$repo/$BLAME"
 unknown_for "a .git-blame-ignore-revs that hides a breaking l10n! commit makes the bump unknown" \
-  "$(run_script "$repo")" ".git-blame-ignore-revs"
+  "$(run_script "$repo")" "$BLAME"
 repo="$(make_repo v0.54.2 "$FEAT" $'Rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
 untyped_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$untyped_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$untyped_sha" > "$repo/$BLAME"
 check "a .git-blame-ignore-revs that hides an untyped commit with a breaking footer changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
 repo="$(make_repo v0.54.2 "$FEAT" 'l10n!: drop the German strings')"
 l10n_sha="$(sha_of "$repo" HEAD)"
-printf '%s\n' "$l10n_sha" > "$repo/.git-blame-ignore-revs"
+printf '%s\n' "$l10n_sha" > "$repo/$BLAME"
 blame_out=$(run_script "$repo")
 case "$(reason_of "$blame_out")" in
   *"0.54.3"*"0.55.0"*) pass "the .git-blame-ignore-revs reason names both versions" ;;
@@ -399,14 +401,14 @@ plain="$TMP/plain"
 mkdir -p "$plain"
 not_tree=$(run_script "$plain")
 case "$(fields "$not_tree")$(reason_of "$not_tree")" in
-  "suggested:unknown bump:unknown reason:"*"inside a work tree"*) pass "outside any repository the bump is unknown" ;;
+  "$UNKNOWN_REASON"*"inside a work tree"*) pass "outside any repository the bump is unknown" ;;
   *) failed "outside any repository the bump is unknown" "$not_tree" ;;
 esac
 bare="$TMP/bare.git"
 env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git init -q --bare "$bare" || setup_failed "git init --bare"
 not_tree=$(run_script "$bare")
 case "$(fields "$not_tree")$(reason_of "$not_tree")" in
-  "suggested:unknown bump:unknown reason:"*"not in a bare repository"*) pass "in a bare repository the bump is unknown" ;;
+  "$UNKNOWN_REASON"*"not in a bare repository"*) pass "in a bare repository the bump is unknown" ;;
   *) failed "in a bare repository the bump is unknown" "$not_tree" ;;
 esac
 
@@ -418,7 +420,7 @@ printf '#!/bin/sh\necho v0.54.1\n' > "$lower/git-cliff"
 chmod +x "$lower/git-cliff"
 below=$(run_bare "$lower" "$(make_repo v0.54.2 "$FEAT")")
 case "$(fields "$below")$(reason_of "$below")" in
-  "suggested:unknown bump:unknown reason:"*"0.54.1"*"v0.54.2"*"another tag"*) pass "an answer below the last tag says git-cliff read another tag" ;;
+  "$UNKNOWN_REASON"*"0.54.1"*"v0.54.2"*"another tag"*) pass "an answer below the last tag says git-cliff read another tag" ;;
   *) failed "an answer below the last tag says git-cliff read another tag" "$below" ;;
 esac
 
@@ -439,7 +441,7 @@ check "run from a subdirectory, the bump counts every commit of the repository" 
 # pre-release.
 pre=$(run_in v0.54.2-rc.1 'chore: bump a tool')
 case "$(fields "$pre")$(reason_of "$pre")" in
-  "suggested:unknown bump:unknown reason:"*"nothing to bump"*) pass "after a pre-release, a chore-only range counts nothing to bump" ;;
+  "$UNKNOWN_REASON"*"nothing to bump"*) pass "after a pre-release, a chore-only range counts nothing to bump" ;;
   *) failed "after a pre-release, a chore-only range counts nothing to bump" "$pre" ;;
 esac
 
