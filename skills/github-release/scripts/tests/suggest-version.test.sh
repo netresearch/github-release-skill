@@ -361,7 +361,7 @@ git_in "$repo" add .git-blame-ignore-revs || setup_failed "add"
 git_in "$repo" commit -q -m 'chore: ignore the reformat in blame' || setup_failed "commit"
 check "a chore commit that changes only .git-blame-ignore-revs changes nothing" \
   "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
-repo="$(make_repo v0.54.2 'fix: handle an empty list' "$FEAT")"
+repo="$(make_repo v0.54.2 'chore: bump a tool' "$FEAT")"
 feat_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$feat_sha" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs that hides a feat commit makes the bump unknown" \
@@ -371,6 +371,56 @@ docs_sha="$(sha_of "$repo" HEAD)"
 printf '%s\n' "$docs_sha" > "$repo/.git-blame-ignore-revs"
 unknown_for "a .git-blame-ignore-revs that hides a docs commit with a breaking footer makes the bump unknown" \
   "$(run_script "$repo")" ".git-blame-ignore-revs"
+
+repo="$(make_repo v0.54.2 'fix: handle an empty list' 'l10n!: drop the German strings')"
+l10n_sha="$(sha_of "$repo" HEAD)"
+printf '%s\n' "$l10n_sha" > "$repo/.git-blame-ignore-revs"
+unknown_for "a .git-blame-ignore-revs that hides a breaking l10n! commit makes the bump unknown" \
+  "$(run_script "$repo")" ".git-blame-ignore-revs"
+repo="$(make_repo v0.54.2 "$FEAT" $'Rewrite the guide\n\nBREAKING CHANGE: the old anchors are gone.')"
+untyped_sha="$(sha_of "$repo" HEAD)"
+printf '%s\n' "$untyped_sha" > "$repo/.git-blame-ignore-revs"
+check "a .git-blame-ignore-revs that hides an untyped commit with a breaking footer changes nothing" \
+  "$PATCH_BUMP" "$(fields "$(run_script "$repo")")"
+repo="$(make_repo v0.54.2 "$FEAT" 'l10n!: drop the German strings')"
+l10n_sha="$(sha_of "$repo" HEAD)"
+printf '%s\n' "$l10n_sha" > "$repo/.git-blame-ignore-revs"
+blame_out=$(run_script "$repo")
+case "$(reason_of "$blame_out")" in
+  *"0.54.3"*"0.55.0"*) pass "the .git-blame-ignore-revs reason names both versions" ;;
+  *) failed "the .git-blame-ignore-revs reason names both versions" "$blame_out" ;;
+esac
+git_in "$repo" worktree prune || setup_failed "worktree prune"
+check "the check without .git-blame-ignore-revs leaves no worktree behind" \
+  "1" "$(git_in "$repo" worktree list --porcelain | grep -c '^worktree ')"
+
+# Outside a work tree the script says so instead of suggesting a first release.
+plain="$TMP/plain"
+mkdir -p "$plain"
+not_tree=$(run_script "$plain")
+case "$(fields "$not_tree")$(reason_of "$not_tree")" in
+  "suggested:unknown bump:unknown reason:"*"inside a work tree"*) pass "outside any repository the bump is unknown" ;;
+  *) failed "outside any repository the bump is unknown" "$not_tree" ;;
+esac
+bare="$TMP/bare.git"
+env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git init -q --bare "$bare" || setup_failed "git init --bare"
+not_tree=$(run_script "$bare")
+case "$(fields "$not_tree")$(reason_of "$not_tree")" in
+  "suggested:unknown bump:unknown reason:"*"not in a bare repository"*) pass "in a bare repository the bump is unknown" ;;
+  *) failed "in a bare repository the bump is unknown" "$not_tree" ;;
+esac
+
+# An answer below the last tag means git-cliff read another tag.
+lower="$TMP/lower-bin"
+mkdir -p "$lower"
+for tool in git dirname readlink; do ln -s "$(command -v "$tool")" "$lower/$tool"; done
+printf '#!/bin/sh\necho v0.54.1\n' > "$lower/git-cliff"
+chmod +x "$lower/git-cliff"
+below=$(run_bare "$lower" "$(make_repo v0.54.2 "$FEAT")")
+case "$(fields "$below")$(reason_of "$below")" in
+  "suggested:unknown bump:unknown reason:"*"0.54.1"*"v0.54.2"*"another tag"*) pass "an answer below the last tag says git-cliff read another tag" ;;
+  *) failed "an answer below the last tag says git-cliff read another tag" "$below" ;;
+esac
 
 # Run from a subdirectory, git-cliff would count only the commits that touch
 # it. The script computes over the whole repository.

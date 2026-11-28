@@ -16,8 +16,9 @@
 #     unknown: git-cliff is missing or failed, the configuration is missing,
 #              the commits carry nothing to bump (only chore, docs, ci, test,
 #              style, build or untyped commits), a .cliffignore sits at the
-#              repository root, .git-blame-ignore-revs hides a commit of the
-#              range from git-cliff, or git-cliff suggested another pre-release
+#              repository root, .git-blame-ignore-revs changes git-cliff's
+#              answer, git-cliff read another tag, the script runs outside a
+#              work tree, or git-cliff suggested another pre-release
 #   reason:<explanation>
 #
 # git-cliff runs as `uvx git-cliff@latest`, which resolves the newest release
@@ -36,6 +37,17 @@ set -euo pipefail
 # called through a symlink.
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CONFIG="$HERE/suggest-version.cliff.toml"
+
+# git-cliff reads the repository through --repository <root>; outside a work
+# tree there is no root, and `git describe` would fail as if no tag existed.
+root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z "$root" ]]; then
+    echo "current:unknown"
+    echo "suggested:unknown"
+    echo "bump:unknown"
+    echo "reason:not inside a git work tree; run it inside a work tree (any directory of a checkout), not in a bare repository"
+    exit 0
+fi
 
 # Find the last version tag: vMAJOR.MINOR.PATCH, a pre-release suffix allowed.
 # An interface tag such as v1 or a two-part v0.60 is no release.
@@ -73,63 +85,24 @@ fi
 # git-cliff drops every commit listed in a .cliffignore at the repository root
 # and has no option to read another file; a branch could hide a breaking
 # commit there.
-root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[[ -n "$root" ]] || unknown "not inside a git work tree; run the script from the root of the repository being released"
-if [[ -n "$root" ]] && [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
+if [[ -e "$root/.cliffignore" || -L "$root/.cliffignore" ]]; then
     unknown "git-cliff would skip the commits listed in ${root}/.cliffignore; choose the next version by hand, or run git-cliff in a temporary clone without that file"
 fi
 
-# git-cliff also drops every commit listed in .git-blame-ignore-revs at the
-# repository root (abbreviated hashes included), and, once the file lists any
-# commit, every commit that changes only that file. Refuse only when that hits
-# a commit of the range that git-cliff would count: the file is common and
-# usually lists old reformats, and a hidden commit the configuration skips
-# anyway (an untyped one, or chore, docs, ci, test, style or build that is not
-# breaking) changes nothing.
-counts() { # counts <sha> -> true when git-cliff would count the commit
-    local message subject
-    message=$(git log -1 --format=%B "$1")
-    subject="${message%%$'\n'*}"
-    if [[ "$subject" =~ ^[A-Za-z]+(\([^\)]*\))?!: ]] || grep -q -E '^BREAKING[ -]CHANGE:' <<< "$message"; then
-        return 0
-    fi
-    [[ "$subject" =~ ^[A-Za-z]+(\([^\)]*\))?: ]] \
-        && ! [[ "$subject" =~ ^(chore|docs|ci|test|style|build)(\([^\)]*\))?: ]]
-}
-blame_file="$root/.git-blame-ignore-revs"
-if [[ -n "$root" && -r "$blame_file" ]]; then
-    listed=$(grep -v -E '^[[:space:]]*(#|$)' "$blame_file" | tr -d '[:blank:]\r' || true)
-    if [[ -n "$listed" ]]; then
-        while read -r sha; do
-            hidden=false
-            while read -r id; do
-                if [[ -n "$id" && "$sha" == "$id"* ]]; then
-                    hidden=true
-                fi
-            done <<< "$listed"
-            if ! $hidden && [[ "$(git diff-tree --no-commit-id --name-only -r --root -m "$sha" | sort -u)" == ".git-blame-ignore-revs" ]]; then
-                hidden=true
-            fi
-            if $hidden && counts "$sha"; then
-                unknown "git-cliff would skip commit ${sha:0:12} because of ${blame_file}; review the commits since ${last_tag} and choose the next version by hand"
-            fi
-        done < <(git rev-list "${last_tag}..HEAD")
-    fi
-fi
-
-# cliff_next <command>... -> git-cliff's answer, or a non-zero status. The
-# caller's GIT_CLIFF_* variables would set options (GIT_CLIFF_SKIP_COMMIT) and
-# GIT_CLIFF__* ones would override the configuration (GIT_CLIFF__GIT__SPLIT_COMMITS),
-# so the run gets neither.
+# cliff_next <repository> <command>... -> git-cliff's answer for <repository>,
+# or a non-zero status. The caller's GIT_CLIFF_* variables would set options
+# (GIT_CLIFF_SKIP_COMMIT) and GIT_CLIFF__* ones would override the
+# configuration (GIT_CLIFF__GIT__SPLIT_COMMITS), so the run gets neither.
+# --repository makes git-cliff read the whole repository: run from a
+# subdirectory, it would count only the commits that touch it.
 cliff_next() (
+    repository="$1"; shift
     for name in $(compgen -e); do
         if [[ "$name" == GIT_CLIFF* ]]; then
             unset "$name"
         fi
     done
-    # Run from a subdirectory, git-cliff would count only the commits that
-    # touch it; --repository makes it read the whole repository.
-    "$@" --repository "$root" --config "$CONFIG" --bumped-version 2>/dev/null
+    "$@" --repository "$repository" --config "$CONFIG" --bumped-version 2>/dev/null
 )
 
 have_uvx=false; have_cliff=false
@@ -138,13 +111,39 @@ command -v git-cliff >/dev/null 2>&1 && have_cliff=true
 if ! $have_uvx && ! $have_cliff; then
     unknown "neither uvx nor git-cliff is installed; install uv (or git-cliff) or choose the next version by hand"
 fi
-if ! { $have_uvx && next=$(cliff_next uvx git-cliff@latest); } \
-    && ! { $have_cliff && next=$(cliff_next git-cliff); }; then
-    unknown "git-cliff could not compute a version from ${last_tag}; choose the next version by hand"
+
+# cliff_at <repository> -> git-cliff's answer as a bare version, or a
+# non-zero status: uvx first, a git-cliff binary when that fails.
+cliff_at() {
+    local answer
+    if ! { $have_uvx && answer=$(cliff_next "$1" uvx git-cliff@latest); } \
+        && ! { $have_cliff && answer=$(cliff_next "$1" git-cliff); }; then
+        return 1
+    fi
+    answer="${answer##*$'\n'}"
+    answer="${answer#v}"
+    printf '%s\n' "${answer%%+*}"
+}
+
+next=$(cliff_at "$root") || unknown "git-cliff could not compute a version from ${last_tag}; choose the next version by hand"
+
+# git-cliff drops every commit listed in .git-blame-ignore-revs at the
+# repository root and, once the file lists a commit, every commit that changes
+# only that file. The file is common and usually lists old reformats, so
+# git-cliff itself decides whether it matters: it computes again on the same
+# HEAD in a temporary worktree without the file, and the two answers must
+# agree.
+if [[ -e "$root/.git-blame-ignore-revs" || -L "$root/.git-blame-ignore-revs" ]]; then
+    probe=$(mktemp -d)
+    trap 'git worktree remove --force "$probe" >/dev/null 2>&1; rm -rf "$probe"; git worktree prune >/dev/null 2>&1' EXIT
+    git -c core.hooksPath=/dev/null worktree add -q --detach --no-checkout "$probe" HEAD >/dev/null 2>&1 \
+        || unknown "could not create a temporary worktree to check ${root}/.git-blame-ignore-revs; choose the next version by hand"
+    rm -f "$probe/.git-blame-ignore-revs"
+    without=$(cliff_at "$probe") || unknown "git-cliff could not compute a version without ${root}/.git-blame-ignore-revs; choose the next version by hand"
+    if [[ "$without" != "$next" ]]; then
+        unknown "git-cliff answers ${next} with ${root}/.git-blame-ignore-revs and ${without} without it: the file hides commits git-cliff counts; review the commits since ${last_tag} and choose the next version by hand"
+    fi
 fi
-next="${next##*$'\n'}"
-next="${next#v}"
-next="${next%%+*}"
 
 core="${current%%+*}"
 if [[ "$next" == "$core" ]]; then
@@ -164,11 +163,12 @@ for part in "$major" "$minor" "$patch" "$new_major" "$new_minor" "$new_patch"; d
     [[ "$part" =~ $number ]] || unknown "git-cliff answered ${next} for ${last_tag}, which is not MAJOR.MINOR.PATCH; choose the next version by hand"
 done
 
-# git-cliff answers with the last version when it counted nothing to bump; an
-# answer below the last tag means it read another tag than `git describe`.
+# git-cliff answers with the last version when it counted nothing to bump
+# (handled above); an answer below the last tag means it read another tag than
+# `git describe`.
 if ((new_major < major || (new_major == major && new_minor < minor) \
     || (new_major == major && new_minor == minor && new_patch <= patch))); then
-    unknown "git-cliff counted nothing to bump in the commits since ${last_tag} (only chore, docs, ci, test, style, build or untyped commits); review them and choose the next version by hand"
+    unknown "git-cliff answered ${next}, below ${last_tag}: git-cliff read another tag than the script; choose the next version by hand"
 fi
 
 if ((new_major != major)); then
