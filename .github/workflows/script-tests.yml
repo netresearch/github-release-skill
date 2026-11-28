@@ -32,7 +32,7 @@ jobs:
       # archive: suggest-version.sh runs git-cliff as `uvx git-cliff@latest`.
       pre-command: |
         # renovate: datasource=github-releases depName=astral-sh/uv
-        UV_VERSION=0.13.9
+        UV_VERSION=0.13.10
         asset=uv-x86_64-unknown-linux-gnu.tar.gz
         base="https://github.com/astral-sh/uv/releases/download/$UV_VERSION"
         mkdir -p "$HOME/.local/bin"
